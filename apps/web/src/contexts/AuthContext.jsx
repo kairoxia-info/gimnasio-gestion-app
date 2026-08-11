@@ -3,14 +3,18 @@ import pb from '@/lib/pocketbaseClient';
 
 const AuthContext = createContext(null);
 
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL;
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD;
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(pb.authStore.record);
 
-    // Auto-login as demo trainer so the app is usable without a login page
+    // Auto-login as demo trainer so the app is usable without a login page.
+    // Only runs if VITE_DEMO_EMAIL / VITE_DEMO_PASSWORD are set (see .env.example).
     useEffect(() => {
-        if (!pb.authStore.isValid) {
+        if (!pb.authStore.isValid && DEMO_EMAIL && DEMO_PASSWORD) {
             pb.collection('users')
-                .authWithPassword('entrenador@fitnessgymplace.com', 'EntrenaFuerte2026!')
+                .authWithPassword(DEMO_EMAIL, DEMO_PASSWORD)
                 .catch(() => {});
         }
     }, []);
