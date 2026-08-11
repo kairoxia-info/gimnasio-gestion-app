@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# PocketBase (será reemplazado por Supabase)
+apps/pocketbase/pocketbase
+apps/pocketbase/pb_data/
+
+# Environment variables
+.env
+.env.local
+
+# Build output
+dist/
