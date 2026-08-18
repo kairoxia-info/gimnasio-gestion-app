@@ -11,3 +11,6 @@ apps/pocketbase/pb_data/
 
 # Build output
 dist/
+
+# Log de sesión del plugin de dev de Horizons (se regenera solo)
+vault/
