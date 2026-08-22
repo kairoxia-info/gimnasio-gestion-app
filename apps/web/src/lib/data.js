@@ -59,6 +59,3 @@ export const estadoDesdeVencimiento = (hasta) => {
     if (dias <= 7) return 'proximo';
     return 'al_dia';
 };
-
-export const LOGO_URL =
-    'https://horizons-cdn.hostinger.com/2f162741-dd16-47ed-899d-174661f3f852/8cb9e218ade3e32b4956bfcadcc16263.jpg';

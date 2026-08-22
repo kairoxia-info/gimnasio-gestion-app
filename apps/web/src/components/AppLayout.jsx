@@ -16,7 +16,6 @@ import {
     X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { LOGO_URL } from '@/lib/data';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -28,13 +27,47 @@ const NAV = [
     { to: '/configuracion', label: 'Precios', icon: Settings },
 ];
 
-export const Logo = ({ className = 'h-10' }) => (
-    <img
-        src={LOGO_URL}
-        alt="Fitness Gym Place"
-        className={`${className} w-auto object-contain mix-blend-multiply dark:mix-blend-screen dark:invert`}
-    />
-);
+// Wordmark propio (ícono + texto), a propósito sin ninguna imagen externa:
+// el LOGO_URL viejo apuntaba al logo real de otro gimnasio (asset de la
+// demo de Hostinger Horizons), no algo que podamos usar como marca propia.
+// Mapeo de tamaño porque los 6 lugares donde se usa <Logo> pasan alturas
+// fijas distintas (sidebar, header mobile, drawer, login, onboarding,
+// restablecer contraseña) — sin esto el texto no escala junto al ícono.
+// "badge" es la insignia cuadrada de fondo; "icon" siempre queda notoriamente
+// más chico que "badge" (icono con margen adentro, no pegado a los bordes).
+const LOGO_SIZES = {
+    'h-9': { badge: 'h-8 w-8', icon: 'h-4 w-4', text: 'text-sm' },
+    'h-10': { badge: 'h-9 w-9', icon: 'h-[18px] w-[18px]', text: 'text-base' },
+    'h-12': { badge: 'h-11 w-11', icon: 'h-5 w-5', text: 'text-lg' },
+    'h-20': { badge: 'h-16 w-16', icon: 'h-8 w-8', text: 'text-3xl' },
+    'h-24': { badge: 'h-[4.5rem] w-[4.5rem]', icon: 'h-9 w-9', text: 'text-4xl' },
+};
+
+export const Logo = ({ className = 'h-10' }) => {
+    const size = LOGO_SIZES[className] || LOGO_SIZES['h-10'];
+    return (
+        <div className={`${className} inline-flex w-auto items-center gap-2.5 text-foreground`}>
+            <span
+                className={`${size.badge} inline-flex shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10`}
+            >
+                <Dumbbell aria-hidden="true" className={`${size.icon} text-primary`} strokeWidth={2.2} />
+            </span>
+            {/* Dos líneas a propósito: "Gestión GYM Kairox IA" entero no
+                entra en una sola línea sin desbordar ni la tarjeta de login
+                ni el sidebar angosto (medido: 431px de texto vs ~302px
+                disponibles en la tarjeta). Partido, cada línea es la mitad
+                de ancho y entra cómodo en cualquiera de los 6 contextos. */}
+            <span
+                className={`font-display ${size.text} whitespace-nowrap font-extrabold uppercase leading-[1.05] tracking-tight`}
+            >
+                <span className="block">Gestión GYM</span>
+                <span className="block">
+                    <span className="text-primary">Kairox</span> IA
+                </span>
+            </span>
+        </div>
+    );
+};
 
 const ThemeToggle = () => {
     const { theme, setTheme } = useTheme();
@@ -55,11 +88,11 @@ export { ThemeToggle };
 
 const AppLayout = ({ title, subtitle, actions, children }) => {
     const [open, setOpen] = useState(false);
-    const { logout, user } = useAuth();
+    const { signOut, user } = useAuth();
     const navigate = useNavigate();
 
-    const salir = () => {
-        logout();
+    const salir = async () => {
+        await signOut();
         navigate('/login', { replace: true });
     };
 

@@ -88,7 +88,7 @@ const AlimentosPage = () => {
             }
         >
             <Helmet>
-                <title>Biblioteca de alimentos | Fitness Gym Place</title>
+                <title>Biblioteca de alimentos | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Alimentos con calorías y macros por porción para armar planes de alimentación personalizados."

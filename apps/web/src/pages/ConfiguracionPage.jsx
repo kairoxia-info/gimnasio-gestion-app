@@ -77,7 +77,7 @@ const ConfiguracionPage = () => {
             }
         >
             <Helmet>
-                <title>Planes y precios | Fitness Gym Place</title>
+                <title>Planes y precios | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Configuración editable de planes del gimnasio: precios, períodos, descuentos y porcentaje de interés por mora."

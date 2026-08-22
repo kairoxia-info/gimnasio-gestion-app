@@ -54,7 +54,7 @@ const PagosPage = () => {
     return (
         <AppLayout title="Pagos y caja" subtitle="Estado de cuota por alumno y resumen de lo cobrado en el mes.">
             <Helmet>
-                <title>Pagos y caja | Fitness Gym Place</title>
+                <title>Pagos y caja | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Resumen de caja mensual, estado de cuota de cada alumno e historial completo de pagos registrados."

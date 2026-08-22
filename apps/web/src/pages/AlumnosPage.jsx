@@ -96,7 +96,7 @@ const AlumnosPage = () => {
             }
         >
             <Helmet>
-                <title>Alumnos | Fitness Gym Place</title>
+                <title>Alumnos | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Listado de alumnos del gimnasio con estado, antigüedad, contacto y observaciones de salud."

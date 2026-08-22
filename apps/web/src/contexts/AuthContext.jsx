@@ -1,43 +1,91 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import pb from '@/lib/pocketbaseClient';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import supabase from '@/lib/supabaseClient';
 
 const AuthContext = createContext(null);
 
-const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL;
-const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD;
-
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(pb.authStore.record);
+    const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    // Auto-login as demo trainer so the app is usable without a login page.
-    // Only runs if VITE_DEMO_EMAIL / VITE_DEMO_PASSWORD are set (see .env.example).
-    useEffect(() => {
-        if (!pb.authStore.isValid && DEMO_EMAIL && DEMO_PASSWORD) {
-            pb.collection('users')
-                .authWithPassword(DEMO_EMAIL, DEMO_PASSWORD)
-                .catch(() => {});
+    const fetchProfile = useCallback(async (userId) => {
+        if (!userId) {
+            setProfile(null);
+            return null;
         }
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, email, first_name, last_name, gimnasio_id, role')
+            .eq('id', userId)
+            .single();
+        if (error) {
+            setProfile(null);
+            return null;
+        }
+        setProfile(data);
+        return data;
     }, []);
 
-    useEffect(() => pb.authStore.onChange((_token, record) => setUser(record)), []);
+    useEffect(() => {
+        let mounted = true;
+
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+            if (!mounted) return;
+            setUser(session?.user ?? null);
+            if (session?.user) await fetchProfile(session.user.id);
+            setLoading(false);
+        });
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (!mounted) return;
+            setUser(session?.user ?? null);
+            if (session?.user) {
+                await fetchProfile(session.user.id);
+            } else {
+                setProfile(null);
+            }
+            setLoading(false);
+        });
+
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
+    }, [fetchProfile]);
 
     const value = useMemo(
         () => ({
             user,
-            isAuthed: pb.authStore.isValid,
-            login: (email, password) => pb.collection('users').authWithPassword(email, password),
-            signup: async (email, password, extraFields = {}) => {
-                await pb.collection('users').create({ email, password, passwordConfirm: password, ...extraFields });
-
-                return pb.collection('users').authWithPassword(email, password);
+            profile,
+            isAuthed: !!user,
+            loading,
+            signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
+            signUp: (email, password, { first_name, last_name } = {}) =>
+                supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { first_name, last_name } },
+                }),
+            signOut: () => supabase.auth.signOut(),
+            resetPasswordForEmail: (email) =>
+                supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/restablecer-password`,
+                }),
+            updatePassword: (newPassword) => supabase.auth.updateUser({ password: newPassword }),
+            createGimnasio: async (nombre) => {
+                const result = await supabase.rpc('create_gimnasio', { nombre_gimnasio: nombre });
+                if (!result.error) await fetchProfile(user?.id);
+                return result;
             },
-            logout: () => pb.authStore.clear(),
+            refreshProfile: () => fetchProfile(user?.id),
         }),
-        [user],
+        [user, profile, loading, fetchProfile],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+};
 
 export const useAuth = () => useContext(AuthContext);
 

@@ -3,6 +3,10 @@ import { Navigate, Route, Routes, BrowserRouter as Router } from 'react-router-d
 import { ThemeProvider } from 'next-themes';
 import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider } from '@/contexts/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import LoginPage from '@/pages/LoginPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AlumnosPage from '@/pages/AlumnosPage';
 import AlumnoPage from '@/pages/AlumnoPage';
@@ -12,7 +16,7 @@ import AsistenciaPage from '@/pages/AsistenciaPage';
 import PagosPage from '@/pages/PagosPage';
 import ConfiguracionPage from '@/pages/ConfiguracionPage';
 
-const guard = (element) => element;
+const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
 function App() {
     return (
@@ -22,6 +26,19 @@ function App() {
                     <ScrollToTop />
                     <Routes>
                         <Route path="/" element={<Navigate to="/panel" replace />} />
+                        {/* Sin ProtectedRoute a propósito: es la puerta de entrada para
+                            usuarios SIN sesión. Envolverla con el guard normal la haría
+                            redirigir a "/login" apenas !isAuthed — Navigate hacia la misma
+                            ruta en la que ya está, dejando el formulario inalcanzable. El
+                            propio LoginPage ya redirige a /panel si detecta sesión activa. */}
+                        <Route path="/login" element={<LoginPage />} />
+                        {/* Sin ProtectedRoute a propósito: esta ruta se llega con la sesión
+                            temporal de recuperación que arma Supabase desde el link del mail,
+                            que todavía no tiene por qué tener gimnasio_id. Pasarla por el guard
+                            normal la rebotaría a /onboarding antes de poder cambiar la clave. La
+                            propia página valida sesión/estado con useAuth() internamente. */}
+                        <Route path="/restablecer-password" element={<ResetPasswordPage />} />
+                        <Route path="/onboarding" element={guard(<OnboardingPage />)} />
                         <Route path="/panel" element={guard(<DashboardPage />)} />
                         <Route path="/alumnos" element={guard(<AlumnosPage />)} />
                         <Route path="/alumnos/:id" element={guard(<AlumnoPage />)} />

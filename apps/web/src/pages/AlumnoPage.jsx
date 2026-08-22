@@ -873,7 +873,7 @@ const AlumnoPage = () => {
     return (
         <AppLayout>
             <Helmet>
-                <title>{alumno ? `${alumno.nombre} | Fitness Gym Place` : 'Ficha del alumno | Fitness Gym Place'}</title>
+                <title>{alumno ? `${alumno.nombre} | Gestión GYM Kairox IA` : 'Ficha del alumno | Gestión GYM Kairox IA'}</title>
                 <meta
                     name="description"
                     content="Ficha completa del alumno: plan de entrenamiento, plan de alimentación, progreso, asistencia y pagos."

@@ -60,7 +60,7 @@ const AsistenciaPage = () => {
             subtitle="Marcá presente o ausente para toda la semana. Un clic presente, dos ausente, tres sin registro."
         >
             <Helmet>
-                <title>Control de asistencia | Fitness Gym Place</title>
+                <title>Control de asistencia | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Grilla semanal de asistencia de todos los alumnos activos del gimnasio, con conteo de presentes y ausentes."

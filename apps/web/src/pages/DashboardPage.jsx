@@ -75,10 +75,10 @@ const DashboardPage = () => {
             subtitle="Todo el estado del gimnasio en una sola pantalla: alumnos, asistencia y caja del mes."
         >
             <Helmet>
-                <title>Panel general | Fitness Gym Place</title>
+                <title>Panel general | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
-                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos en mora en Fitness Gym Place."
+                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos en mora en Gestión GYM Kairox IA."
                 />
             </Helmet>
 
