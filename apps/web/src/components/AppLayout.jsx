@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
     Apple,
+    Building2,
     CalendarCheck,
     Dumbbell,
     LayoutDashboard,
@@ -69,6 +70,56 @@ export const Logo = ({ className = 'h-10' }) => {
     );
 };
 
+// Marca del GIMNASIO del profe logueado (nombre + logo propio, cargados en el
+// onboarding) — esto es lo que tiene que resaltar *adentro* de la app, no la
+// marca de Kairox. Si todavía no subió logo, cae a un ícono genérico + el
+// nombre en texto (con truncate: el nombre del gimnasio es arbitrario, puede
+// ser mucho más largo que "Gestión GYM Kairox IA").
+const GIMNASIO_TEXT_SIZES = {
+    'h-9': { icon: 'h-4 w-4', text: 'text-sm' },
+    'h-10': { icon: 'h-[18px] w-[18px]', text: 'text-base' },
+    'h-12': { icon: 'h-5 w-5', text: 'text-lg' },
+};
+
+const GimnasioMark = ({ className = 'h-10' }) => {
+    const { gimnasio } = useAuth();
+    const [imgFailed, setImgFailed] = useState(false);
+    const nombre = gimnasio?.nombre || 'Tu gimnasio';
+
+    if (gimnasio?.logo_url && !imgFailed) {
+        return (
+            <img
+                src={gimnasio.logo_url}
+                alt={nombre}
+                title={nombre}
+                onError={() => setImgFailed(true)}
+                className={`${className} w-auto max-w-full shrink-0 rounded-lg object-contain`}
+            />
+        );
+    }
+
+    const size = GIMNASIO_TEXT_SIZES[className] || GIMNASIO_TEXT_SIZES['h-10'];
+    return (
+        <div className={`${className} inline-flex w-auto min-w-0 items-center gap-2 text-foreground`}>
+            <Building2 className={`${size.icon} shrink-0 text-primary`} strokeWidth={2.2} />
+            <span
+                className={`font-display ${size.text} min-w-0 truncate font-extrabold uppercase leading-none tracking-tight`}
+            >
+                {nombre}
+            </span>
+        </div>
+    );
+};
+
+// Firma chica de la plataforma, para adentro de la app — a propósito discreta:
+// "Gestión GYM Kairox IA" tiene que resaltar en el login, no acá, donde el
+// protagonista es el gimnasio de cada profe (GimnasioMark, arriba).
+const KairoxFooterMark = () => (
+    <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        Gestión GYM Kairox IA
+    </p>
+);
+
 const ThemeToggle = () => {
     const { theme, setTheme } = useTheme();
     const dark = theme !== 'light';
@@ -124,11 +175,11 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                 <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between border-r border-border px-4 py-6 lg:flex">
                     <div>
                         <Link to="/panel" className="mb-8 block px-1">
-                            <Logo className="h-12" />
+                            <GimnasioMark className="h-12" />
                         </Link>
                         {links}
                     </div>
-                    <div className="space-y-2 px-1">
+                    <div className="space-y-3 px-1">
                         <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                         <button
                             type="button"
@@ -137,6 +188,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                         >
                             <LogOut className="h-4 w-4" strokeWidth={1.9} /> Cerrar sesión
                         </button>
+                        <KairoxFooterMark />
                     </div>
                 </aside>
 
@@ -151,8 +203,8 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             >
                                 <Menu className="h-5 w-5" />
                             </button>
-                            <div className="lg:hidden">
-                                <Logo className="h-9" />
+                            <div className="min-w-0 lg:hidden">
+                                <GimnasioMark className="h-9" />
                             </div>
                             <div className="ml-auto flex items-center gap-2">
                                 {actions}
@@ -185,13 +237,13 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                         role="presentation"
                     />
                     <div className="absolute inset-y-0 left-0 w-72 border-r border-border bg-background px-4 py-6">
-                        <div className="mb-6 flex items-center justify-between">
-                            <Logo className="h-10" />
+                        <div className="mb-6 flex items-center justify-between gap-3">
+                            <GimnasioMark className="h-10" />
                             <button
                                 type="button"
                                 onClick={() => setOpen(false)}
                                 aria-label="Cerrar menú"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
                             >
                                 <X className="h-4 w-4" />
                             </button>
@@ -204,6 +256,9 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                         >
                             <LogOut className="h-4 w-4" /> Cerrar sesión
                         </button>
+                        <div className="mt-3">
+                            <KairoxFooterMark />
+                        </div>
                     </div>
                 </div>
             )}

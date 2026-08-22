@@ -13,9 +13,13 @@ export const AuthProvider = ({ children }) => {
             setProfile(null);
             return null;
         }
+        // gimnasios(...) es un embed de PostgREST vía la FK profiles.gimnasio_id ->
+        // gimnasios.id: trae nombre/logo/color del gimnasio del usuario en la misma
+        // consulta, sin un segundo roundtrip. La RLS de "gimnasios" (id = get_mi_gimnasio_id())
+        // sigue aplicando dentro del embed, así que esto nunca expone el gimnasio de otro.
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, email, first_name, last_name, gimnasio_id, role')
+            .select('id, email, first_name, last_name, gimnasio_id, role, gimnasios(nombre, logo_url, color_principal)')
             .eq('id', userId)
             .single();
         if (error) {
@@ -59,6 +63,7 @@ export const AuthProvider = ({ children }) => {
         () => ({
             user,
             profile,
+            gimnasio: profile?.gimnasios ?? null,
             isAuthed: !!user,
             loading,
             signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
