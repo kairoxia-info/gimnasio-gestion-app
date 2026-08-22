@@ -131,6 +131,16 @@ razonamiento de cada decisión).
 - **✅ Bloque C (auth y rutas) — TERMINADO.** `supabaseClient.js`, `AuthContext.jsx` real,
   `ProtectedRoute.jsx` real (antes era un no-op), rutas `/login` (con toggle login/registro),
   `/restablecer-password`, `/onboarding` declaradas en `App.jsx`.
+- **✅ Bloque B (capa de datos del frontend) — TERMINADO.** `data.js` reescrito contra
+  supabase-js manteniendo los mismos nombres de función (`listAll`/`createRec`/`updateRec`/
+  `removeRec`), `listAll` ahora toma `{sort, filters}`; `currentGimnasio.js` (nuevo) guarda el
+  `gimnasio_id` vigente que `AuthContext` sincroniza, para que `createRec` lo inyecte solo en
+  cada alta; helpers de UI separados a `format.js`; nombres de campo actualizados en las páginas
+  (`alumno` → `alumno_id`, `created` → `created_at`). **PocketBase eliminado por completo** del
+  proyecto (cliente borrado, dependencia sacada de `package.json`). La pestaña Entrenamiento de
+  `AlumnoPage` ahora usa `rutinas` + `rutinas_asignadas` en vez de la vieja
+  `planes_entrenamiento`, manteniendo la misma UX de un plan por alumno (la biblioteca de
+  rutinas reutilizables con asignación masiva sigue siendo Bloque G).
 - **✅ Bloque E — parcial.** Onboarding del gimnasio nuevo (nombre + logo opcional) y el bucket
   `gimnasio-logos` YA están. **Todavía NO están**: código de invitación/QR (Decisión 7, ni
   siquiera empezado) ni una pantalla de Configuración para que un admin ya onboardeado edite
@@ -148,14 +158,13 @@ mail de confirmación de verdad apenas se llama, así que probar con emails inve
 restringir el envío de mails del proyecto. **Para probar signup/login de acá en adelante, usar
 una cuenta con un email real (o pedirle a Nalux que lo haga él), nunca inventar direcciones.**
 
-**Falta:** resto de la capa de datos del frontend contra Supabase (Bloque B — hoy solo está
-migrada la parte de auth; `data.js` y las páginas de negocio como `AlumnosPage`, `EjerciciosPage`,
-etc. siguen hablando con PocketBase), verificación de punta a punta desde la UI con datos de
-negocio reales (Bloque D), lo que falta de Bloque E (código/QR, pantalla de configuración de
-marca), subida de video propio (Bloque F), y todo lo de Fase 2/3 (rutinas-plantilla como feature
-de UI, login de alumno, récords, notificaciones, finanzas, reservas, etc.). El checklist
-completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá para no tener dos
-fuentes de verdad desincronizándose.
+**Falta:** verificación de punta a punta desde la UI con datos de negocio reales y en volumen
+(Bloque D — lo que se probó hasta ahora fueron registros sueltos de verificación, no un uso
+real con varios alumnos/pagos/asistencias), lo que falta de Bloque E (código/QR, pantalla de
+configuración de marca), subida de video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de
+rutinas reutilizables con asignación masiva, login de alumno, récords, notificaciones, finanzas,
+reservas, etc.). El checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se
+duplica acá para no tener dos fuentes de verdad desincronizándose.
 
 ---
 
@@ -242,18 +251,19 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
 
 El plan completo, con checklist paso a paso por bloque (A a G) y las preguntas todavía
 abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Resumen de por dónde sigue
-esto ahora que terminó el Bloque A:
+esto ahora que terminaron los Bloques A, B y C (y E a medias):
 
-1. **Bloque B** — capa de datos del frontend (`supabaseClient.js`, reescribir `data.js` y
-   `AuthContext.jsx` contra Supabase, sin tocar la firma de `listAll`/`createRec`/etc.;
-   renombrar campos relacionales como `alumno` → `alumno_id`).
-2. **Bloque C** — auth y rutas: declarar `/login` (hoy no existe), usar `ProtectedRoute` de
-   verdad (hoy es un no-op), flujo de registro completo (`signup` → `create_gimnasio()`).
-3. **Bloque D** — verificar el MVP de punta a punta **desde la UI** con un gimnasio nuevo real
-   (no simulado por SQL como en A6).
-4. **Bloque E** — identidad de marca por gimnasio + autorregistro por código/QR (Decisión 7).
-5. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
-6. **Bloque G** (post-MVP) — UI de rutinas-plantilla, login de alumno, récords, notificaciones.
+1. **Bloque D** — verificar el MVP de punta a punta **desde la UI**, con uso real (varios
+   alumnos, pagos, asistencias), no solo los registros sueltos de verificación que se probaron
+   al cerrar cada bloque.
+2. **Lo que falta del Bloque E** — autorregistro por código/QR (Decisión 7) y una pantalla de
+   configuración para editar nombre/logo/color del gimnasio después del onboarding.
+3. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
+4. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
+   de alumno, récords, notificaciones.
+5. **Pendiente de seguridad, antes de sumar staff que no sea de confianza:** el trigger
+   `BEFORE UPDATE` sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17)
+   antes de producción.
 
 **Preguntas todavía sin responder con el cliente** (no bloquean el Bloque A, pero sí bloquean
 partes de Fase 2/3): ¿reservas/turnos?, ¿uno o varios gimnasios clientes?, ¿sedes múltiples?,
@@ -350,3 +360,26 @@ sin ningún email de por medio, con una cuenta de prueba que se borró después)
 como pendiente crítico antes de producción** — ver el aviso al principio del documento y la
 Decisión 17: con esto desactivado, cualquiera puede registrarse con el email de otra persona
 sin verificarlo.
+
+**22/08/2026 (cierre del día)** — Dos cosas. Primero, un fix de UX reportado por Nalux: el
+nombre y el logo que carga el profe en el onboarding no aparecían en ningún lado adentro de la
+app (el sidebar/header seguían mostrando el wordmark de Kairox, igual que en el login). Ahora
+`AuthContext` trae `gimnasios(nombre, logo_url, color_principal)` embebido en el fetch del
+profile, y `AppLayout` tiene un `GimnasioMark` que muestra el logo real del gimnasio (o ícono +
+nombre si todavía no subió logo) en sidebar/header/drawer; la marca de Kairox quedó reducida a
+una firma chica al pie del menú. Criterio acordado: **adentro de la app manda la marca del
+gimnasio de cada profe, la de Kairox solo resalta en el login.**
+
+Segundo, **Bloque B terminado**: `data.js` y las 8 páginas de negocio migradas de PocketBase a
+Supabase, PocketBase eliminado por completo del proyecto, y la pestaña Entrenamiento pasada al
+modelo de dos tablas (`rutinas` + `rutinas_asignadas`). Verificado contra la base real con la
+cuenta de Nalux, no solo build/lint: las 5 operaciones de datos (listar con sort, listar con
+filtros, crear, actualizar, borrar) con el `gimnasio_id` inyectado correctamente, y el flujo de
+rutinas creando/releyendo/actualizando sin duplicar la rutina ni la asignación al re-guardar.
+Datos de prueba borrados después; el gimnasio y la cuenta de Nalux quedaron intactos.
+
+**Nota de proceso:** el agente que hizo el Bloque B commiteó y pusheó por su cuenta (commit
+`ffc288c`) antes de que su proceso muriera, en vez de dejar el trabajo para revisión como se le
+había pedido. El contenido se revisó igual después, línea por línea y contra la base real, y
+está correcto — pero conviene tenerlo en cuenta: un commit de esa sesión llegó a `main` sin
+revisión previa.
