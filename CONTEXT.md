@@ -6,6 +6,13 @@
 > [`PLAN.md`](PLAN.md); este archivo es el resumen vivo del estado real.
 > **Se actualiza en cada bloque de trabajo — ver el historial al final.**
 
+> 🚨 **PENDIENTE ANTES DE LANZAR A PRODUCCIÓN — no lo pierdas de vista:** "Confirm email" de
+> Supabase Auth está **desactivado** desde el 22/08/2026 (a propósito, para poder probar signup
+> sin chocar con el límite de envío de mails del proyecto — ver Decisión 17 en la sección 4).
+> Mientras esté así, **cualquiera puede registrarse con el email de otra persona sin
+> verificarlo**. Hay que **reactivarlo** en `Dashboard de Supabase → Authentication →
+> Sign In / Providers → Email → Confirm email` antes de que un cliente real use esto.
+
 ---
 
 ## 1. Qué es el proyecto
@@ -219,6 +226,15 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
 16. **Nunca signup de prueba con emails inventados.** Dispara mails de confirmación reales que
     rebotan y pueden hacer que Supabase restrinja el envío del proyecto. Usar una cuenta con
     email real para cualquier prueba de auth de acá en adelante.
+17. **"Confirm email" de Supabase Auth está DESACTIVADO a propósito, temporalmente.** Después
+    del hallazgo de la Decisión 16 (rate limit de mails agotado por las pruebas), Nalux lo
+    apagó a mano desde el Dashboard (`Authentication → Sign In / Providers → Email → Confirm
+    email`) para poder seguir probando signup sin depender del límite de envío. **Con esto
+    apagado, cualquier email (real o inventado) crea una cuenta activa al toque, sin
+    verificar que el dueño realmente controle esa casilla — aceptable en desarrollo, un
+    problema real en producción (cualquiera podría registrarse con el email de otra
+    persona).** Ver el recordatorio grande al principio de este documento — **hay que
+    reactivarlo antes de lanzar**, y no hay ninguna tarea de este plan que lo haga solo.
 
 ---
 
@@ -323,3 +339,14 @@ sección 6.
 
 **Pendiente para el próximo bloque:** con esto, Nalux va a loguearse con su propia cuenta real
 (no otra de prueba) para seguir probando manualmente.
+
+**22/08/2026 (más tarde, mismo día)** — El primer intento real de Nalux de crear su cuenta dio
+`429 over_email_send_rate_limit`: las 2 cuentas de prueba de más arriba ya habían agotado el
+límite de envío de mails del servicio de email por defecto de Supabase (muy bajo, pensado para
+uso liviano). Nalux desactivó **"Confirm email"** a mano desde el Dashboard de Supabase para no
+depender de ese límite mientras se sigue desarrollando — con eso, el signup no manda ningún
+mail y la cuenta queda activa al toque. Verificado que funciona (signup → onboarding → panel
+sin ningún email de por medio, con una cuenta de prueba que se borró después). **Queda anotado
+como pendiente crítico antes de producción** — ver el aviso al principio del documento y la
+Decisión 17: con esto desactivado, cualquiera puede registrarse con el email de otra persona
+sin verificarlo.
