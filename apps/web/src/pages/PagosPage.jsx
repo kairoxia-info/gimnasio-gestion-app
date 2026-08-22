@@ -3,7 +3,8 @@ import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Card, Empty, ErrorBox, Loading } from '@/components/ui-kit';
-import { ESTADOS_PAGO, estadoDesdeVencimiento, fmtFecha, listAll, money } from '@/lib/data';
+import { listAll } from '@/lib/data';
+import { ESTADOS_PAGO, estadoDesdeVencimiento, fmtFecha, money } from '@/lib/format';
 
 const PagosPage = () => {
     const [alumnos, setAlumnos] = useState([]);
@@ -29,8 +30,8 @@ const PagosPage = () => {
 
         const ultimo = new Map();
         pagos.forEach((p) => {
-            const prev = ultimo.get(p.alumno);
-            if (!prev || String(p.periodo_hasta || '') > String(prev.periodo_hasta || '')) ultimo.set(p.alumno, p);
+            const prev = ultimo.get(p.alumno_id);
+            if (!prev || String(p.periodo_hasta || '') > String(prev.periodo_hasta || '')) ultimo.set(p.alumno_id, p);
         });
 
         const filas = alumnos
@@ -139,7 +140,7 @@ const PagosPage = () => {
                                 {pagos.slice(0, 15).map((p) => (
                                     <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                                         <div>
-                                            <p className="text-sm font-semibold">{nombre(p.alumno)}</p>
+                                            <p className="text-sm font-semibold">{nombre(p.alumno_id)}</p>
                                             <p className="text-xs text-muted-foreground">
                                                 {fmtFecha(p.fecha_pago)} · {p.metodo || 'Efectivo'}
                                                 {p.descuento ? ` · -${p.descuento}%` : ''}

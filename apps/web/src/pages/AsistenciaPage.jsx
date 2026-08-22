@@ -39,14 +39,14 @@ const AsistenciaPage = () => {
     const mapa = useMemo(() => {
         const m = {};
         asistencias.forEach((a) => {
-            m[`${a.alumno}|${a.fecha}`] = a;
+            m[`${a.alumno_id}|${a.fecha}`] = a;
         });
         return m;
     }, [asistencias]);
 
     const marcar = async (alumnoId, fecha) => {
         const actual = mapa[`${alumnoId}|${fecha}`];
-        if (!actual) await createRec('asistencias', { alumno: alumnoId, fecha, presente: true });
+        if (!actual) await createRec('asistencias', { alumno_id: alumnoId, fecha, presente: true });
         else if (actual.presente) await updateRec('asistencias', actual.id, { presente: false });
         else await removeRec('asistencias', actual.id);
         cargar();

@@ -3,7 +3,8 @@ import { Helmet } from 'react-helmet';
 import { Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select } from '@/components/ui-kit';
-import { createRec, listAll, money, removeRec, updateRec } from '@/lib/data';
+import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { money } from '@/lib/format';
 
 const PERIODOS = ['Diario', 'Semanal', 'Mensual', 'Trimestral', 'Anual'];
 

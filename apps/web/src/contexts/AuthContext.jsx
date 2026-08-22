@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import supabase from '@/lib/supabaseClient';
+import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
 
 const AuthContext = createContext(null);
 
@@ -58,6 +59,14 @@ export const AuthProvider = ({ children }) => {
             subscription.unsubscribe();
         };
     }, [fetchProfile]);
+
+    // data.js es un módulo plano (no un hook): necesita el gimnasio_id
+    // vigente para poder mandarlo en cada INSERT. Se lo pasamos acá cada vez
+    // que cambia el profile, en vez de que data.js vuelva a consultar
+    // `profiles` por su cuenta.
+    useEffect(() => {
+        setCurrentGimnasioId(profile?.gimnasio_id ?? null);
+    }, [profile]);
 
     const value = useMemo(
         () => ({

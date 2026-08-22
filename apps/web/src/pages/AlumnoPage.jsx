@@ -3,33 +3,43 @@ import { Helmet } from 'react-helmet';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, UserRound } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import pb from '@/lib/pocketbaseClient';
+import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
-import {
-    COMIDAS,
-    ESTADOS_PAGO,
-    antiguedad,
-    createRec,
-    estadoDesdeVencimiento,
-    fmtFecha,
-    hoy,
-    money,
-    removeRec,
-    updateRec,
-} from '@/lib/data';
+import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { COMIDAS, ESTADOS_PAGO, antiguedad, estadoDesdeVencimiento, fmtFecha, hoy, money } from '@/lib/format';
 
 const DIAS = ['Día 1', 'Día 2', 'Día 3', 'Día 4', 'Día 5', 'Día 6'];
 
-const byAlumno = (col, id, sort = '-created') =>
-    pb.collection(col).getFullList({ filter: pb.filter('alumno = {:id}', { id }), sort });
+// rutinas es la plantilla (nombre/descripcion/items), rutinas_asignadas es el
+// vínculo con el alumno. Acá se trae la asignación más reciente (activa si
+// hay varias) y se combina con su rutina en un solo objeto para que
+// PlanEntrenamiento no tenga que saber nada del modelo de dos tablas.
+const cargarRutinaAsignada = async (alumnoId) => {
+    const asignadas = await listAll('rutinas_asignadas', {
+        filters: { alumno_id: alumnoId },
+        sort: '-created_at',
+    });
+    if (asignadas.length === 0) return null;
+    const asignacion = asignadas.find((a) => a.activa) || asignadas[0];
+    const rutinas = await listAll('rutinas', { filters: { id: asignacion.rutina_id } });
+    const rutina = rutinas[0];
+    if (!rutina) return null;
+    return {
+        asignacionId: asignacion.id,
+        rutinaId: rutina.id,
+        nombre: rutina.nombre,
+        descripcion: rutina.descripcion,
+        items: rutina.items || [],
+    };
+};
 
 /* ---------------- Plan de entrenamiento ---------------- */
 
 const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
     const [items, setItems] = useState(plan?.items || []);
     const [nombre, setNombre] = useState(plan?.nombre || 'Plan de entrenamiento');
-    const [notas, setNotas] = useState(plan?.notas || '');
+    const [notas, setNotas] = useState(plan?.descripcion || '');
     const [sel, setSel] = useState(ejercicios[0]?.id || '');
     const [dia, setDia] = useState(DIAS[0]);
     const [saving, setSaving] = useState(false);
@@ -38,7 +48,7 @@ const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
     useEffect(() => {
         setItems(plan?.items || []);
         setNombre(plan?.nombre || 'Plan de entrenamiento');
-        setNotas(plan?.notas || '');
+        setNotas(plan?.descripcion || '');
     }, [plan]);
 
     const agregar = () => {
@@ -67,9 +77,15 @@ const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
         setSaving(true);
         setMsg('');
         try {
-            const payload = { alumno: alumnoId, nombre, notas, items };
-            if (plan?.id) await updateRec('planes_entrenamiento', plan.id, payload);
-            else await createRec('planes_entrenamiento', payload);
+            const payloadRutina = { nombre, descripcion: notas, items };
+            if (plan?.rutinaId) {
+                // Ya hay una rutina asignada a este alumno: se actualiza la
+                // misma plantilla en vez de crear una nueva en cada guardado.
+                await updateRec('rutinas', plan.rutinaId, payloadRutina);
+            } else {
+                const rutina = await createRec('rutinas', payloadRutina);
+                await createRec('rutinas_asignadas', { rutina_id: rutina.id, alumno_id: alumnoId });
+            }
             setMsg('Plan guardado.');
             onSaved();
         } catch (_) {
@@ -249,7 +265,7 @@ const PlanAlimentacion = ({ alumnoId, alimentos, plan, onSaved }) => {
         setSaving(true);
         setMsg('');
         try {
-            const payload = { alumno: alumnoId, nombre, items };
+            const payload = { alumno_id: alumnoId, nombre, items };
             if (plan?.id) await updateRec('planes_alimentacion', plan.id, payload);
             else await createRec('planes_alimentacion', payload);
             setMsg('Plan guardado.');
@@ -373,7 +389,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
         setSaving(true);
         try {
             await createRec('progreso', {
-                alumno: alumnoId,
+                alumno_id: alumnoId,
                 fecha: form.fecha,
                 peso: Number(form.peso || 0),
                 cintura: Number(form.cintura || 0),
@@ -538,7 +554,7 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
 
     const marcar = async (fecha) => {
         const actual = mapa[fecha];
-        if (!actual) await createRec('asistencias', { alumno: alumnoId, fecha, presente: true });
+        if (!actual) await createRec('asistencias', { alumno_id: alumnoId, fecha, presente: true });
         else if (actual.presente) await updateRec('asistencias', actual.id, { presente: false });
         else await removeRec('asistencias', actual.id);
         onChange();
@@ -646,7 +662,7 @@ const PagosAlumno = ({ alumnoId, pagos, precios, onChange }) => {
         setSaving(true);
         try {
             await createRec('pagos', {
-                alumno: alumnoId,
+                alumno_id: alumnoId,
                 monto: total,
                 fecha_pago: form.fecha_pago,
                 periodo_desde: form.periodo_desde,
@@ -836,37 +852,44 @@ const AlumnoPage = () => {
         precios: [],
     });
 
-    const cargar = () => {
-        Promise.all([
-            pb.collection('alumnos').getOne(id),
-            pb.collection('ejercicios').getFullList({ sort: 'nombre' }),
-            pb.collection('alimentos').getFullList({ sort: 'nombre' }),
-            byAlumno('planes_entrenamiento', id),
-            byAlumno('planes_alimentacion', id),
-            byAlumno('progreso', id, '-fecha'),
-            byAlumno('asistencias', id, '-fecha'),
-            byAlumno('pagos', id, '-fecha_pago'),
-            pb.collection('configuracion_precios').getFullList({ sort: 'nombre' }),
-        ])
-            .then(([alumno, ejercicios, alimentos, pe, pa, progreso, asistencias, pagos, precios]) => {
-                setData({
-                    alumno,
-                    ejercicios,
-                    alimentos,
-                    planEnt: pe[0] || null,
-                    planAli: pa[0] || null,
-                    progreso,
-                    asistencias,
-                    pagos,
-                    precios,
-                });
-                setError('');
-            })
-            .catch(() => setError('No se pudo cargar la ficha del alumno.'))
-            .finally(() => setLoading(false));
+    const cargar = async () => {
+        try {
+            const [alumnoRes, ejercicios, alimentos, planAliRows, progreso, asistencias, pagos, precios] =
+                await Promise.all([
+                    supabase.from('alumnos').select('*').eq('id', id).single(),
+                    listAll('ejercicios', { sort: 'nombre' }),
+                    listAll('alimentos', { sort: 'nombre' }),
+                    listAll('planes_alimentacion', { filters: { alumno_id: id }, sort: '-created_at' }),
+                    listAll('progreso', { filters: { alumno_id: id }, sort: '-fecha' }),
+                    listAll('asistencias', { filters: { alumno_id: id }, sort: '-fecha' }),
+                    listAll('pagos', { filters: { alumno_id: id }, sort: '-fecha_pago' }),
+                    listAll('configuracion_precios', { sort: 'nombre' }),
+                ]);
+            if (alumnoRes.error) throw alumnoRes.error;
+            const planEnt = await cargarRutinaAsignada(id);
+            setData({
+                alumno: alumnoRes.data,
+                ejercicios,
+                alimentos,
+                planEnt,
+                planAli: planAliRows[0] || null,
+                progreso,
+                asistencias,
+                pagos,
+                precios,
+            });
+            setError('');
+        } catch (_) {
+            setError('No se pudo cargar la ficha del alumno.');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    useEffect(cargar, [id]);
+    useEffect(() => {
+        cargar();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]);
 
     const { alumno } = data;
 

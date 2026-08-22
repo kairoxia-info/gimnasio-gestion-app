@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { Plus, Search, UserRound } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
-import { antiguedad, createRec, fmtFecha, hoy, listAll, removeRec, updateRec } from '@/lib/data';
+import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { antiguedad, fmtFecha, hoy } from '@/lib/format';
 
 const vacio = {
     nombre: '',

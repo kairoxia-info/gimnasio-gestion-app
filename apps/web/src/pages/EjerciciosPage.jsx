@@ -3,7 +3,8 @@ import { Helmet } from 'react-helmet';
 import { Dumbbell, ExternalLink, Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
-import { GRUPOS, createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { GRUPOS } from '@/lib/format';
 
 const vacio = { nombre: '', grupo_muscular: GRUPOS[0], media_url: '', descripcion: '' };
 

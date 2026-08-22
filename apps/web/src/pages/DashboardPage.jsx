@@ -5,7 +5,8 @@ import { ArrowUpRight, CalendarCheck, TrendingUp, Users, Wallet } from 'lucide-r
 import AppLayout from '@/components/AppLayout';
 import { Card, Empty, Loading } from '@/components/ui-kit';
 import CountUp from '@/components/CountUp';
-import { ESTADOS_PAGO, estadoDesdeVencimiento, fmtFecha, listAll, money } from '@/lib/data';
+import { listAll } from '@/lib/data';
+import { ESTADOS_PAGO, estadoDesdeVencimiento, fmtFecha, money } from '@/lib/format';
 
 const DashboardPage = () => {
     const [state, setState] = useState({ loading: true, alumnos: [], pagos: [], asistencias: [] });
@@ -32,9 +33,9 @@ const DashboardPage = () => {
 
         const ultimoPorAlumno = new Map();
         pagos.forEach((p) => {
-            const prev = ultimoPorAlumno.get(p.alumno);
+            const prev = ultimoPorAlumno.get(p.alumno_id);
             if (!prev || String(p.periodo_hasta || '') > String(prev.periodo_hasta || '')) {
-                ultimoPorAlumno.set(p.alumno, p);
+                ultimoPorAlumno.set(p.alumno_id, p);
             }
         });
 
