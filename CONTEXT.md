@@ -35,6 +35,10 @@ baja directamente.
 
 **Repo:** `github.com/kairoxia-info/gimnasio-gestion-app` (privado, cuenta personal de Nalux).
 
+**Nombre de la app (temporal, hasta definir el nombre final):** "Gestión GYM Kairox IA". Ya
+reemplazó a "Fitness Gym Place" (el nombre de otro gimnasio real, que venía hardcodeado desde
+la exportación de Horizons) en todos los `<title>`/`<meta>`/logo de `apps/web`.
+
 ---
 
 ## 2. Stack y arquitectura
@@ -78,6 +82,19 @@ confirmar explícitamente `project_id: fftdmpqbemcnxdnfnvhd` antes de ejecutar n
   `GRANT` a nivel de tabla para el rol `authenticated` antes de que la policy siquiera se
   evalúe. Aprendido de la manera dura en el Bloque A — ver Decisión 5 en sección 4.
 
+**Auth real (Bloque C, ya construido):** `AuthContext.jsx` habla contra Supabase Auth
+(`signIn`/`signUp`/`signOut`/`resetPasswordForEmail`/`updateUser`), expone `profile`
+(`gimnasio_id`, `role`) leído de `profiles`. `ProtectedRoute.jsx` decide: sin sesión → `/login`;
+con sesión sin `gimnasio_id` → `/onboarding`; con `gimnasio_id` → resto de la app.
+
+**Storage (Bloque E, parcial):** bucket `gimnasio-logos` (público para lectura, escritura solo
+admin del propio gimnasio, nombre de archivo anclado a `{gimnasio_id}/logo.<ext>`) —
+`supabase/migrations/0003_gimnasio_logos_storage.sql`. Mismo principio de aislamiento que las
+tablas, pero ojo: `storage.objects`/`storage.buckets` son tablas **únicas y compartidas por
+todos los buckets del proyecto** — el control de acceso ahí es 100% vía RLS con
+`bucket_id = '...'` en cada policy, **nunca** vía `GRANT`/`REVOKE` de tabla como en `0002`
+(revocarle algo a `storage.objects` completo rompería todos los buckets, no solo uno).
+
 Detalle completo del schema SQL: `supabase/migrations/` (aplicado) y `PLAN.md` (research y
 razonamiento de cada decisión).
 
@@ -104,13 +121,34 @@ razonamiento de cada decisión).
   prueba, cada uno simulado con `SET ROLE authenticated` + `auth.uid()` real — confirmado que
   A no ve nada de B, B no ve nada de A, y sin login no se ve nada. Datos de prueba borrados
   después, base queda vacía. Detalle completo en sección 4 (decisiones 5 y 6).
+- **✅ Bloque C (auth y rutas) — TERMINADO.** `supabaseClient.js`, `AuthContext.jsx` real,
+  `ProtectedRoute.jsx` real (antes era un no-op), rutas `/login` (con toggle login/registro),
+  `/restablecer-password`, `/onboarding` declaradas en `App.jsx`.
+- **✅ Bloque E — parcial.** Onboarding del gimnasio nuevo (nombre + logo opcional) y el bucket
+  `gimnasio-logos` YA están. **Todavía NO están**: código de invitación/QR (Decisión 7, ni
+  siquiera empezado) ni una pantalla de Configuración para que un admin ya onboardeado edite
+  después el nombre/logo/color de su gimnasio (hoy esos datos solo se cargan una vez, en el
+  onboarding — no hay UI para volver a editarlos).
+- **Verificado contra la base real, no simulado:** signup → confirmación → login → onboarding →
+  panel, con dos cuentas reales distintas; aislamiento entre tenants con el código real
+  (alumnos, gimnasios y profiles ajenos no visibles entre sí); Storage — subida propia OK,
+  subida cruzada a otro gimnasio rechazada, nombre de archivo fuera de patrón rechazado, lectura
+  pública OK; contraste claro/oscuro verificado con estilos computados. Detalle en el historial.
 
-**Falta todo lo demás:** capa de datos del frontend contra Supabase (Bloque B), auth y rutas
-protegidas (Bloque C), verificación de punta a punta desde la UI (Bloque D), identidad de marca
-por gimnasio (Bloque E), autorregistro por código/QR y subida de video propio (Bloques E/F), y
-todo lo de Fase 2/3 (rutinas-plantilla como feature de UI, login de alumno, récords,
-notificaciones, finanzas, reservas, etc.). El checklist completo, bloque por bloque, está en
-`PLAN.md` sección 3.5 — no se duplica acá para no tener dos fuentes de verdad desincronizándose.
+**⚠️ Lección operativa de esta sesión — cuentas de prueba:** `supabase.auth.signUp()` manda el
+mail de confirmación de verdad apenas se llama, así que probar con emails inventados
+(`@example.com` o similares) hace que Supabase reciba rebotes reales — con suficientes, puede
+restringir el envío de mails del proyecto. **Para probar signup/login de acá en adelante, usar
+una cuenta con un email real (o pedirle a Nalux que lo haga él), nunca inventar direcciones.**
+
+**Falta:** resto de la capa de datos del frontend contra Supabase (Bloque B — hoy solo está
+migrada la parte de auth; `data.js` y las páginas de negocio como `AlumnosPage`, `EjerciciosPage`,
+etc. siguen hablando con PocketBase), verificación de punta a punta desde la UI con datos de
+negocio reales (Bloque D), lo que falta de Bloque E (código/QR, pantalla de configuración de
+marca), subida de video propio (Bloque F), y todo lo de Fase 2/3 (rutinas-plantilla como feature
+de UI, login de alumno, récords, notificaciones, finanzas, reservas, etc.). El checklist
+completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá para no tener dos
+fuentes de verdad desincronizándose.
 
 ---
 
@@ -170,6 +208,17 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
 13. **Solo se opera contra el proyecto Supabase `gimnasio-gestion-app` (`fftdmpqbemcnxdnfnvhd`)
     desde este repo.** El otro proyecto de la misma organización, `Kairox-gestión (nuevo)`, es
     de otro producto y nunca se consulta ni se modifica desde acá — ver sección 2.
+14. **Sin imágenes de terceros como marca propia.** El `LOGO_URL` original (heredado de la
+    demo de Horizons) apuntaba al logo real de otro gimnasio — se eliminó por completo. El
+    componente `Logo` (`AppLayout.jsx`) es ahora un wordmark propio (ícono + texto Tailwind,
+    sin ninguna imagen externa) hasta que haya un logo real propio.
+15. **Storage: control de acceso 100% por RLS con `bucket_id`, nunca por `GRANT`/`REVOKE` de
+    tabla.** `storage.objects` es una tabla compartida por todos los buckets del proyecto —
+    tocar sus grants (como se hizo con las tablas de negocio en `0002`) rompería todos los
+    buckets a la vez, no solo uno. Ver Decisión 5 y sección 2.
+16. **Nunca signup de prueba con emails inventados.** Dispara mails de confirmación reales que
+    rebotan y pueden hacer que Supabase restrinja el envío del proyecto. Usar una cuenta con
+    email real para cualquier prueba de auth de acá en adelante.
 
 ---
 
@@ -222,10 +271,20 @@ cada operación. Para tener acceso, pedirle a Nalux que invite tu usuario al pro
 
 **Comandos** (desde la raíz):
 ```bash
-npm run dev     # levanta apps/web (puerto 3000) + apps/pocketbase en paralelo
-npm run build   # build de apps/web a dist/apps/web
-npm run lint    # eslint de apps/web
+npm run dev -w apps/web   # levanta SOLO apps/web, puerto 3001
+npm run build -w apps/web # build de apps/web a dist/apps/web
+npm run lint -w apps/web  # eslint de apps/web
 ```
+
+⚠️ **No usar `npm run dev` a secas** (sin `-w apps/web`): ese script de la raíz usa
+`concurrently --kill-others` para levantar `apps/web` **y** `apps/pocketbase` juntos, y como
+`apps/pocketbase` no existe en este checkout (ver nota sección 1), apenas ese segundo comando
+falla, `--kill-others` mata también el servidor de `apps/web` que sí había arrancado.
+
+Puerto **3001**, no el 5173 por defecto de Vite (a propósito, para no chocar con otros
+proyectos corriendo en paralelo) — configurado tanto en `apps/web/package.json` como en
+`apps/web/vite.config.js` (`server.port`). Hay un `.claude/launch.json` en la raíz apuntando a
+`npm run dev -w apps/web` para levantarlo directo desde Claude Code.
 
 ---
 
@@ -244,3 +303,23 @@ detectó y motivó una segunda migración, `0002_grant_authenticated_privileges.
 `GRANT`s de tabla faltantes para `authenticated` que RLS por sí sola no cubre. Aislamiento
 confirmado en ambos sentidos (A no ve B, B no ve A) y sin autenticar no se ve nada. Datos de
 prueba borrados, base queda limpia.
+
+**22/08/2026** — Bloque C completo + Bloque E parcial (onboarding + Storage de logos). Auth
+real contra Supabase (`supabaseClient.js`, `AuthContext.jsx`, `ProtectedRoute.jsx`), pantallas
+de login/registro/recuperar-contraseña/onboarding nuevas, bucket `gimnasio-logos`
+(`0003_gimnasio_logos_storage.sql`) revisado por `appsec-secure-coding` (corrigió un hallazgo
+real: el chequeo de tenant solo validaba el primer segmento del path, no el nombre completo del
+archivo — quedaba abierta una vía de abuso de storage compartido). Todo verificado contra la
+base real: signup→login→onboarding→panel con 2 cuentas, aislamiento entre tenants con el código
+real (no solo simulado por SQL), Storage con test de subida cruzada rechazada, contraste
+claro/oscuro. Nombre de la app corregido a "Gestión GYM Kairox IA" (dos idas y vueltas en la
+sesión: primero "GYM Kairox", después "Gestión Gym Kairox", nombre final confirmado por Nalux).
+`LOGO_URL` (el logo real de otro gimnasio, heredado de la demo de Horizons) eliminado — `Logo`
+ahora es un wordmark propio. Aprendida y documentada la lección de no usar emails inventados
+para probar signup (dispara mails reales que rebotan). Corregido en este mismo documento un
+dato que había quedado desactualizado de una sesión anterior: el comando correcto para levantar
+`apps/web` es `npm run dev -w apps/web` en el puerto 3001, no `npm run dev` a secas — ver
+sección 6.
+
+**Pendiente para el próximo bloque:** con esto, Nalux va a loguearse con su propia cuenta real
+(no otra de prueba) para seguir probando manualmente.
