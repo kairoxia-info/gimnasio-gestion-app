@@ -151,6 +151,16 @@ razonamiento de cada decisión).
   (alumnos, gimnasios y profiles ajenos no visibles entre sí); Storage — subida propia OK,
   subida cruzada a otro gimnasio rechazada, nombre de archivo fuera de patrón rechazado, lectura
   pública OK; contraste claro/oscuro verificado con estilos computados. Detalle en el historial.
+- **✅ Bloque D (verificación end-to-end desde la UI) — TERMINADO.** Flujo completo manejado por
+  la aplicación real (no SQL a mano): signup → onboarding → alta de ejercicio → alta de alumno →
+  armar y guardar rutina asignada → marcar asistencia → registrar pago, con un gimnasio de
+  prueba ("VERIF Gimnasio A"). Después, segundo gimnasio de prueba ("VERIF Gimnasio B") para
+  repetir el test de aislamiento A6 pero con código de aplicación real en vez de SQL simulado:
+  confirmado en ambas direcciones (B no ve nada de A — panel en cero, listas vacías, acceso
+  directo por URL a la ficha de un alumno de A rechazado; A no ve el alumno cargado en B) tanto
+  desde la UI como con una consulta SQL de árbitro neutral. Datos de prueba (2 gimnasios, 2
+  cuentas, alumnos/ejercicios/rutinas/asistencias/pagos asociados) borrados después — verificado
+  por SQL que solo queda la cuenta real de Nalux ("Mi GYM FIT").
 
 **⚠️ Lección operativa de esta sesión — cuentas de prueba:** `supabase.auth.signUp()` manda el
 mail de confirmación de verdad apenas se llama, así que probar con emails inventados
@@ -158,13 +168,11 @@ mail de confirmación de verdad apenas se llama, así que probar con emails inve
 restringir el envío de mails del proyecto. **Para probar signup/login de acá en adelante, usar
 una cuenta con un email real (o pedirle a Nalux que lo haga él), nunca inventar direcciones.**
 
-**Falta:** verificación de punta a punta desde la UI con datos de negocio reales y en volumen
-(Bloque D — lo que se probó hasta ahora fueron registros sueltos de verificación, no un uso
-real con varios alumnos/pagos/asistencias), lo que falta de Bloque E (código/QR, pantalla de
-configuración de marca), subida de video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de
-rutinas reutilizables con asignación masiva, login de alumno, récords, notificaciones, finanzas,
-reservas, etc.). El checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se
-duplica acá para no tener dos fuentes de verdad desincronizándose.
+**Falta:** lo que falta de Bloque E (código/QR, pantalla de configuración de marca), subida de
+video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de rutinas reutilizables con
+asignación masiva, login de alumno, récords, notificaciones, finanzas, reservas, etc.). El
+checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá para no
+tener dos fuentes de verdad desincronizándose.
 
 ---
 
@@ -253,15 +261,12 @@ El plan completo, con checklist paso a paso por bloque (A a G) y las preguntas t
 abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Resumen de por dónde sigue
 esto ahora que terminaron los Bloques A, B y C (y E a medias):
 
-1. **Bloque D** — verificar el MVP de punta a punta **desde la UI**, con uso real (varios
-   alumnos, pagos, asistencias), no solo los registros sueltos de verificación que se probaron
-   al cerrar cada bloque.
-2. **Lo que falta del Bloque E** — autorregistro por código/QR (Decisión 7) y una pantalla de
+1. **Lo que falta del Bloque E** — autorregistro por código/QR (Decisión 7) y una pantalla de
    configuración para editar nombre/logo/color del gimnasio después del onboarding.
-3. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
-4. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
+2. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
+3. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
    de alumno, récords, notificaciones.
-5. **Pendiente de seguridad, antes de sumar staff que no sea de confianza:** el trigger
+4. **Pendiente de seguridad, antes de sumar staff que no sea de confianza:** el trigger
    `BEFORE UPDATE` sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17)
    antes de producción.
 
@@ -383,3 +388,18 @@ Datos de prueba borrados después; el gimnasio y la cuenta de Nalux quedaron int
 había pedido. El contenido se revisó igual después, línea por línea y contra la base real, y
 está correcto — pero conviene tenerlo en cuenta: un commit de esa sesión llegó a `main` sin
 revisión previa.
+
+**24/08/2026** — **Bloque D terminado**: verificación end-to-end desde la UI, manejada por la
+aplicación real (nunca SQL a mano para simular el flujo de negocio). Con "VERIF Gimnasio A":
+signup → onboarding → ejercicio → alumno → rutina armada y asignada → asistencia → pago,
+recorriendo la app real de punta a punta. Con "VERIF Gimnasio B" (segundo gimnasio, cuenta
+distinta) se repitió el test de aislamiento de la Decisión 5 pero con código de aplicación real
+en lugar de SQL simulado: confirmado en ambas direcciones — B no ve nada de A (panel en cero,
+listas de alumnos/ejercicios vacías, y acceso directo por URL a la ficha del alumno de A
+rechazado por RLS con "No se pudo cargar la ficha"), y A no ve el alumno cargado después en B —
+verificado tanto desde la UI como con una consulta SQL de árbitro neutral contando filas por
+`gimnasio_id`. Datos de prueba (2 gimnasios, 2 cuentas de auth, y todos los
+alumnos/ejercicios/rutinas/rutinas_asignadas/asistencias/pagos asociados) borrados por cascada
+al borrar los gimnasios de prueba + las cuentas de auth; confirmado por SQL que solo queda la
+cuenta real de Nalux ("Mi GYM FIT", `nadiatecera13@gmail.com`) y que no quedó ningún archivo de
+prueba en el bucket `gimnasio-logos`.
