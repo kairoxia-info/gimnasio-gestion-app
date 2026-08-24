@@ -94,13 +94,22 @@ confirmar explícitamente `project_id: fftdmpqbemcnxdnfnvhd` antes de ejecutar n
 (`gimnasio_id`, `role`) leído de `profiles`. `ProtectedRoute.jsx` decide: sin sesión → `/login`;
 con sesión sin `gimnasio_id` → `/onboarding`; con `gimnasio_id` → resto de la app.
 
-**Storage (Bloque E, parcial):** bucket `gimnasio-logos` (público para lectura, escritura solo
+**Storage (Bloque E):** bucket `gimnasio-logos` (público para lectura, escritura solo
 admin del propio gimnasio, nombre de archivo anclado a `{gimnasio_id}/logo.<ext>`) —
 `supabase/migrations/0003_gimnasio_logos_storage.sql`. Mismo principio de aislamiento que las
 tablas, pero ojo: `storage.objects`/`storage.buckets` son tablas **únicas y compartidas por
 todos los buckets del proyecto** — el control de acceso ahí es 100% vía RLS con
 `bucket_id = '...'` en cada policy, **nunca** vía `GRANT`/`REVOKE` de tabla como en `0002`
 (revocarle algo a `storage.objects` completo rompería todos los buckets, no solo uno).
+
+**Autorregistro público (Bloque E):** `supabase/migrations/0004_autorregistro_alumnos.sql`.
+`gimnasios.codigo_invitacion` (único, no adivinable) + `autorregistro_activo`; `alumnos.origen`
+('manual' | 'autorregistro'). Tres RPC `SECURITY DEFINER` nuevas: `join_gimnasio_por_codigo()` y
+`listar_planes_para_codigo()` (ambas con `GRANT` explícito a `anon` — únicas funciones del
+proyecto callables sin sesión, resuelven el tenant exclusivamente por el código) y
+`regenerar_codigo_invitacion()` (solo admin). Ver Decisión 18 para el detalle de seguridad y un
+bug real de `search_path` encontrado recién al verificar en vivo (`pgcrypto` vive en el schema
+`extensions` de Supabase, no en `public`).
 
 Detalle completo del schema SQL: `supabase/migrations/` (aplicado) y `PLAN.md` (research y
 razonamiento de cada decisión).
@@ -141,11 +150,16 @@ razonamiento de cada decisión).
   `AlumnoPage` ahora usa `rutinas` + `rutinas_asignadas` en vez de la vieja
   `planes_entrenamiento`, manteniendo la misma UX de un plan por alumno (la biblioteca de
   rutinas reutilizables con asignación masiva sigue siendo Bloque G).
-- **✅ Bloque E — parcial.** Onboarding del gimnasio nuevo (nombre + logo opcional) y el bucket
-  `gimnasio-logos` YA están. **Todavía NO están**: código de invitación/QR (Decisión 7, ni
-  siquiera empezado) ni una pantalla de Configuración para que un admin ya onboardeado edite
-  después el nombre/logo/color de su gimnasio (hoy esos datos solo se cargan una vez, en el
-  onboarding — no hay UI para volver a editarlos).
+- **✅ Bloque E — TERMINADO.** Onboarding del gimnasio nuevo (nombre + logo opcional) y el bucket
+  `gimnasio-logos` ya estaban. Se sumó lo que faltaba: pantalla "Datos del gimnasio" en
+  Configuración (editar nombre/logo/color después del onboarding, con `refreshProfile()` para que
+  el `GimnasioMark` del sidebar se actualice al toque) y autorregistro de alumnos por código de
+  invitación + QR (Decisión 8) — `gimnasios.codigo_invitacion` + `autorregistro_activo`, RPCs
+  `join_gimnasio_por_codigo()`/`listar_planes_para_codigo()` (públicas, `SECURITY DEFINER`,
+  únicas funciones del proyecto callable sin sesión) y `regenerar_codigo_invitacion()` (admin),
+  pantalla pública `/unirse/:codigo`, QR generado client-side (librería `qrcode`) con descarga, y
+  badge "Pendiente de aprobación" + botón "Aprobar" en `AlumnosPage` para los autorregistros.
+  Detalle completo en el historial (24/08/2026).
 - **Verificado contra la base real, no simulado:** signup → confirmación → login → onboarding →
   panel, con dos cuentas reales distintas; aislamiento entre tenants con el código real
   (alumnos, gimnasios y profiles ajenos no visibles entre sí); Storage — subida propia OK,
@@ -168,11 +182,10 @@ mail de confirmación de verdad apenas se llama, así que probar con emails inve
 restringir el envío de mails del proyecto. **Para probar signup/login de acá en adelante, usar
 una cuenta con un email real (o pedirle a Nalux que lo haga él), nunca inventar direcciones.**
 
-**Falta:** lo que falta de Bloque E (código/QR, pantalla de configuración de marca), subida de
-video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de rutinas reutilizables con
-asignación masiva, login de alumno, récords, notificaciones, finanzas, reservas, etc.). El
-checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá para no
-tener dos fuentes de verdad desincronizándose.
+**Falta:** subida de video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de rutinas
+reutilizables con asignación masiva, login de alumno, récords, notificaciones, finanzas, reservas,
+etc.). El checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá
+para no tener dos fuentes de verdad desincronizándose.
 
 ---
 
@@ -252,6 +265,26 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
     problema real en producción (cualquiera podría registrarse con el email de otra
     persona).** Ver el recordatorio grande al principio de este documento — **hay que
     reactivarlo antes de lanzar**, y no hay ninguna tarea de este plan que lo haga solo.
+18. **Autorregistro público (Bloque E, Decisión 8): única superficie de escritura sin login de
+    todo el proyecto, tratada como endpoint público de internet.** `join_gimnasio_por_codigo()` es
+    `SECURITY DEFINER` con `GRANT EXECUTE` explícito a `anon` (la única función del proyecto que
+    lo tiene) — resuelve el `gimnasio_id` EXCLUSIVAMENTE por `codigo_invitacion` (128 bits de
+    entropía, nunca por un parámetro del caller), inserta siempre con `activo = false` (pendiente
+    de aprobación del profesor, nunca se autoactiva), trunca todo input de texto a 200 caracteres,
+    y tiene un rate-limit propio (máx. 50 altas/5min por gimnasio) contra spam/loop. Revisado por
+    `appsec-secure-coding`, que además reclasificó el gap ya conocido de la Decisión 6
+    (`profiles_update_self`): antes de este bloque el techo del abuso era intra-tenant de bajo
+    impacto; desde este bloque, el mismo gap también habilita invalidar el `codigo_invitacion`
+    real de un gimnasio (vía `regenerar_codigo_invitacion()`, que solo chequea `role = 'admin'`)
+    sin ser su admin real — hoy no es explotable en la práctica (no existe todavía ninguna feature
+    de "invitar staff"), pero el fix diferido de la Decisión 6 pasa a ser bloqueante de esa
+    feature futura, no solo "conveniente". **Bug real encontrado recién al verificar en vivo (no
+    en el review estático):** `gen_random_bytes()` de `pgcrypto` vive en el schema `extensions` en
+    este proyecto de Supabase, no en `public` — las funciones `SECURITY DEFINER` con
+    `SET search_path = public` no lo encontraban (`create_gimnasio()` y
+    `regenerar_codigo_invitacion()` fallaban con error 42883 al primer intento real de signup).
+    Corregido calificando el schema explícitamente (`extensions.gen_random_bytes(...)`) — deja
+    como lección para futuras funciones `SECURITY DEFINER` de este proyecto que usen `pgcrypto`.
 
 ---
 
@@ -261,14 +294,16 @@ El plan completo, con checklist paso a paso por bloque (A a G) y las preguntas t
 abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Resumen de por dónde sigue
 esto ahora que terminaron los Bloques A, B y C (y E a medias):
 
-1. **Lo que falta del Bloque E** — autorregistro por código/QR (Decisión 7) y una pantalla de
-   configuración para editar nombre/logo/color del gimnasio después del onboarding.
-2. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
-3. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
+1. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
+2. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
    de alumno, récords, notificaciones.
-4. **Pendiente de seguridad, antes de sumar staff que no sea de confianza:** el trigger
-   `BEFORE UPDATE` sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17)
-   antes de producción.
+3. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
+   construir cualquier feature de "invitar staff a mi gimnasio"):** el trigger `BEFORE UPDATE`
+   sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17) antes de
+   producción. Ver Decisión 18 — el Bloque E subió la prioridad real de este gap: hoy mismo
+   permite que cualquier staff se autoasigne `admin` de su propio gimnasio (ya lo permitía antes),
+   pero **desde el Bloque E** eso además le da permiso a invalidar el código de invitación real
+   del gimnasio (`regenerar_codigo_invitacion()`) sin ser el admin real.
 
 **Preguntas todavía sin responder con el cliente** (no bloquean el Bloque A, pero sí bloquean
 partes de Fase 2/3): ¿reservas/turnos?, ¿uno o varios gimnasios clientes?, ¿sedes múltiples?,
@@ -403,3 +438,39 @@ alumnos/ejercicios/rutinas/rutinas_asignadas/asistencias/pagos asociados) borrad
 al borrar los gimnasios de prueba + las cuentas de auth; confirmado por SQL que solo queda la
 cuenta real de Nalux ("Mi GYM FIT", `nadiatecera13@gmail.com`) y que no quedó ningún archivo de
 prueba en el bucket `gimnasio-logos`.
+
+**24/08/2026 (más tarde, mismo día)** — **Bloque E terminado**: lo que faltaba (código de
+invitación + QR para autorregistro de alumnos, Decisión 8; pantalla de Configuración para editar
+nombre/logo/color del gimnasio después del onboarding). Migración
+`supabase/migrations/0004_autorregistro_alumnos.sql`: `gimnasios.codigo_invitacion` +
+`autorregistro_activo`, `alumnos.origen`, y tres RPC `SECURITY DEFINER` nuevas
+(`join_gimnasio_por_codigo()`, `listar_planes_para_codigo()`, `regenerar_codigo_invitacion()`).
+Diseñada por `database-architect`, revisada por `appsec-secure-coding` (encontró y corrigió: falta
+de truncado defensivo en el parámetro `p_codigo`, ausencia de rate-limit contra spam/loop en el
+autorregistro público, un bug de corrección en `regenerar_codigo_invitacion()` que devolvía un
+código "nuevo" sin guardarlo si el caller no tenía `gimnasio_id`, y reclasificó al alza la
+severidad futura del gap ya conocido de `profiles_update_self` — ver Decisión 18 para el detalle).
+Frontend por `frontend-architect`: dos secciones nuevas en `ConfiguracionPage` ("Datos del
+gimnasio" editable, "Código de invitación" con QR descargable vía la librería `qrcode`, toggle de
+autorregistro y botón de regenerar código), pantalla pública nueva `/unirse/:codigo`
+(`UnirsePage.jsx`, sin sesión ni `ProtectedRoute`), y badge "Pendiente de aprobación" + botón
+"Aprobar" en `AlumnosPage` para los autorregistros.
+
+**Bug real encontrado recién al verificar en vivo (no en el review estático):**
+`gen_random_bytes()` de `pgcrypto` vive en el schema `extensions` en este proyecto de Supabase, no
+en `public` — las funciones `SECURITY DEFINER` con `SET search_path = public` (`create_gimnasio()`
+y `regenerar_codigo_invitacion()`) no lo encontraban y fallaban con error 42883 al primer intento
+real de crear un gimnasio nuevo. El backfill de códigos para gimnasios ya existentes (SQL suelto,
+sin ese `search_path` restringido) no tuvo el mismo problema, lo que ocultó el bug hasta el primer
+signup real contra el código ya aplicado. Corregido calificando el schema explícitamente
+(`extensions.gen_random_bytes(...)`) en ambas funciones.
+
+Verificado de punta a punta contra la base real con un gimnasio de prueba nuevo: edición de
+nombre/color del gimnasio con reflejo inmediato en el sidebar (`refreshProfile()`), código +
+QR generados correctamente, autorregistro público exitoso (alumno queda `activo=false`,
+`origen='autorregistro'`), badge + botón "Aprobar" en `AlumnosPage` funcionando, código inválido
+rechazado con mensaje genérico, `autorregistro_activo=false` bloquea el autorregistro (mismo
+mensaje genérico, sin distinguir "código inexistente" de "pausado"), y "Regenerar código" invalida
+el código viejo y habilita uno nuevo al instante. Datos de prueba (1 gimnasio, 1 cuenta admin, 1
+alumno autorregistrado) borrados después; confirmado por SQL que solo queda la cuenta real de
+Nalux.

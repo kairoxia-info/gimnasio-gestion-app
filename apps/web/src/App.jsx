@@ -6,6 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import LoginPage from '@/pages/LoginPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import UnirsePage from '@/pages/UnirsePage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AlumnosPage from '@/pages/AlumnosPage';
@@ -38,6 +39,14 @@ function App() {
                             normal la rebotaría a /onboarding antes de poder cambiar la clave. La
                             propia página valida sesión/estado con useAuth() internamente. */}
                         <Route path="/restablecer-password" element={<ResetPasswordPage />} />
+                        {/* Sin ProtectedRoute a propósito: es la puerta de entrada para un
+                            visitante SIN sesión (alguien que escaneó el QR o abrió el link del
+                            código de invitación) — nunca va a tener sesión propia para esta
+                            acción puntual (el autorregistro no crea un usuario de auth.users,
+                            solo una fila en alumnos). El guard normal lo rebotaría a /login antes
+                            de poder ver el formulario, igual que pasaría con /login y
+                            /restablecer-password si los envolviéramos. */}
+                        <Route path="/unirse/:codigo" element={<UnirsePage />} />
                         <Route path="/onboarding" element={guard(<OnboardingPage />)} />
                         <Route path="/panel" element={guard(<DashboardPage />)} />
                         <Route path="/alumnos" element={guard(<AlumnosPage />)} />

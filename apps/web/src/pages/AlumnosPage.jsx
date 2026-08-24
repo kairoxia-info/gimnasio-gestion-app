@@ -143,8 +143,16 @@ const AlumnosPage = () => {
                                     <p className="truncate font-display text-lg font-bold">{a.nombre}</p>
                                     <p className="text-xs text-muted-foreground">{antiguedad(a.fecha_alta)}</p>
                                 </div>
-                                <Badge className={a.activo ? 'text-ok border-current' : 'text-muted-foreground border-border'}>
-                                    {a.activo ? 'Activo' : 'Inactivo'}
+                                <Badge
+                                    className={
+                                        a.activo
+                                            ? 'text-ok border-current'
+                                            : a.origen === 'autorregistro'
+                                              ? 'text-warn border-current'
+                                              : 'text-muted-foreground border-border'
+                                    }
+                                >
+                                    {a.activo ? 'Activo' : a.origen === 'autorregistro' ? 'Pendiente de aprobación' : 'Inactivo'}
                                 </Badge>
                             </div>
 
@@ -170,6 +178,14 @@ const AlumnosPage = () => {
                                 <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirEditar(a)}>
                                     Editar
                                 </Btn>
+                                {a.origen === 'autorregistro' && !a.activo && (
+                                    <Btn
+                                        className="px-3 py-2 text-xs"
+                                        onClick={() => updateRec('alumnos', a.id, { activo: true }).then(cargar)}
+                                    >
+                                        Aprobar
+                                    </Btn>
+                                )}
                                 <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(a.id)}>
                                     Eliminar
                                 </Btn>
