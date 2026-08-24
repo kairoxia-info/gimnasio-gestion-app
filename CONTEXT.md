@@ -111,6 +111,14 @@ proyecto callables sin sesión, resuelven el tenant exclusivamente por el códig
 bug real de `search_path` encontrado recién al verificar en vivo (`pgcrypto` vive en el schema
 `extensions` de Supabase, no en `public`).
 
+**Video/imagen propia de ejercicios (Bloque F):**
+`supabase/migrations/0005_ejercicios_media_storage.sql`. Bucket `ejercicios-media` (público para
+lectura, 50 MB, video+imagen), path `{gimnasio_id}/{ejercicio_id}.<ext>` — a diferencia de
+`gimnasio-logos`, acá escribe CUALQUIER staff del tenant (no solo admin, igualando el permiso que
+ya tiene la tabla `ejercicios`) y el INSERT/UPDATE exige además un `EXISTS` contra
+`public.ejercicios` (el `ejercicio_id` del path tiene que ser una fila real del propio tenant, no
+solo "tener forma de UUID") — ver Decisión 19.
+
 Detalle completo del schema SQL: `supabase/migrations/` (aplicado) y `PLAN.md` (research y
 razonamiento de cada decisión).
 
@@ -175,6 +183,12 @@ razonamiento de cada decisión).
   desde la UI como con una consulta SQL de árbitro neutral. Datos de prueba (2 gimnasios, 2
   cuentas, alumnos/ejercicios/rutinas/asistencias/pagos asociados) borrados después — verificado
   por SQL que solo queda la cuenta real de Nalux ("Mi GYM FIT").
+- **✅ Bloque F (video/imagen propia de ejercicios) — TERMINADO.** Bucket `ejercicios-media`
+  (`supabase/migrations/0005_ejercicios_media_storage.sql`) + `EjerciciosPage.jsx`: selector de
+  archivo (MP4/WEBM/MOV/PNG/JPG/WEBP, máx. 50 MB) que convive con el campo de URL externa ya
+  existente — si se sube un archivo, ese archivo gana sobre la URL pegada. El archivo se sube
+  DESPUÉS de guardar la fila de `ejercicios` (nunca antes: la policy de storage lo exige vía un
+  `EXISTS`), con el `id` real del ejercicio en el path. Detalle de seguridad en Decisión 19.
 
 **⚠️ Lección operativa de esta sesión — cuentas de prueba:** `supabase.auth.signUp()` manda el
 mail de confirmación de verdad apenas se llama, así que probar con emails inventados
@@ -182,10 +196,10 @@ mail de confirmación de verdad apenas se llama, así que probar con emails inve
 restringir el envío de mails del proyecto. **Para probar signup/login de acá en adelante, usar
 una cuenta con un email real (o pedirle a Nalux que lo haga él), nunca inventar direcciones.**
 
-**Falta:** subida de video propio (Bloque F), y todo lo de Fase 2/3 (biblioteca de rutinas
-reutilizables con asignación masiva, login de alumno, récords, notificaciones, finanzas, reservas,
-etc.). El checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 — no se duplica acá
-para no tener dos fuentes de verdad desincronizándose.
+**Falta:** todo lo de Fase 2/3, ahora que el MVP de Fase 1 (Bloques A-F) está completo: biblioteca
+de rutinas reutilizables con asignación masiva (Bloque G), login de alumno, récords, notificaciones,
+finanzas, reservas, etc. El checklist completo, bloque por bloque, está en `PLAN.md` sección 3.5 —
+no se duplica acá para no tener dos fuentes de verdad desincronizándose.
 
 ---
 
@@ -285,19 +299,38 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
     `regenerar_codigo_invitacion()` fallaban con error 42883 al primer intento real de signup).
     Corregido calificando el schema explícitamente (`extensions.gen_random_bytes(...)`) — deja
     como lección para futuras funciones `SECURITY DEFINER` de este proyecto que usen `pgcrypto`.
+19. **Bucket `ejercicios-media` (Bloque F): mismo nivel de permiso que la tabla `ejercicios`, no el
+    de `gimnasio-logos`.** A diferencia del logo (un archivo por tenant, solo admin puede
+    escribirlo), acá cualquier staff del gimnasio puede subir/reemplazar/borrar el media de un
+    ejercicio — porque `ejercicios_tenant_isolation` (Decisión 2/0001) ya le da a cualquier staff
+    permiso total sobre la tabla `ejercicios`; restringir el archivo a solo admin habría sido
+    inconsistente (un entrenador podría crear el ejercicio pero no subirle el video). **Hallazgo
+    real de `appsec-secure-coding` antes de aplicar:** el path de este bucket es
+    `{gimnasio_id}/{ejercicio_id}.<ext>` (a diferencia del nombre fijo `logo.<ext>`), y el segundo
+    segmento es un UUID libre — un espacio de nombres casi infinito. El regex anclado por sí solo
+    no limitaba la CANTIDAD de archivos que un staff podía subir dentro de su propia carpeta
+    (podía inventar UUIDs que no correspondían a ningún ejercicio real y subir hasta 50 MB por
+    cada uno, sin tope, agotando cuota de storage compartida por todos los tenants del proyecto).
+    Corregido agregando un `EXISTS` contra `public.ejercicios` en las policies de INSERT/UPDATE: el
+    `ejercicio_id` del path tiene que ser una fila real del propio tenant. Efecto en el flujo de
+    la UI (no es un bug, es el comportamiento esperado): el ejercicio se tiene que guardar
+    PRIMERO (fila en `ejercicios`), y el archivo se sube DESPUÉS con el `id` real — igual criterio
+    que ya usa el logo con `create_gimnasio()`. Verificado contra la base real: subida cruzada a
+    otro gimnasio rechazada, subida con un `ejercicio_id` inexistente (aunque con formato UUID
+    válido) rechazada, tipo de archivo no permitido rechazado a nivel de bucket, lectura pública
+    OK, y edición de un ejercicio sin tocar el archivo no pisa el `media_url` existente.
 
 ---
 
 ## 5. Qué falta / próximos pasos
 
 El plan completo, con checklist paso a paso por bloque (A a G) y las preguntas todavía
-abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Resumen de por dónde sigue
-esto ahora que terminaron los Bloques A, B y C (y E a medias):
+abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **toda la Fase 1
+(Bloques A-F) está terminada** — el MVP vendible según el plan original. Lo que sigue:
 
-1. **Bloque F** — subida de video propio a Supabase Storage (Decisión 10).
-2. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
+1. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
    de alumno, récords, notificaciones.
-3. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
+2. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
    construir cualquier feature de "invitar staff a mi gimnasio"):** el trigger `BEFORE UPDATE`
    sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17) antes de
    producción. Ver Decisión 18 — el Bloque E subió la prioridad real de este gap: hoy mismo
@@ -474,3 +507,39 @@ mensaje genérico, sin distinguir "código inexistente" de "pausado"), y "Regene
 el código viejo y habilita uno nuevo al instante. Datos de prueba (1 gimnasio, 1 cuenta admin, 1
 alumno autorregistrado) borrados después; confirmado por SQL que solo queda la cuenta real de
 Nalux.
+
+**24/08/2026 (cierre del día) — Bloque F terminado: video/imagen propia de ejercicios.**
+`supabase/migrations/0005_ejercicios_media_storage.sql`: bucket `ejercicios-media` (público para
+lectura, 50 MB, video+imagen), path `{gimnasio_id}/{ejercicio_id}.<ext>`. Diseñada por
+`database-architect`, revisada por `appsec-secure-coding`, que encontró y corrigió un hallazgo real
+(severidad alta): a diferencia de `gimnasio-logos` (nombre de archivo fijo, tope natural de ~4
+archivos por tenant), acá el segundo segmento del path es un UUID libre — sin más control, un
+staff podía inventar UUIDs sin ejercicio real detrás y subir archivos de hasta 50 MB sin límite de
+cantidad, agotando cuota de storage compartida por todos los tenants del proyecto. Corregido
+agregando un `EXISTS` contra `public.ejercicios` en las policies de INSERT/UPDATE — ver Decisión
+19 para el detalle completo.
+
+Frontend en `EjerciciosPage.jsx` (`frontend-architect`, revisado y corregido por mí antes de
+probar): selector de archivo que convive con el campo de URL externa ya existente (si se sube un
+archivo, ese archivo gana). **Bug real que encontré yo al revisar el código antes de probarlo en
+vivo** (no llegó a tocar la base real): el guardado inicial pisaba `media_url` a `''` apenas se
+elegía un archivo, ANTES de saber si la subida iba a salir bien — si la subida fallaba después, un
+ejercicio que ya tenía un archivo funcionando quedaba con `media_url` vacío en vez de conservar el
+anterior. Corregido: el guardado inicial ya no toca `media_url`, solo el `updateRec` posterior a
+una subida exitosa lo pisa.
+
+Verificado de punta a punta contra la base real con un gimnasio de prueba nuevo (usando el truco de
+`DataTransfer` para simular la selección de un archivo real en el `<input type="file">`, ya que no
+es scriptable de forma nativa): alta de ejercicio con imagen subida, `media_url` resultante con el
+path exacto esperado, lectura pública confirmada (fetch directo a la URL), subida cruzada a otro
+gimnasio rechazada (403 RLS), subida con un `ejercicio_id` con formato UUID válido pero inexistente
+rechazada (403 RLS, confirma el fix de AppSec), tipo de archivo no permitido (PDF) rechazado a
+nivel de bucket (415, antes de evaluar cualquier policy), edición de solo la descripción sin tocar
+el archivo preserva el `media_url` existente (confirma mi propio fix), y borrado del archivo vía
+Storage API funcionando (confirma la policy de DELETE). Datos de prueba (1 gimnasio, 1 cuenta, 1
+ejercicio, 1 archivo en `ejercicios-media`) borrados después — el archivo de Storage requirió la
+API de Storage para borrarlo (`DELETE FROM storage.objects` directo está bloqueado por Supabase);
+confirmado por SQL que solo queda la cuenta real de Nalux y que `ejercicios-media` quedó vacío.
+
+Con esto, **toda la Fase 1 del plan (Bloques A a F) está terminada** — el MVP vendible según
+`PLAN.md`. Sigue el Bloque G (post-MVP) o las preguntas abiertas con el cliente.

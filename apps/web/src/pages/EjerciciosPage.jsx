@@ -1,14 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Dumbbell, ExternalLink, Plus } from 'lucide-react';
+import { AlertTriangle, Dumbbell, ExternalLink, Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { GRUPOS } from '@/lib/format';
+import { useAuth } from '@/contexts/AuthContext';
+import supabase from '@/lib/supabaseClient';
 
 const vacio = { nombre: '', grupo_muscular: GRUPOS[0], media_url: '', descripcion: '' };
 
+// Mismo criterio que 0005_ejercicios_media_storage.sql (bucket 'ejercicios-media'):
+// tope de 50 MB y solo estos 6 MIME types, ya validados también a nivel de bucket,
+// pero conviene validar del lado del cliente para dar un mensaje legible antes de
+// intentar subir. El path final es SIEMPRE gimnasioId/ejercicioId.<ext>, nunca con
+// el nombre de archivo original elegido por el usuario.
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+const MIME_TO_EXT = {
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'video/quicktime': 'mov',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+};
+
 const EjerciciosPage = () => {
+    const { profile } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -17,6 +35,16 @@ const EjerciciosPage = () => {
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [warning, setWarning] = useState('');
+
+    // Archivo elegido para subir a Storage (equivalente a logoFile de
+    // OnboardingPage/ConfiguracionPage). mediaUrlActual guarda el media_url
+    // que ya tenía el ejercicio al abrir el modal en edición, solo para el
+    // aviso de "ya tenés un archivo cargado".
+    const [mediaFile, setMediaFile] = useState(null);
+    const [mediaError, setMediaError] = useState('');
+    const [mediaUrlActual, setMediaUrlActual] = useState('');
+    const mediaInputRef = useRef(null);
 
     const cargar = () => {
         setLoading(true);
@@ -38,13 +66,81 @@ const EjerciciosPage = () => {
 
     const visibles = filtro === 'todos' ? items : items.filter((i) => i.grupo_muscular === filtro);
 
+    const limpiarMedia = () => {
+        setMediaFile(null);
+        setMediaError('');
+        setMediaUrlActual('');
+        if (mediaInputRef.current) mediaInputRef.current.value = '';
+    };
+
+    const cerrarModal = () => {
+        setOpen(false);
+        limpiarMedia();
+    };
+
+    const onMediaChange = (e) => {
+        const file = e.target.files?.[0];
+        setMediaError('');
+        if (!file) {
+            setMediaFile(null);
+            return;
+        }
+        if (!MIME_TO_EXT[file.type]) {
+            setMediaError('El archivo debe ser MP4, WEBM, MOV, PNG, JPG o WEBP.');
+            e.target.value = '';
+            return;
+        }
+        if (file.size > MAX_MEDIA_BYTES) {
+            setMediaError('El archivo no puede pesar más de 50 MB.');
+            e.target.value = '';
+            return;
+        }
+        setMediaFile(file);
+    };
+
     const guardar = async (e) => {
         e.preventDefault();
         setSaving(true);
+        setWarning('');
         try {
-            if (editId) await updateRec('ejercicios', editId, form);
-            else await createRec('ejercicios', form);
+            // NO forzar media_url a '' acá cuando hay mediaFile: si el upload de abajo
+            // falla, este guardado inicial tiene que dejar intacto lo que ya hubiera
+            // (la URL externa vieja, o el media_url previo en edición) en vez de
+            // pisarlo con vacío antes de saber si el archivo nuevo se subió bien. El
+            // archivo, si se sube con éxito, gana recién en el updateRec de más abajo
+            // (después del upload) — nunca acá.
+            const payload = { ...form };
+
+            let id = editId;
+            if (editId) await updateRec('ejercicios', editId, payload);
+            else {
+                const creado = await createRec('ejercicios', payload);
+                id = creado.id;
+            }
+
+            if (mediaFile && profile?.gimnasio_id && id) {
+                try {
+                    const ext = MIME_TO_EXT[mediaFile.type];
+                    const path = `${profile.gimnasio_id}/${id}.${ext}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('ejercicios-media')
+                        .upload(path, mediaFile, { upsert: true });
+                    if (uploadError) throw uploadError;
+
+                    const {
+                        data: { publicUrl },
+                    } = supabase.storage.from('ejercicios-media').getPublicUrl(path);
+
+                    await updateRec('ejercicios', id, { media_url: publicUrl });
+                } catch (_) {
+                    setWarning(
+                        'El ejercicio se guardó, pero el archivo no se pudo subir. Podés volver a intentarlo editando el ejercicio.',
+                    );
+                }
+            }
+
             setOpen(false);
+            limpiarMedia();
             cargar();
         } catch (_) {
             setError('No se pudo guardar el ejercicio.');
@@ -62,6 +158,8 @@ const EjerciciosPage = () => {
                     onClick={() => {
                         setForm(vacio);
                         setEditId(null);
+                        limpiarMedia();
+                        setWarning('');
                         setOpen(true);
                     }}
                 >
@@ -95,6 +193,12 @@ const EjerciciosPage = () => {
             </div>
 
             {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
+            {warning && !error && (
+                <div className="mb-4 flex items-start gap-2 rounded-2xl border border-border bg-secondary p-4 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" strokeWidth={1.8} />
+                    <span>{warning}</span>
+                </div>
+            )}
 
             {loading ? (
                 <Loading rows={4} />
@@ -138,6 +242,9 @@ const EjerciciosPage = () => {
                                             descripcion: ej.descripcion || '',
                                         });
                                         setEditId(ej.id);
+                                        limpiarMedia();
+                                        setMediaUrlActual(ej.media_url || '');
+                                        setWarning('');
                                         setOpen(true);
                                     }}
                                 >
@@ -156,7 +263,7 @@ const EjerciciosPage = () => {
                 </div>
             )}
 
-            <Modal open={open} onClose={() => setOpen(false)} title={editId ? 'Editar ejercicio' : 'Nuevo ejercicio'}>
+            <Modal open={open} onClose={cerrarModal} title={editId ? 'Editar ejercicio' : 'Nuevo ejercicio'}>
                 <form onSubmit={guardar} className="space-y-4">
                     <Field label="Nombre">
                         <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required />
@@ -173,12 +280,38 @@ const EjerciciosPage = () => {
                             ))}
                         </Select>
                     </Field>
-                    <Field label="Video o imagen demostrativa (URL opcional)">
+                    <Field label="Video o imagen demostrativa (URL externa opcional)">
                         <Input
                             value={form.media_url}
                             onChange={(e) => setForm({ ...form, media_url: e.target.value })}
                             placeholder="https://..."
+                            disabled={!!mediaFile}
                         />
+                        <span className="text-xs text-muted-foreground">
+                            Pegá un link de YouTube, Vimeo, etc. — o subí tu propio archivo abajo.
+                        </span>
+                    </Field>
+                    <Field label="Subir archivo propio (opcional)">
+                        <input
+                            ref={mediaInputRef}
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime,image/png,image/jpeg,image/webp"
+                            onChange={onMediaChange}
+                            className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground file:transition hover:file:brightness-110"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                            MP4, WEBM, MOV, PNG, JPG o WEBP. Máximo 50 MB. Si subís un archivo, reemplaza la URL de
+                            arriba.
+                        </span>
+                        {mediaFile && (
+                            <span className="text-xs font-semibold text-primary">Archivo elegido: {mediaFile.name}</span>
+                        )}
+                        {!mediaFile && mediaUrlActual && (
+                            <span className="text-xs text-muted-foreground">
+                                Ya tenés un archivo cargado para este ejercicio.
+                            </span>
+                        )}
+                        {mediaError && <ErrorBox>{mediaError}</ErrorBox>}
                     </Field>
                     <Field label="Descripción / técnica">
                         <Textarea
@@ -187,7 +320,7 @@ const EjerciciosPage = () => {
                         />
                     </Field>
                     <div className="flex justify-end gap-2 pt-2">
-                        <Btn variant="ghost" onClick={() => setOpen(false)}>
+                        <Btn variant="ghost" onClick={cerrarModal}>
                             Cancelar
                         </Btn>
                         <Btn type="submit" disabled={saving}>
