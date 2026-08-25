@@ -10,6 +10,17 @@ import supabase from '@/lib/supabaseClient';
 
 const vacio = { nombre: '', grupo_muscular: GRUPOS[0], media_url: '', descripcion: '' };
 
+// Un ejercicio puede tener media_url apuntando a un archivo propio (bucket
+// ejercicios-media) o a un link externo (YouTube, Vimeo, etc.). Solo tiene
+// sentido borrar de Storage en el primer caso — para el segundo no hay nada
+// nuestro que limpiar. El path dentro del bucket es siempre lo que viene
+// después de ".../object/public/ejercicios-media/".
+const pathEnBucket = (mediaUrl) => {
+    const marca = '/object/public/ejercicios-media/';
+    const i = mediaUrl?.indexOf(marca) ?? -1;
+    return i === -1 ? null : mediaUrl.slice(i + marca.length);
+};
+
 // Mismo criterio que 0005_ejercicios_media_storage.sql (bucket 'ejercicios-media'):
 // tope de 50 MB y solo estos 6 MIME types, ya validados también a nivel de bucket,
 // pero conviene validar del lado del cliente para dar un mensaje legible antes de
@@ -58,6 +69,24 @@ const EjerciciosPage = () => {
     };
 
     useEffect(cargar, []);
+
+    // Storage no se limpia solo: hay que borrar el archivo del bucket antes
+    // (o junto con) la fila. Es "best effort" — si el archivo ya no está o
+    // falla el borrado, no bloqueamos el borrado del ejercicio en sí, porque
+    // para el usuario lo que importa es que el ejercicio desaparezca de la
+    // biblioteca.
+    const borrar = async (ej) => {
+        const path = pathEnBucket(ej.media_url);
+        if (path) {
+            try {
+                await supabase.storage.from('ejercicios-media').remove([path]);
+            } catch (_) {
+                // best effort, seguimos igual
+            }
+        }
+        await removeRec('ejercicios', ej.id);
+        cargar();
+    };
 
     const grupos = useMemo(
         () => Array.from(new Set([...GRUPOS, ...items.map((i) => i.grupo_muscular).filter(Boolean)])),
@@ -253,7 +282,7 @@ const EjerciciosPage = () => {
                                 <Btn
                                     variant="danger"
                                     className="px-3 py-2 text-xs"
-                                    onClick={() => removeRec('ejercicios', ej.id).then(cargar)}
+                                    onClick={() => borrar(ej)}
                                 >
                                     Eliminar
                                 </Btn>
