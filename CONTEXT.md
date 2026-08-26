@@ -328,8 +328,15 @@ El plan completo, con checklist paso a paso por bloque (A a G) y las preguntas t
 abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **toda la Fase 1
 (Bloques A-F) está terminada** — el MVP vendible según el plan original. Lo que sigue:
 
-1. **Bloque G** (post-MVP) — biblioteca de rutinas reutilizables con asignación masiva, login
-   de alumno, récords, notificaciones.
+1. **Bloque G** (post-MVP), en curso ítem por ítem — ver historial para el detalle de cada uno:
+   - ~~G1. Biblioteca de rutinas reutilizables + asignación masiva~~ **hecho** (26/08/2026).
+   - G2. Login de alumno + policies de fila (Nivel 2 de aislamiento).
+   - G3. `cargas_ejercicio` + vista de "última carga" del alumno.
+   - G4. Récords automáticos.
+   - G5. Cronómetro + calculadora de 1RM.
+   - G6. Notificaciones segmentadas.
+   - G7-G9: gatillados por decisiones de negocio todavía sin resolver (ver preguntas abiertas
+     abajo) — no arrancar sin resolver esas antes.
 2. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
    construir cualquier feature de "invitar staff a mi gimnasio"):** el trigger `BEFORE UPDATE`
    sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17) antes de
@@ -590,8 +597,45 @@ del plan, no una config con toggle. Documentado en detalle en la sección 6 ("Pr
 usuario de GitHub.
 
 **Arreglado** configurando `git config` (local a este repo, no global) con
-`user.name=kairoxia-info` / `user.email=kairoxiainfo@gmail.com`, y confirmando con un commit de
-prueba que Vercel ya no bloquea esa autoría (quedó "Canceled" — no "Blocked" — por no tener
-archivos cambiados, comportamiento esperado del sistema de monorepo de Vercel). Pendiente:
-empujar un commit real con esta autoría para confirmar el build completo y que la URL pública
-por fin sirva el código actual.
+`user.name=kairoxia-info` / `user.email=kairoxiainfo@gmail.com`, y confirmado con un commit real
+(esta misma actualización de CONTEXT.md): build completo, "Ready" en 11 segundos, promovido a
+Production automáticamente. Visitada la URL pública después: título y contenido correctos,
+Supabase Auth funcionando, cero llamadas a PocketBase — la producción por fin sirve el código
+actual.
+
+**26/08/2026 (más tarde, mismo día) — Bloque G1 terminado: biblioteca de rutinas + asignación
+masiva.** No hizo falta ninguna migración SQL nueva — el schema de `rutinas`/`rutinas_asignadas`
+del Bloque A ya alcanzaba. Página nueva `RutinasPage.jsx` (ruta `/rutinas`, ítem de nav junto a
+Ejercicios): lista de rutinas con conteo de alumnos activos asignados, crear/editar con el mismo
+armador de ejercicios-por-día que ya existía, botón "Asignar a alumnos" (checklist con selección
+múltiple → una fila en `rutinas_asignadas` por alumno tildado, en paralelo — la asignación masiva
+real), y borrado con advertencia dinámica si la rutina tiene alumnos activos.
+
+Construido por `frontend-architect`, con un cambio de comportamiento necesario en
+`AlumnoPage.jsx`: antes, editar el plan de un alumno pisaba directamente su `rutinas` — funcionaba
+porque cada rutina era 1-a-1 con un alumno. Ahora que una rutina puede estar asignada a varios
+alumnos a la vez, ese mismo guardado hubiera editado sin querer la plantilla compartida de todos
+los demás. La pestaña Entrenamiento de la ficha del alumno pasó a ser de **solo lectura** +
+"Cambiar rutina" (desactiva la asignación vieja, `activa:false`, sin borrarla — queda de
+historial — y crea una nueva) + "Quitar rutina" (solo desactiva). Editar el contenido de una
+rutina vive únicamente en `RutinasPage` de ahora en más.
+
+**Bug real encontrado al verificar en vivo** (no en el review estático, ni en build/lint): el
+botón "Quitar rutina" desactivaba bien la fila en la base (confirmado por SQL, `activa:false`),
+pero la pantalla seguía mostrando la misma rutina como si nada — parecía que el botón no hacía
+nada. Causa: `cargarRutinaAsignada()` (ya existía desde el Bloque B) traía todas las asignaciones
+del alumno y hacía `asignadas.find(a => a.activa) || asignadas[0]` — si ninguna estaba activa,
+igual mostraba la más reciente de todas. Este fallback era inofensivo en el Bloque B porque nada
+desactivaba filas todavía; con "Quitar rutina" y "Cambiar rutina" del Bloque G pasó a ser un bug
+real y visible. Corregido filtrando `activa: true` directo en la consulta (server-side), así sin
+ninguna asignación activa devuelve limpio "sin rutina" en vez de resucitar una vieja.
+
+Verificado de punta a punta contra la base real, con la cuenta real de Nalux (ya sin necesidad de
+gimnasios de prueba descartables — la cuenta estaba vacía, así que se cargaron 2 ejercicios + 2
+alumnos + 2 rutinas de prueba con prefijo "ZZZ", todo por la UI real): alta de rutina con
+ejercicios en 2 días distintos, asignación masiva a 2 alumnos con conteo actualizado en la
+biblioteca, vista de solo lectura correcta en la ficha del alumno, "Cambiar rutina" confirmado por
+SQL (asignación vieja `activa:false` sin borrarse, nueva `activa:true`), y "Quitar rutina" ya
+corregido mostrando el estado vacío. Datos de prueba borrados después (incluida la cascada de
+`rutinas_asignadas` al borrar las `rutinas`, sin tocarla a mano); confirmado por SQL que la cuenta
+real quedó exactamente como antes de la prueba.

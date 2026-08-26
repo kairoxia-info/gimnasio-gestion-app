@@ -9,19 +9,23 @@ import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { COMIDAS, ESTADOS_PAGO, antiguedad, estadoDesdeVencimiento, fmtFecha, hoy, money } from '@/lib/format';
 
-const DIAS = ['Día 1', 'Día 2', 'Día 3', 'Día 4', 'Día 5', 'Día 6'];
-
-// rutinas es la plantilla (nombre/descripcion/items), rutinas_asignadas es el
-// vínculo con el alumno. Acá se trae la asignación más reciente (activa si
-// hay varias) y se combina con su rutina en un solo objeto para que
-// PlanEntrenamiento no tenga que saber nada del modelo de dos tablas.
+// rutinas es la plantilla (nombre/descripcion/duracion_semanas/items),
+// rutinas_asignadas es el vínculo con el alumno. Acá se trae la asignación
+// más reciente (activa si hay varias) y se combina con su rutina en un solo
+// objeto para que PlanEntrenamiento no tenga que saber nada del modelo de
+// dos tablas.
 const cargarRutinaAsignada = async (alumnoId) => {
+    // Filtra por activa=true en la propia consulta: si no, "Quitar rutina" (que
+    // solo pone activa=false, no borra la fila) queda pisado por este fallback
+    // apenas se recarga, porque sigue habiendo una fila -aunque inactiva- para
+    // volver a mostrar. Con el filtro server-side, sin ninguna activa esto
+    // devuelve [] limpio, tal como espera "Quitar rutina".
     const asignadas = await listAll('rutinas_asignadas', {
-        filters: { alumno_id: alumnoId },
+        filters: { alumno_id: alumnoId, activa: true },
         sort: '-created_at',
     });
     if (asignadas.length === 0) return null;
-    const asignacion = asignadas.find((a) => a.activa) || asignadas[0];
+    const asignacion = asignadas[0];
     const rutinas = await listAll('rutinas', { filters: { id: asignacion.rutina_id } });
     const rutina = rutinas[0];
     if (!rutina) return null;
@@ -30,66 +34,69 @@ const cargarRutinaAsignada = async (alumnoId) => {
         rutinaId: rutina.id,
         nombre: rutina.nombre,
         descripcion: rutina.descripcion,
+        duracionSemanas: rutina.duracion_semanas,
         items: rutina.items || [],
     };
 };
 
 /* ---------------- Plan de entrenamiento ---------------- */
 
-const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
-    const [items, setItems] = useState(plan?.items || []);
-    const [nombre, setNombre] = useState(plan?.nombre || 'Plan de entrenamiento');
-    const [notas, setNotas] = useState(plan?.descripcion || '');
-    const [sel, setSel] = useState(ejercicios[0]?.id || '');
-    const [dia, setDia] = useState(DIAS[0]);
+// Desde el Bloque G, las rutinas son plantillas de la biblioteca compartidas
+// por varios alumnos (rutinas + rutinas_asignadas) — este componente ya NO
+// edita la plantilla en línea (eso pisaría la rutina de todos los demás
+// alumnos que también la tienen asignada). Acá solo se lee en modo
+// solo-lectura y se reasigna: cambiar de rutina desactiva la asignación
+// vieja (no la borra, queda como historial) y crea una nueva. Armar o editar
+// el contenido de una rutina vive únicamente en RutinasPage.
+const PlanEntrenamiento = ({ alumnoId, plan, onSaved }) => {
+    const [cambiando, setCambiando] = useState(false);
+    const [rutinasDisponibles, setRutinasDisponibles] = useState([]);
+    const [cargandoRutinas, setCargandoRutinas] = useState(false);
+    const [rutinaElegida, setRutinaElegida] = useState('');
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
 
-    useEffect(() => {
-        setItems(plan?.items || []);
-        setNombre(plan?.nombre || 'Plan de entrenamiento');
-        setNotas(plan?.descripcion || '');
-    }, [plan]);
-
-    const agregar = () => {
-        const ej = ejercicios.find((e) => e.id === sel);
-        if (!ej) return;
-        setItems([
-            ...items,
-            {
-                key: `${ej.id}-${Date.now()}`,
-                ejercicioId: ej.id,
-                nombre: ej.nombre,
-                grupo: ej.grupo_muscular,
-                dia,
-                series: 4,
-                reps: 10,
-                peso: '',
-                descanso: '60 s',
-            },
-        ]);
+    const abrirSelector = () => {
+        setMsg('');
+        setCambiando(true);
+        setCargandoRutinas(true);
+        listAll('rutinas', { sort: 'nombre' })
+            .then((r) => {
+                setRutinasDisponibles(r);
+                setRutinaElegida(r.find((x) => x.id !== plan?.rutinaId)?.id || r[0]?.id || '');
+            })
+            .catch(() => setMsg('No se pudieron cargar las rutinas de la biblioteca.'))
+            .finally(() => setCargandoRutinas(false));
     };
 
-    const editar = (key, campo, valor) =>
-        setItems(items.map((it) => (it.key === key ? { ...it, [campo]: valor } : it)));
-
-    const guardar = async () => {
+    const confirmarCambio = async () => {
+        if (!rutinaElegida) return;
         setSaving(true);
         setMsg('');
         try {
-            const payloadRutina = { nombre, descripcion: notas, items };
-            if (plan?.rutinaId) {
-                // Ya hay una rutina asignada a este alumno: se actualiza la
-                // misma plantilla en vez de crear una nueva en cada guardado.
-                await updateRec('rutinas', plan.rutinaId, payloadRutina);
-            } else {
-                const rutina = await createRec('rutinas', payloadRutina);
-                await createRec('rutinas_asignadas', { rutina_id: rutina.id, alumno_id: alumnoId });
+            if (plan?.asignacionId) {
+                // No se borra: queda desactivada como historial.
+                await updateRec('rutinas_asignadas', plan.asignacionId, { activa: false });
             }
-            setMsg('Plan guardado.');
+            await createRec('rutinas_asignadas', { rutina_id: rutinaElegida, alumno_id: alumnoId });
+            setCambiando(false);
             onSaved();
         } catch (_) {
-            setMsg('No se pudo guardar el plan.');
+            setMsg('No se pudo asignar la rutina.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const quitar = async () => {
+        if (!plan?.asignacionId) return;
+        setSaving(true);
+        setMsg('');
+        try {
+            await updateRec('rutinas_asignadas', plan.asignacionId, { activa: false });
+            onSaved();
+        } catch (_) {
+            setMsg('No se pudo quitar la rutina.');
         } finally {
             setSaving(false);
         }
@@ -97,65 +104,55 @@ const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
 
     const porDia = useMemo(() => {
         const map = {};
-        items.forEach((it) => {
+        (plan?.items || []).forEach((it) => {
             map[it.dia] = map[it.dia] || [];
             map[it.dia].push(it);
         });
         return map;
-    }, [items]);
+    }, [plan]);
+
+    if (!plan) {
+        return (
+            <Empty>
+                Este alumno todavía no tiene una rutina asignada. Armala o asignala desde la{' '}
+                <Link to="/rutinas" className="font-semibold text-primary">
+                    biblioteca de rutinas
+                </Link>
+                .
+            </Empty>
+        );
+    }
 
     return (
         <div className="space-y-5">
             <Card>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Nombre del plan">
-                        <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
-                    </Field>
-                    <Field label="Notas para el alumno">
-                        <Input value={notas} onChange={(e) => setNotas(e.target.value)} />
-                    </Field>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Rutina asignada
+                        </p>
+                        <h3 className="mt-1 font-display text-xl font-bold">{plan.nombre}</h3>
+                        {plan.descripcion && <p className="mt-1 text-sm text-muted-foreground">{plan.descripcion}</p>}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            {plan.duracionSemanas
+                                ? `${plan.duracionSemanas} semana${plan.duracionSemanas === 1 ? '' : 's'}`
+                                : 'Duración libre'}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={abrirSelector}>
+                            Cambiar rutina
+                        </Btn>
+                        <Btn variant="danger" className="px-3 py-2 text-xs" onClick={quitar} disabled={saving}>
+                            Quitar rutina
+                        </Btn>
+                    </div>
                 </div>
-                {ejercicios.length === 0 ? (
-                    <div className="mt-4">
-                        <Empty>
-                            Primero cargá ejercicios en la{' '}
-                            <Link to="/ejercicios" className="font-semibold text-primary">
-                                biblioteca
-                            </Link>
-                            .
-                        </Empty>
-                    </div>
-                ) : (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-[2fr,1fr,auto]">
-                        <Field label="Ejercicio de la biblioteca">
-                            <Select value={sel} onChange={(e) => setSel(e.target.value)}>
-                                {ejercicios.map((e) => (
-                                    <option key={e.id} value={e.id}>
-                                        {e.nombre} · {e.grupo_muscular}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <Field label="Día">
-                            <Select value={dia} onChange={(e) => setDia(e.target.value)}>
-                                {DIAS.map((d) => (
-                                    <option key={d} value={d}>
-                                        {d}
-                                    </option>
-                                ))}
-                            </Select>
-                        </Field>
-                        <div className="flex items-end">
-                            <Btn onClick={agregar} className="w-full sm:w-auto">
-                                <Plus className="h-4 w-4" /> Agregar
-                            </Btn>
-                        </div>
-                    </div>
-                )}
+                {msg && !cambiando && <p className="mt-3 text-sm text-muted-foreground">{msg}</p>}
             </Card>
 
-            {items.length === 0 ? (
-                <Empty>Todavía no agregaste ejercicios a este plan.</Empty>
+            {(plan.items || []).length === 0 ? (
+                <Empty>Esta rutina todavía no tiene ejercicios cargados.</Empty>
             ) : (
                 <div className="space-y-4">
                     {Object.entries(porDia).map(([d, lista]) => (
@@ -166,50 +163,34 @@ const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
                                     {lista.length} ejercicios
                                 </Badge>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {lista.map((it) => (
                                     <div
                                         key={it.key}
-                                        className="grid items-end gap-3 rounded-xl border border-border p-3 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto]"
+                                        className="grid gap-3 rounded-xl border border-border p-3 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr))]"
                                     >
                                         <div>
                                             <p className="text-sm font-bold">{it.nombre}</p>
                                             <p className="text-xs text-muted-foreground">{it.grupo}</p>
                                         </div>
-                                        <Field label="Series">
-                                            <Input
-                                                type="number"
-                                                value={it.series}
-                                                onChange={(e) => editar(it.key, 'series', e.target.value)}
-                                            />
-                                        </Field>
-                                        <Field label="Reps">
-                                            <Input
-                                                value={it.reps}
-                                                onChange={(e) => editar(it.key, 'reps', e.target.value)}
-                                            />
-                                        </Field>
-                                        <Field label="Peso">
-                                            <Input
-                                                value={it.peso}
-                                                onChange={(e) => editar(it.key, 'peso', e.target.value)}
-                                                placeholder="kg"
-                                            />
-                                        </Field>
-                                        <Field label="Descanso">
-                                            <Input
-                                                value={it.descanso}
-                                                onChange={(e) => editar(it.key, 'descanso', e.target.value)}
-                                            />
-                                        </Field>
-                                        <button
-                                            type="button"
-                                            aria-label="Quitar ejercicio"
-                                            onClick={() => setItems(items.filter((x) => x.key !== it.key))}
-                                            className="mb-1 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-primary"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Series</p>
+                                            <p className="text-sm font-semibold">{it.series}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Reps</p>
+                                            <p className="text-sm font-semibold">{it.reps}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Peso</p>
+                                            <p className="text-sm font-semibold">{it.peso || '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                Descanso
+                                            </p>
+                                            <p className="text-sm font-semibold">{it.descanso || '—'}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -218,12 +199,40 @@ const PlanEntrenamiento = ({ alumnoId, ejercicios, plan, onSaved }) => {
                 </div>
             )}
 
-            <div className="flex items-center gap-3">
-                <Btn onClick={guardar} disabled={saving}>
-                    {saving ? 'Guardando...' : 'Guardar plan'}
-                </Btn>
-                {msg && <span className="text-sm text-muted-foreground">{msg}</span>}
-            </div>
+            <Modal open={cambiando} onClose={() => setCambiando(false)} title="Cambiar rutina asignada">
+                <div className="space-y-4">
+                    {cargandoRutinas ? (
+                        <Loading rows={2} />
+                    ) : rutinasDisponibles.length === 0 ? (
+                        <Empty>
+                            No hay rutinas en la biblioteca todavía. Armá una desde{' '}
+                            <Link to="/rutinas" className="font-semibold text-primary">
+                                Rutinas
+                            </Link>
+                            .
+                        </Empty>
+                    ) : (
+                        <Field label="Rutina de la biblioteca">
+                            <Select value={rutinaElegida} onChange={(e) => setRutinaElegida(e.target.value)}>
+                                {rutinasDisponibles.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                        {r.nombre}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
+                    )}
+                    {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Btn variant="ghost" onClick={() => setCambiando(false)}>
+                            Cancelar
+                        </Btn>
+                        <Btn onClick={confirmarCambio} disabled={saving || !rutinaElegida}>
+                            {saving ? 'Guardando...' : 'Asignar'}
+                        </Btn>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };
@@ -842,7 +851,6 @@ const AlumnoPage = () => {
     const [error, setError] = useState('');
     const [data, setData] = useState({
         alumno: null,
-        ejercicios: [],
         alimentos: [],
         planEnt: null,
         planAli: null,
@@ -854,22 +862,24 @@ const AlumnoPage = () => {
 
     const cargar = async () => {
         try {
-            const [alumnoRes, ejercicios, alimentos, planAliRows, progreso, asistencias, pagos, precios] =
-                await Promise.all([
-                    supabase.from('alumnos').select('*').eq('id', id).single(),
-                    listAll('ejercicios', { sort: 'nombre' }),
-                    listAll('alimentos', { sort: 'nombre' }),
-                    listAll('planes_alimentacion', { filters: { alumno_id: id }, sort: '-created_at' }),
-                    listAll('progreso', { filters: { alumno_id: id }, sort: '-fecha' }),
-                    listAll('asistencias', { filters: { alumno_id: id }, sort: '-fecha' }),
-                    listAll('pagos', { filters: { alumno_id: id }, sort: '-fecha_pago' }),
-                    listAll('configuracion_precios', { sort: 'nombre' }),
-                ]);
+            const [alumnoRes, alimentos, planAliRows, progreso, asistencias, pagos, precios] = await Promise.all([
+                supabase.from('alumnos').select('*').eq('id', id).single(),
+                listAll('alimentos', { sort: 'nombre' }),
+                listAll('planes_alimentacion', { filters: { alumno_id: id }, sort: '-created_at' }),
+                listAll('progreso', { filters: { alumno_id: id }, sort: '-fecha' }),
+                listAll('asistencias', { filters: { alumno_id: id }, sort: '-fecha' }),
+                listAll('pagos', { filters: { alumno_id: id }, sort: '-fecha_pago' }),
+                listAll('configuracion_precios', { sort: 'nombre' }),
+            ]);
             if (alumnoRes.error) throw alumnoRes.error;
+            // Se pide después y aparte del Promise.all de arriba a propósito:
+            // depende del alumno recién cargado (necesita su id, que ya
+            // tenemos por route param, pero conceptualmente es "lo próximo"
+            // una vez que sabemos que el alumno existe) y trae dos tablas
+            // relacionadas (rutinas_asignadas + rutinas) en cascada.
             const planEnt = await cargarRutinaAsignada(id);
             setData({
                 alumno: alumnoRes.data,
-                ejercicios,
                 alimentos,
                 planEnt,
                 planAli: planAliRows[0] || null,
@@ -964,12 +974,7 @@ const AlumnoPage = () => {
                         </div>
 
                         {tab === 'entrenamiento' && (
-                            <PlanEntrenamiento
-                                alumnoId={id}
-                                ejercicios={data.ejercicios}
-                                plan={data.planEnt}
-                                onSaved={cargar}
-                            />
+                            <PlanEntrenamiento alumnoId={id} plan={data.planEnt} onSaved={cargar} />
                         )}
                         {tab === 'nutricion' && (
                             <PlanAlimentacion

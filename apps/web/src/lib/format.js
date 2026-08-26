@@ -33,6 +33,11 @@ export const antiguedad = (fechaAlta) => {
 
 export const COMIDAS = ['Desayuno', 'Almuerzo', 'Merienda', 'Cena', 'Colación'];
 
+// Compartida entre el armador de rutinas (RutinasPage) y la vista de solo
+// lectura del plan asignado (AlumnoPage) — mismo vocabulario de "día" en
+// ambos lugares para que los items sean 100% compatibles entre sí.
+export const DIAS = ['Día 1', 'Día 2', 'Día 3', 'Día 4', 'Día 5', 'Día 6'];
+
 export const GRUPOS = ['Piernas', 'Espalda', 'Pecho', 'Hombros', 'Brazos', 'Core', 'Glúteos', 'Cardio'];
 
 export const ESTADOS_PAGO = {

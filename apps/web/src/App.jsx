@@ -12,6 +12,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import AlumnosPage from '@/pages/AlumnosPage';
 import AlumnoPage from '@/pages/AlumnoPage';
 import EjerciciosPage from '@/pages/EjerciciosPage';
+import RutinasPage from '@/pages/RutinasPage';
 import AlimentosPage from '@/pages/AlimentosPage';
 import AsistenciaPage from '@/pages/AsistenciaPage';
 import PagosPage from '@/pages/PagosPage';
@@ -52,6 +53,7 @@ function App() {
                         <Route path="/alumnos" element={guard(<AlumnosPage />)} />
                         <Route path="/alumnos/:id" element={guard(<AlumnoPage />)} />
                         <Route path="/ejercicios" element={guard(<EjerciciosPage />)} />
+                        <Route path="/rutinas" element={guard(<RutinasPage />)} />
                         <Route path="/alimentos" element={guard(<AlimentosPage />)} />
                         <Route path="/asistencia" element={guard(<AsistenciaPage />)} />
                         <Route path="/pagos" element={guard(<PagosPage />)} />
