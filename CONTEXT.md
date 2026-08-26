@@ -385,6 +385,22 @@ proyectos corriendo en paralelo) — configurado tanto en `apps/web/package.json
 `apps/web/vite.config.js` (`server.port`). Hay un `.claude/launch.json` en la raíz apuntando a
 `npm run dev -w apps/web` para levantarlo directo desde Claude Code.
 
+**Producción (Vercel):** proyecto `gimnasio-gestion-app-web` en el team "Kairox IA info"
+(`kairoxiainfo@gmail.com`, plan Hobby), conectado por Git al repo `main`. URL pública:
+`gimnasio-gestion-app-web.vercel.app`.
+
+⚠️ **Gotcha importante para cualquiera que haga push a `main`:** el team de Vercel es Hobby +
+el repo es privado. En esa combinación, Vercel **bloquea el deploy a producción de cualquier
+commit cuyo autor no sea exactamente la identidad de GitHub que Vercel tiene vinculada**
+(`kairoxia-info`) — no alcanza con tener permiso de push al repo. Si Luciano (u otra persona)
+pushea con su propio usuario de GitHub, el build corre pero el deploy queda "Blocked" y nunca
+llega a producción, sin avisar en ningún otro lado más que la pestaña Deployments de Vercel.
+Mientras se siga en Hobby con repo privado, cualquiera que pushee a `main` necesita que el
+commit quede autoría `kairoxia-info <kairoxiainfo@gmail.com>` (`git config user.name`/
+`user.email` **local al repo**, no global). Alternativas de fondo si esto molesta: upgrade a
+Vercel Pro (permite agregar colaboradores reales), o hacer público el repo — ninguna de las dos
+se tomó todavía.
+
 ---
 
 ## Historial de actualizaciones
@@ -543,3 +559,39 @@ confirmado por SQL que solo queda la cuenta real de Nalux y que `ejercicios-medi
 
 Con esto, **toda la Fase 1 del plan (Bloques A a F) está terminada** — el MVP vendible según
 `PLAN.md`. Sigue el Bloque G (post-MVP) o las preguntas abiertas con el cliente.
+
+**26/08/2026** — Recorrido en vivo pidiendo "levantá la app y probala": re-verificado de punta a
+punta contra la base real (signup → onboarding → branding en `/configuracion` → código/QR de
+invitación → autorregistro público → aprobar alumno → ejercicio con imagen propia) con un
+gimnasio de prueba descartable, borrado después. Todo funcionando — confirma que Bloques D/E/F
+seguían sanos.
+
+**Bug real encontrado en ese recorrido:** el botón "Eliminar" de `EjerciciosPage.jsx` solo
+borraba la fila de `ejercicios`, nunca el archivo asociado en el bucket `ejercicios-media` —
+dejaba archivos huérfanos. Corregido: `borrar()` ahora primero borra el objeto del bucket
+(extrayendo el path desde `media_url`; si `media_url` es un link externo, no toca Storage) y
+recién después borra la fila. Verificado en vivo con una cuenta descartable: creado un ejercicio
+con imagen, confirmado el objeto en `storage.objects`, apretado "Eliminar" en la UI real, y
+confirmado por SQL que fila y archivo quedaron ambos en cero.
+
+**Hallazgo grande, no relacionado al código: la app nunca había llegado a producción.** El
+usuario abrió la URL de Vercel y encontró la build de "Fitness Gym Place" con llamadas a la API
+vieja de PocketBase (`hcgi/platform/api/collections/...`) — es decir, de **antes del Bloque B**.
+Investigado en la pestaña Deployments del proyecto: **los últimos 6 deploys a `main` (Bloques B,
+D, E, F y el fix de Eliminar) estaban todos marcados "Blocked"**. Vercel explica el motivo en el
+detalle de cada uno: *"The deployment was blocked because the commit author did not have
+contributing access to the project on Vercel. The Hobby Plan does not support collaboration for
+private repositories."* — todos los commits los autoría `nalux-Ar <nalux2430@gmail.com>`, pero
+el team de Vercel (Hobby, repo privado) solo confía en la identidad de GitHub que tiene
+vinculada, `kairoxia-info`. Confirmado que ambas cuentas de GitHub son de la misma persona
+(Nalux). Ni el auto-deploy por push ni el botón "Redeploy" manual lo sortean — es una regla dura
+del plan, no una config con toggle. Documentado en detalle en la sección 6 ("Producción
+(Vercel)") porque es un gotcha que va a afectar a cualquiera que pushee a `main` con su propio
+usuario de GitHub.
+
+**Arreglado** configurando `git config` (local a este repo, no global) con
+`user.name=kairoxia-info` / `user.email=kairoxiainfo@gmail.com`, y confirmando con un commit de
+prueba que Vercel ya no bloquea esa autoría (quedó "Canceled" — no "Blocked" — por no tener
+archivos cambiados, comportamiento esperado del sistema de monorepo de Vercel). Pendiente:
+empujar un commit real con esta autoría para confirmar el build completo y que la URL pública
+por fin sirva el código actual.
