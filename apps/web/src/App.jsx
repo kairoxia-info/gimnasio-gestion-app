@@ -7,6 +7,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import LoginPage from '@/pages/LoginPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import UnirsePage from '@/pages/UnirsePage';
+import MiPlanPage from '@/pages/MiPlanPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AlumnosPage from '@/pages/AlumnosPage';
@@ -48,6 +49,11 @@ function App() {
                             de poder ver el formulario, igual que pasaría con /login y
                             /restablecer-password si los envolviéramos. */}
                         <Route path="/unirse/:codigo" element={<UnirsePage />} />
+                        {/* Sin ProtectedRoute a propósito, mismo criterio que /unirse/:codigo:
+                            el alumno accede escaneando un QR o abriendo un link, sin sesión
+                            propia (el acceso se resuelve 100% por el código individual del
+                            alumno vía la RPC ver_plan_por_codigo, público/anon). */}
+                        <Route path="/mi-plan/:codigo" element={<MiPlanPage />} />
                         <Route path="/onboarding" element={guard(<OnboardingPage />)} />
                         <Route path="/panel" element={guard(<DashboardPage />)} />
                         <Route path="/alumnos" element={guard(<AlumnosPage />)} />

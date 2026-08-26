@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, UserRound } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import QRCode from 'qrcode';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -834,6 +835,134 @@ const PagosAlumno = ({ alumnoId, pagos, precios, onChange }) => {
     );
 };
 
+/* ---------------- QR de acceso del alumno ---------------- */
+
+// Mismo patrón que la sección "Código de invitación" de ConfiguracionPage.jsx
+// (QR client-side con la librería qrcode, fondo blanco fijo, descarga y
+// regenerar), pero acá el código es individual por alumno (codigo_acceso,
+// migración 0006) en vez de uno solo por gimnasio. La RPC pública que lee
+// ese código (ver_plan_por_codigo) no requiere sesión: por eso el link
+// apunta a /mi-plan/:codigo, la pantalla que el alumno abre desde el QR.
+const QrAlumno = ({ alumno, onRegenerado }) => {
+    const [qrDataUrl, setQrDataUrl] = useState('');
+    const [copiado, setCopiado] = useState(false);
+    const [regenerando, setRegenerando] = useState(false);
+    const [qrError, setQrError] = useState('');
+
+    const link = alumno?.codigo_acceso ? `${window.location.origin}/mi-plan/${alumno.codigo_acceso}` : '';
+
+    useEffect(() => {
+        if (!link) {
+            setQrDataUrl('');
+            return;
+        }
+        let cancelado = false;
+        QRCode.toDataURL(link, { width: 240 })
+            .then((url) => {
+                if (!cancelado) setQrDataUrl(url);
+            })
+            .catch(() => {
+                if (!cancelado) setQrDataUrl('');
+            });
+        return () => {
+            cancelado = true;
+        };
+    }, [link]);
+
+    const copiarLink = async () => {
+        if (!link) return;
+        try {
+            await navigator.clipboard.writeText(link);
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 1500);
+        } catch (_) {
+            setQrError('No se pudo copiar el link. Copialo a mano.');
+        }
+    };
+
+    const regenerar = async () => {
+        if (!alumno?.id) return;
+        if (
+            !window.confirm(
+                '¿Seguro que querés regenerar el código? El QR y el link que ya le compartiste a este alumno dejan de funcionar al toque.',
+            )
+        ) {
+            return;
+        }
+        setRegenerando(true);
+        setQrError('');
+        try {
+            const { data: nuevoCodigo, error: err } = await supabase.rpc('regenerar_codigo_acceso_alumno', {
+                p_alumno_id: alumno.id,
+            });
+            if (err) throw err;
+            onRegenerado(nuevoCodigo);
+        } catch (_) {
+            setQrError('No se pudo regenerar el código.');
+        } finally {
+            setRegenerando(false);
+        }
+    };
+
+    return (
+        <Card className="mb-6">
+            <h2 className="font-display text-lg font-bold">QR para el alumno</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+                Imprimí o mandale este QR a tu alumno para que vea su rutina y su plan desde el celular, sin
+                necesidad de usuario ni contraseña.
+            </p>
+
+            {!alumno?.codigo_acceso ? (
+                <div className="mt-4">
+                    <Empty>Este alumno todavía no tiene un código de acceso propio.</Empty>
+                </div>
+            ) : (
+                <div className="mt-4 grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                        <Field label="Link del alumno">
+                            <div className="flex gap-2">
+                                <Input readOnly value={link} className="font-mono text-xs" />
+                                <Btn type="button" variant="ghost" onClick={copiarLink} className="shrink-0">
+                                    {copiado ? '¡Copiado!' : 'Copiar'}
+                                </Btn>
+                            </div>
+                        </Field>
+
+                        <Btn type="button" variant="ghost" onClick={regenerar} disabled={regenerando}>
+                            {regenerando ? 'Regenerando...' : 'Regenerar código'}
+                        </Btn>
+
+                        {qrError && <ErrorBox>{qrError}</ErrorBox>}
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-4">
+                        {qrDataUrl ? (
+                            <>
+                                {/* Fondo blanco fijo a propósito (no bg-card): un QR necesita
+                                    contraste real para escanear, no el tema claro/oscuro de la app. */}
+                                <img
+                                    src={qrDataUrl}
+                                    alt="Código QR del alumno"
+                                    className="h-48 w-48 rounded-lg bg-white p-2"
+                                />
+                                <a
+                                    href={qrDataUrl}
+                                    download={`qr-${(alumno.nombre || 'alumno').replace(/\s+/g, '-').toLowerCase()}.png`}
+                                    className="text-sm font-semibold text-primary hover:underline"
+                                >
+                                    Descargar QR
+                                </a>
+                            </>
+                        ) : (
+                            <span className="text-sm text-muted-foreground">Generando QR...</span>
+                        )}
+                    </div>
+                </div>
+            )}
+        </Card>
+    );
+};
+
 /* ---------------- Ficha ---------------- */
 
 const TABS = [
@@ -955,6 +1084,13 @@ const AlumnoPage = () => {
                                 <p className="mt-1">{alumno.observaciones_salud}</p>
                             </div>
                         )}
+
+                        <QrAlumno
+                            alumno={alumno}
+                            onRegenerado={(nuevoCodigo) =>
+                                setData((d) => ({ ...d, alumno: { ...d.alumno, codigo_acceso: nuevoCodigo } }))
+                            }
+                        />
 
                         <div className="mb-6 flex flex-wrap gap-2">
                             {TABS.map(([key, label]) => (

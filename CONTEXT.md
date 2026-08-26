@@ -319,6 +319,31 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
     otro gimnasio rechazada, subida con un `ejercicio_id` inexistente (aunque con formato UUID
     válido) rechazada, tipo de archivo no permitido rechazado a nivel de bucket, lectura pública
     OK, y edición de un ejercicio sin tocar el archivo no pisa el `media_url` existente.
+20. **El alumno NO tiene login: accede por un QR individual, sin cuenta ni contraseña.** Esta
+    decisión reemplaza al "G2. Login del alumno" que figuraba en `PLAN.md` — **la pidió Nalux
+    explícitamente** y es de producto, no técnica: buena parte de los alumnos de un gimnasio de
+    barrio es gente mayor o poco técnica, y un login con usuario+contraseña haría que
+    directamente pierdan el acceso ("sino muchos van a perder el acceso"). En vez de eso, cada
+    alumno tiene un `codigo_acceso` propio (128 bits) que el profesor le entrega como QR
+    impreso o por mensaje; al escanearlo entra a `/mi-plan/:codigo`, una pantalla pública de
+    **solo lectura** con su rutina y su plan de alimentación, que puede imprimir o guardar como
+    PDF con la función nativa del navegador. No se crea ninguna fila en `auth.users`, no hay
+    JWT, no hay sesión que cerrar.
+    **Consecuencia importante para el roadmap:** al no haber identidad de sesión del alumno,
+    **G3 (cargas de ejercicio / "última carga") y G4 (récords automáticos) quedan bloqueados** —
+    los dos asumen un alumno que ESCRIBE datos propios, y esto es de solo lectura. Si en algún
+    momento se quieren, hay que retomar la idea del login (o inventar otro mecanismo). Está
+    anotado en la sección 5.
+    **Compensación deliberada de seguridad:** un código en un QR es más parecido a la llave de
+    un casillero que a una contraseña — quien lo tenga, entra. Por eso la superficie de datos es
+    la más chica de todo el proyecto: `ver_plan_por_codigo()` devuelve SOLO nombre del alumno,
+    branding del gimnasio, rutina activa y plan de alimentación. **Nunca** pagos, deuda,
+    contacto, email, observaciones de salud, fecha de nacimiento, asistencias ni progreso. Si un
+    QR se filtra, el peor caso es que alguien vea la rutina de ESE alumno, y el profesor lo
+    invalida al instante con "Regenerar código". Se agregó también `mediaUrl` a cada ejercicio
+    (decisión de producto de Nalux): sin eso, todo el material que el profe sube en el Bloque F
+    nunca le llegaba al alumno, que es justamente a quien más le sirve ver *cómo* se hace el
+    ejercicio.
 
 ---
 
@@ -330,8 +355,13 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
 
 1. **Bloque G** (post-MVP), en curso ítem por ítem — ver historial para el detalle de cada uno:
    - ~~G1. Biblioteca de rutinas reutilizables + asignación masiva~~ **hecho** (26/08/2026).
-   - G2. Login de alumno + policies de fila (Nivel 2 de aislamiento).
-   - G3. `cargas_ejercicio` + vista de "última carga" del alumno.
+   - ~~G2. Login de alumno~~ → **rediseñado y hecho** (26/08/2026) como **acceso por QR sin
+     login**, a pedido del cliente. Ver Decisión 20 y el historial: NO hay cuentas de auth para
+     alumnos. Ojo: esto deja G3/G4 sin base (ver abajo).
+   - G3. `cargas_ejercicio` + vista de "última carga" del alumno. ⚠️ **BLOQUEADO por la
+     Decisión 20**: asume un alumno que puede ESCRIBIR datos propios, y el acceso por QR es de
+     solo lectura sin identidad de sesión. Requiere retomar la idea de login de alumno (o
+     inventar otro mecanismo) antes de poder arrancar. Charlar con Nalux primero.
    - G4. Récords automáticos.
    - G5. Cronómetro + calculadora de 1RM.
    - G6. Notificaciones segmentadas.
@@ -664,3 +694,60 @@ overrideado a la ruta relativa `../../dist/apps/web`). Vercel solo lee `vercel.j
 del Root Directory configurado. Movido a `apps/web/vercel.json`, redeploy automático, confirmado
 en la URL pública real: `/rutinas` y `/unirse/<código inválido>` cargan bien de punta a punta sin
 pasar por `/` primero. Documentado en la sección 6.
+
+**26/08/2026 (cierre) — Bloque G2 terminado, pero REDISEÑADO respecto de `PLAN.md`.** El plan
+original decía "login del alumno + policies de fila". Al plantearle a Nalux el diseño (invitación
+del profe → el alumno define contraseña → portal propio), la respuesta cambió el rumbo por
+completo: *"del lado del alumno tendría que ser algo sencillo, que escanee el QR y vea documentos
+[...] y poder descargarlos si quiere, para que les sirva a gente grande también, sino muchos van a
+perder el acceso"*. Se descartó el login entero. Ver Decisión 20 para el detalle y sus
+consecuencias en el roadmap (G3/G4 quedan bloqueados).
+
+`supabase/migrations/0006_acceso_alumno_por_codigo.sql`: `alumnos.codigo_acceso` (128 bits,
+`DEFAULT` de columna para cubrir los dos caminos de alta que tiene `alumnos` — staff manual y
+`join_gimnasio_por_codigo()` de 0004 — sin tocar ninguna función existente), RPC pública
+`ver_plan_por_codigo()` (la segunda función `anon` del proyecto) y `regenerar_codigo_acceso_alumno()`
+(solo staff del propio gimnasio). Diseñada por `database-architect`, auditada por
+`appsec-secure-coding`.
+
+**Hallazgo real de la auditoría (severidad media), corregido ANTES de aplicar:** el rate-limit de
+`ver_plan_por_codigo()` hacía el `UPDATE` del contador y recién después chequeaba el tope con un
+`IF ... RAISE`. Como el `RAISE` hace rollback de la transacción entera, el contador nunca pasaba de
+60 — o sea que SÍ limitaba los datos devueltos — pero el `UPDATE` abortado igual generaba una tupla
+muerta en MVCC antes de deshacerse (el abort no evita la escritura física, solo la hace invisible).
+Resultado: alguien con un código válido filtrado podía loopear la función sin techo generando WAL y
+bloat sobre esa fila. **El rate-limit limitaba las lecturas pero no las escrituras, que es
+exactamente lo que tiene que frenar.** Corregido moviendo el tope al `WHERE` del propio `UPDATE`
+(mismo criterio atómico que ya usaba `regenerar_codigo_acceso_alumno()`): al llegar al tope no
+matchea ninguna fila, cero escritura, y `NOT FOUND` corta. Verificado midiendo el contador después
+de 65 llamadas: quedó en exactamente 60, confirmando que las 5 rechazadas no escribieron nada.
+
+**Hueco funcional que encontré yo revisando el SQL antes de mandarlo a auditar** (no era de
+seguridad, se habría descubierto recién con la app en manos de un alumno real): `rutinas.items`
+guarda `ejercicioId` pero NO el `media_url` — el alumno habría leído "Sentadilla 4x10" sin poder
+ver el video que el profe subió en el Bloque F, dejando esa feature entera sin ningún consumidor.
+Consultado con Nalux y agregado: la RPC ahora enriquece cada item con su `mediaUrl` (defensivo:
+valida que `items` sea array, compara `id::text` contra el JSON en vez de castear a UUID —un
+`ejercicioId` malformado tiraría la página con un 500—, y preserva el orden con `WITH ORDINALITY`).
+
+Frontend (`frontend-architect`): `MiPlanPage.jsx` en `/mi-plan/:codigo`, pública, sin `AuthContext`
+ni `ProtectedRoute` (mismo criterio que `/unirse/:codigo`). Diseñada para el público objetivo:
+tipografía grande, ningún texto por debajo de 14px, datos numéricos en `text-2xl`/`text-3xl`, sin
+menú ni navegación, botón "Ver cómo se hace" bien destacado por ejercicio con video. Estilos de
+impresión que sobreescriben las custom properties de color en el contenedor de la página (en vez de
+forzar `!important` clase por clase) para que el modo oscuro no se imprima, con `break-inside: avoid`
+para no cortar un ejercicio a la mitad entre páginas. Sección "QR para el alumno" en `AlumnoPage`,
+calcando el patrón de `ConfiguracionPage` (QR client-side con `qrcode`, fondo blanco fijo, descarga,
+regenerar con `window.confirm`).
+
+Verificado de punta a punta contra la base real (datos de prueba "ZZZ" borrados después, confirmado
+por SQL que la cuenta real quedó en cero): la RPC llamada literalmente como `anon` devuelve la
+rutina y el plan correctos; `mediaUrl` llega poblado en el ejercicio con video y `null` en el que no
+tiene, **sin romper**; un `ejercicioId` inexistente en la rutina tampoco rompe; el campo
+`observaciones_salud` (cargado a propósito con "CONFIDENCIAL: no debe verse...") **no aparece en
+ningún lado**, ni el teléfono ni el email (verificado inspeccionando el HTML renderizado, no solo la
+respuesta SQL); código inválido, alumno dado de baja e intento de inyección SQL devuelven todos el
+mismo mensaje genérico; `anon` no puede llamar `regenerar_codigo_acceso_alumno` (permiso denegado);
+rate-limit corta exacto en la llamada 61; el botón "Regenerar código" de la UI cambia el link y el
+QR al instante y deja el QR viejo muerto (confirmado abriendo la URL vieja después). Pantalla
+probada además en viewport de celular (375x812), que es como la va a abrir el alumno.
