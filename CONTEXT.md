@@ -408,6 +408,14 @@ commit quede autoría `kairoxia-info <kairoxiainfo@gmail.com>` (`git config user
 Vercel Pro (permite agregar colaboradores reales), o hacer público el repo — ninguna de las dos
 se tomó todavía.
 
+**Root Directory del proyecto en Vercel: `apps/web`** (no la raíz del monorepo) — cualquier
+`vercel.json` u otro archivo de configuración específico de Vercel tiene que vivir ahí, no en la
+raíz del repo, o Vercel simplemente no lo lee. `apps/web/vercel.json` tiene el rewrite SPA
+(`"/(.*)" -> "/index.html"`) que hace falta para que una URL interna (`/rutinas`, `/unirse/:codigo`,
+`/restablecer-password`, etc.) cargue bien al entrar directo, sin pasar antes por `/` — sin esto,
+Vercel devuelve 404 nativo porque no hay archivo estático en ese path. Ver el historial del
+26/08/2026 para el detalle de cómo se encontró.
+
 ---
 
 ## Historial de actualizaciones
@@ -639,3 +647,20 @@ SQL (asignación vieja `activa:false` sin borrarse, nueva `activa:true`), y "Qui
 corregido mostrando el estado vacío. Datos de prueba borrados después (incluida la cascada de
 `rutinas_asignadas` al borrar las `rutinas`, sin tocarla a mano); confirmado por SQL que la cuenta
 real quedó exactamente como antes de la prueba.
+
+**Hallazgo grande #2 del día, encontrado al verificar el deploy de Bloque G1 en la URL pública
+real:** entrar directo a `/rutinas` (o cualquier ruta interna, sin pasar antes por `/`) daba 404
+nativo de Vercel. Nunca hubo un `vercel.json` con el rewrite SPA catch-all. En local nunca se notó
+porque el dev server de Vite ya maneja el fallback solo; en producción nunca se había podido
+probar hasta hoy (ver el bloqueo de deploys de más arriba). Esto es más grave de lo que parece:
+`/unirse/:codigo` (el link público de autorregistro del Bloque E, pensado para compartirse por QR)
+y `/restablecer-password` (el link que manda el mail de recuperación de Supabase) dependían los
+dos de que un link directo funcionara — los dos estaban rotos en producción hasta este fix.
+
+Primer intento: `vercel.json` en la raíz del repo — no funcionó (siguió dando 404). Revisando la
+configuración del proyecto en Vercel se encontró la causa: **el Root Directory está seteado a
+`apps/web`**, no la raíz del monorepo (coherente con que el Output Directory ya estuviera
+overrideado a la ruta relativa `../../dist/apps/web`). Vercel solo lee `vercel.json` desde dentro
+del Root Directory configurado. Movido a `apps/web/vercel.json`, redeploy automático, confirmado
+en la URL pública real: `/rutinas` y `/unirse/<código inválido>` cargan bien de punta a punta sin
+pasar por `/` primero. Documentado en la sección 6.
