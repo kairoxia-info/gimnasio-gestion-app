@@ -362,8 +362,9 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
      Decisión 20**: asume un alumno que puede ESCRIBIR datos propios, y el acceso por QR es de
      solo lectura sin identidad de sesión. Requiere retomar la idea de login de alumno (o
      inventar otro mecanismo) antes de poder arrancar. Charlar con Nalux primero.
-   - G4. Récords automáticos.
-   - G5. Cronómetro + calculadora de 1RM.
+   - G4. Récords automáticos. También depende de G3 (necesita el historial de cargas), así que
+     queda bloqueado por la misma razón.
+   - ~~G5. Cronómetro + calculadora de 1RM~~ **hecho** (26/08/2026), en `/mi-plan/:codigo`.
    - G6. Notificaciones segmentadas.
    - G7-G9: gatillados por decisiones de negocio todavía sin resolver (ver preguntas abiertas
      abajo) — no arrancar sin resolver esas antes.
@@ -751,3 +752,32 @@ mismo mensaje genérico; `anon` no puede llamar `regenerar_codigo_acceso_alumno`
 rate-limit corta exacto en la llamada 61; el botón "Regenerar código" de la UI cambia el link y el
 QR al instante y deja el QR viejo muerto (confirmado abriendo la URL vieja después). Pantalla
 probada además en viewport de celular (375x812), que es como la va a abrir el alumno.
+
+**26/08/2026 (más tarde) — Bloque G5 terminado: cronómetro de descanso + calculadora de 1RM,
+directo en `/mi-plan/:codigo`.** Sin cambios de schema — es 100% client-side sobre datos que la RPC
+`ver_plan_por_codigo()` ya devolvía.
+
+- **Cronómetro**: cada ejercicio con un `descanso` interpretable (texto libre del profe: "90 s",
+  "1:30", "2 min"...) suma un botón "Iniciar descanso" que abre una cuenta regresiva grande, con
+  beep (Web Audio API sintetizado, sin archivo de audio) + vibración al llegar a cero, pausa/reanuda
+  y reinicio. Implementado contra un timestamp objetivo (`Date.now() + duración`), no restando 1
+  por tick — así no se atrasa si el celular pone la pestaña en segundo plano mientras el alumno
+  descansa. Si el texto de `descanso` no se puede interpretar como tiempo (ej. "a discreción"), el
+  botón simplemente no aparece — mejor eso que un cronómetro mal armado.
+- **Calculadora de 1RM**: fórmula de Epley (`peso × (1 + reps/30)`), con aviso explícito de que es
+  una estimación y no una invitación a probar ese peso sin el profe — mismo criterio de público
+  mayor/poco técnico de toda la pantalla.
+
+**Bug que encontré yo revisando el código antes de probarlo** (no llegó a tocar la base real): si
+dos ejercicios comparten exactamente el mismo texto de descanso ("90 s" los dos) y el alumno pide
+el cronómetro del segundo mientras el del primero sigue corriendo, la duración en segundos —usada
+como `key` de React— es idéntica, así que React no reemplaza el componente y el cronómetro viejo
+seguía mostrando su cuenta a mitad de camino en vez de arrancar de nuevo. Corregido con un id
+incremental por apertura en vez de la duración como `key`.
+
+Verificado en vivo con datos de prueba (borrados después, confirmado por SQL en cero): "8 s" y
+"1:30" muestran el botón, "a discreción" no; el cronómetro llega a 0:00, avisa "¡Descanso
+terminado!" y deshabilita "Pausar"; pausado 3 segundos reales queda congelado en el mismo valor
+(no sigue bajando) y "Seguir" retoma justo desde ahí; "Reiniciar" vuelve a la duración original; la
+calculadora da 76 kg para 60 kg × 8 reps (coincide con Epley a mano) y rechaza 16 repeticiones
+(fuera del rango 1-15) mostrando el aviso en vez de un resultado.

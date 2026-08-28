@@ -1,9 +1,287 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
-import { AlertTriangle, Dumbbell, Loader2, Play, Printer } from 'lucide-react';
+import { AlertTriangle, Calculator, Dumbbell, Loader2, Pause, Play, Printer, RotateCcw, Timer, X } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
+
+// El campo "descanso" de cada ejercicio es texto libre que escribe el profe
+// ("90 s", "1:30", "2 min", "60"...), no un número — así que hay que
+// interpretarlo para poder arrancar el cronómetro. Si no se entiende, se
+// devuelve null y el botón de descanso simplemente no aparece: preferimos no
+// mostrar el cronómetro antes que mostrar una cuenta regresiva equivocada.
+const parsearDescanso = (texto) => {
+    if (!texto) return null;
+    const t = String(texto).trim().toLowerCase();
+
+    // Formato mm:ss ("1:30")
+    const mmss = t.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+    if (mmss) {
+        const segundos = Number(mmss[1]) * 60 + Number(mmss[2]);
+        return segundos > 0 && segundos <= 3600 ? segundos : null;
+    }
+
+    const num = t.match(/(\d+(?:[.,]\d+)?)/);
+    if (!num) return null;
+    const valor = Number(num[1].replace(',', '.'));
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+
+    // "2 min"/"2m" son minutos; "90 s"/"90" son segundos. Se pide que
+    // aparezca una "m" para tratarlo como minutos, así "90 s" no se
+    // malinterpreta.
+    const esMinutos = /m/.test(t);
+    const segundos = Math.round(esMinutos ? valor * 60 : valor);
+    return segundos > 0 && segundos <= 3600 ? segundos : null;
+};
+
+const formatearMmSs = (segundos) => {
+    const m = Math.floor(segundos / 60);
+    const s = segundos % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+// Beep sintetizado con Web Audio API en vez de un archivo de audio: cero
+// peso extra, cero request, y funciona igual sin conexión. Envuelto en
+// try/catch porque algunos navegadores exigen una interacción previa del
+// usuario para permitir audio — si falla, el aviso por vibración (más abajo)
+// alcanza igual.
+const reproducirBeep = () => {
+    try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new Ctx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.55);
+    } catch (_) {
+        // sin sonido, sigue la vibración si el dispositivo la soporta
+    }
+};
+
+// Cronómetro de descanso entre series. Basado en un timestamp objetivo
+// (Date.now() + duración) en vez de simplemente restar 1 en cada tick: un
+// setInterval de "restar 1 por segundo" se atrasa si el celular pone la
+// pestaña en segundo plano (el navegador enlentece los timers), y acá el
+// alumno bien puede bloquear el teléfono mientras descansa. Comparando
+// siempre contra el reloj real, al volver a abrir la pantalla el cronómetro
+// muestra el tiempo que pasó de verdad, no el que el timer alcanzó a contar.
+const CronometroModal = ({ duracionInicial, onClose }) => {
+    const [restante, setRestante] = useState(duracionInicial);
+    const [corriendo, setCorriendo] = useState(true);
+    const finRef = useRef(Date.now() + duracionInicial * 1000);
+    const avisadoRef = useRef(false);
+
+    useEffect(() => {
+        if (!corriendo) return undefined;
+        const id = setInterval(() => {
+            const seg = Math.max(0, Math.ceil((finRef.current - Date.now()) / 1000));
+            setRestante(seg);
+            if (seg <= 0 && !avisadoRef.current) {
+                avisadoRef.current = true;
+                reproducirBeep();
+                if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]);
+            }
+        }, 250);
+        return () => clearInterval(id);
+    }, [corriendo]);
+
+    const pausarOReanudar = () => {
+        if (corriendo) {
+            setCorriendo(false);
+        } else {
+            finRef.current = Date.now() + restante * 1000;
+            avisadoRef.current = restante <= 0;
+            setCorriendo(true);
+        }
+    };
+
+    const reiniciar = () => {
+        finRef.current = Date.now() + duracionInicial * 1000;
+        avisadoRef.current = false;
+        setRestante(duracionInicial);
+        setCorriendo(true);
+    };
+
+    const terminado = restante <= 0;
+    const porcentaje = Math.min(
+        100,
+        Math.round(((duracionInicial - restante) / duracionInicial) * 100),
+    );
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cronómetro de descanso"
+            className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-center shadow-xl">
+                <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                        Tiempo de descanso
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Cerrar cronómetro"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </div>
+
+                <p
+                    className={`font-display text-7xl font-extrabold tabular-nums ${
+                        terminado ? 'text-primary' : 'text-foreground'
+                    }`}
+                >
+                    {formatearMmSs(restante)}
+                </p>
+
+                <p className="mt-3 text-lg font-bold text-primary">
+                    {terminado ? '¡Descanso terminado!' : corriendo ? 'Contando...' : 'En pausa'}
+                </p>
+
+                <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-secondary">
+                    <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${porcentaje}%` }}
+                    />
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                    <button
+                        type="button"
+                        onClick={pausarOReanudar}
+                        disabled={terminado}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-40"
+                    >
+                        {corriendo ? (
+                            <>
+                                <Pause className="h-5 w-5" aria-hidden="true" /> Pausar
+                            </>
+                        ) : (
+                            <>
+                                <Play className="h-5 w-5" aria-hidden="true" /> Seguir
+                            </>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={reiniciar}
+                        aria-label="Reiniciar cronómetro"
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold transition active:scale-[0.98]"
+                    >
+                        <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Calculadora de 1RM (repetición máxima estimada) con la fórmula de Epley,
+// la más usada para esto: 1RM = peso × (1 + reps/30). Es una ESTIMACIÓN
+// matemática a partir de una serie ya hecha, no una invitación a probar ese
+// peso solo/sin cuidado — el aviso de abajo lo deja explícito a propósito,
+// pensando en el mismo público mayor/poco técnico de toda esta pantalla.
+const Calculadora1RM = ({ onClose }) => {
+    const [peso, setPeso] = useState('');
+    const [reps, setReps] = useState('');
+
+    const pesoNum = Number(String(peso).replace(',', '.'));
+    const repsNum = Math.round(Number(reps));
+    const valido = Number.isFinite(pesoNum) && pesoNum > 0 && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= 15;
+    const resultado = valido ? Math.round(pesoNum * (1 + repsNum / 30) * 2) / 2 : null;
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Calculadora de fuerza"
+            className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-xl">
+                <div className="mb-4 flex items-center justify-between">
+                    <p className="text-lg font-bold">¿Cuánto podés levantar?</p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Cerrar calculadora"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </div>
+
+                <p className="text-base text-muted-foreground">
+                    Contame un peso que ya levantaste y cuántas veces seguidas, y calculo tu máximo estimado.
+                </p>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                            Peso (kg)
+                        </span>
+                        <input
+                            type="number"
+                            inputMode="decimal"
+                            min="1"
+                            value={peso}
+                            onChange={(e) => setPeso(e.target.value)}
+                            placeholder="60"
+                            className="rounded-xl border border-input bg-background px-3 py-3 text-2xl font-bold text-foreground focus:border-primary focus:outline-none"
+                        />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                            Repeticiones
+                        </span>
+                        <input
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            max="15"
+                            value={reps}
+                            onChange={(e) => setReps(e.target.value)}
+                            placeholder="8"
+                            className="rounded-xl border border-input bg-background px-3 py-3 text-2xl font-bold text-foreground focus:border-primary focus:outline-none"
+                        />
+                    </label>
+                </div>
+
+                {reps && !valido && (
+                    <p className="mt-3 text-sm text-muted-foreground">
+                        Las repeticiones tienen que ser un número entero entre 1 y 15 para que la
+                        estimación tenga sentido.
+                    </p>
+                )}
+
+                {resultado !== null && (
+                    <div className="mt-5 rounded-2xl bg-secondary p-5 text-center">
+                        <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                            Tu máximo estimado
+                        </p>
+                        <p className="mt-1 font-display text-4xl font-extrabold text-primary">
+                            {resultado} kg
+                        </p>
+                    </div>
+                )}
+
+                <p className="mt-5 text-sm text-muted-foreground">
+                    Es una estimación matemática, no una indicación de que pruebes ese peso. Para
+                    probar un máximo de verdad, hacelo siempre acompañado por tu profe.
+                </p>
+            </div>
+        </div>
+    );
+};
 
 // Mensajes literales que devuelve la RPC ver_plan_por_codigo (migración
 // 0006_acceso_alumno_por_codigo.sql). Comparamos con una regex laxa en vez
@@ -86,6 +364,16 @@ const MiPlanPage = () => {
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    // { duracion, id } del cronómetro activo, o null si está cerrado. El id
+    // incremental (no solo la duración) es a propósito: si dos ejercicios
+    // comparten el mismo descanso ("90 s" los dos) y se pide el segundo
+    // mientras el primero sigue contando, la duración por sí sola no cambia
+    // -React no re-renderiza con un valor de estado idéntico- y el
+    // cronómetro viejo seguiría mostrando su cuenta a mitad de camino en vez
+    // de arrancar de nuevo.
+    const [cronometro, setCronometro] = useState(null);
+    const cronometroIdRef = useRef(0);
+    const [calculadoraAbierta, setCalculadoraAbierta] = useState(false);
 
     // Se llama una sola vez al montar (o si cambia el código de la URL):
     // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
@@ -200,13 +488,22 @@ const MiPlanPage = () => {
                             <p className="text-lg text-muted-foreground">
                                 Acá tenés tu rutina y tu plan de alimentación.
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => window.print()}
-                                className="mp-no-imprimir inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
-                            >
-                                <Printer className="h-6 w-6" aria-hidden="true" /> Descargar / Imprimir
-                            </button>
+                            <div className="mp-no-imprimir flex flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
+                                >
+                                    <Printer className="h-6 w-6" aria-hidden="true" /> Descargar / Imprimir
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCalculadoraAbierta(true)}
+                                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-primary px-6 py-4 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
+                                >
+                                    <Calculator className="h-6 w-6" aria-hidden="true" /> ¿Cuánto puedo levantar?
+                                </button>
+                            </div>
                         </section>
 
                         <section aria-labelledby="mp-rutina-titulo" className="space-y-5">
@@ -242,39 +539,60 @@ const MiPlanPage = () => {
                                                     {dia}
                                                 </h3>
                                                 <div className="space-y-3">
-                                                    {items.map((it) => (
-                                                        <article
-                                                            key={it.key}
-                                                            className="mp-evitar-corte rounded-2xl border border-border bg-card p-5"
-                                                        >
-                                                            <p className="text-xl font-bold sm:text-2xl">{it.nombre}</p>
-                                                            {it.grupo && (
-                                                                <p className="mt-0.5 text-base text-muted-foreground">
-                                                                    {it.grupo}
-                                                                </p>
-                                                            )}
-                                                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                                                <DatoEjercicio label="Series" valor={it.series} />
-                                                                <DatoEjercicio label="Reps" valor={it.reps} />
-                                                                <DatoEjercicio label="Peso" valor={it.peso || '—'} />
-                                                                <DatoEjercicio
-                                                                    label="Descanso"
-                                                                    valor={it.descanso || '—'}
-                                                                />
-                                                            </div>
-                                                            {it.mediaUrl && (
-                                                                <a
-                                                                    href={it.mediaUrl}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="mp-no-imprimir mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
-                                                                >
-                                                                    <Play className="h-5 w-5" aria-hidden="true" /> Ver
-                                                                    cómo se hace
-                                                                </a>
-                                                            )}
-                                                        </article>
-                                                    ))}
+                                                    {items.map((it) => {
+                                                        const descansoSeg = parsearDescanso(it.descanso);
+                                                        return (
+                                                            <article
+                                                                key={it.key}
+                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-5"
+                                                            >
+                                                                <p className="text-xl font-bold sm:text-2xl">{it.nombre}</p>
+                                                                {it.grupo && (
+                                                                    <p className="mt-0.5 text-base text-muted-foreground">
+                                                                        {it.grupo}
+                                                                    </p>
+                                                                )}
+                                                                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                                                    <DatoEjercicio label="Series" valor={it.series} />
+                                                                    <DatoEjercicio label="Reps" valor={it.reps} />
+                                                                    <DatoEjercicio label="Peso" valor={it.peso || '—'} />
+                                                                    <DatoEjercicio
+                                                                        label="Descanso"
+                                                                        valor={it.descanso || '—'}
+                                                                    />
+                                                                </div>
+                                                                <div className="mp-no-imprimir mt-4 flex flex-col gap-3 sm:flex-row">
+                                                                    {it.mediaUrl && (
+                                                                        <a
+                                                                            href={it.mediaUrl}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
+                                                                        >
+                                                                            <Play className="h-5 w-5" aria-hidden="true" />{' '}
+                                                                            Ver cómo se hace
+                                                                        </a>
+                                                                    )}
+                                                                    {descansoSeg && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                cronometroIdRef.current += 1;
+                                                                                setCronometro({
+                                                                                    duracion: descansoSeg,
+                                                                                    id: cronometroIdRef.current,
+                                                                                });
+                                                                            }}
+                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3 text-lg font-bold transition active:scale-[0.98] sm:w-auto"
+                                                                        >
+                                                                            <Timer className="h-5 w-5" aria-hidden="true" />{' '}
+                                                                            Iniciar descanso
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </article>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         ))
@@ -329,6 +647,15 @@ const MiPlanPage = () => {
                             )}
                         </section>
                     </main>
+
+                    {cronometro !== null && (
+                        <CronometroModal
+                            key={cronometro.id}
+                            duracionInicial={cronometro.duracion}
+                            onClose={() => setCronometro(null)}
+                        />
+                    )}
+                    {calculadoraAbierta && <Calculadora1RM onClose={() => setCalculadoraAbierta(false)} />}
                 </>
             )}
         </div>
