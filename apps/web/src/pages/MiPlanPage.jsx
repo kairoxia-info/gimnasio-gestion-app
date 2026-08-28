@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
-import { AlertTriangle, Dumbbell, Loader2, Pause, Play, Printer, RotateCcw, Timer, X } from 'lucide-react';
+import { AlertTriangle, Download, Dumbbell, Loader2, Pause, Play, RotateCcw, Timer, X } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
 
@@ -259,6 +259,17 @@ const ESTILOS_IMPRESION = `
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  /* El alumno puede descargar la rutina y el plan de comida por separado
+     (cada uno en su propio PDF, no uno solo con todo junto) — al imprimir
+     con data-imprimiendo="rutina" se oculta la sección de alimentación y
+     viceversa, dejando el saludo/header igual en los dos casos. Fuera de
+     @media print esto no hace nada: en pantalla siempre se ven las dos. */
+  .mp-pagina[data-imprimiendo='rutina'] .mp-seccion-alimentacion {
+    display: none !important;
+  }
+  .mp-pagina[data-imprimiendo='alimentacion'] .mp-seccion-rutina {
+    display: none !important;
+  }
 }
 `;
 
@@ -276,6 +287,40 @@ const MiPlanPage = () => {
     // de arrancar de nuevo.
     const [cronometro, setCronometro] = useState(null);
     const cronometroIdRef = useRef(0);
+    // 'rutina' | 'alimentacion' | null. Controla qué sección queda visible
+    // a la hora de imprimir (ver ESTILOS_IMPRESION) — así "Descargar rutina"
+    // y "Descargar plan de comida" arman cada uno su propio PDF con solo lo
+    // que corresponde, en vez de un único PDF con todo mezclado.
+    const [imprimiendoSeccion, setImprimiendoSeccion] = useState(null);
+
+    // 'afterprint' es un evento estándar del navegador que se dispara al
+    // cerrarse el diálogo de impresión, se haya guardado el PDF o
+    // cancelado — se usa para "soltar" el filtro de sección después, sin
+    // adivinar con un timeout cuánto tarda el usuario en elegir. Es solo
+    // prolijidad (deja el estado en null cuando ya no hace falta): NO es lo
+    // que dispara la impresión en sí, ver descargarSeccion() más abajo.
+    useEffect(() => {
+        const soltar = () => setImprimiendoSeccion(null);
+        window.addEventListener('afterprint', soltar);
+        return () => window.removeEventListener('afterprint', soltar);
+    }, []);
+
+    // Fija qué sección queda visible para imprimir y recién AHÍ llama a
+    // print() — nunca desde un useEffect enganchado al valor de
+    // imprimiendoSeccion. Motivo: si 'afterprint' no llegara a dispararse en
+    // algún navegador (pasa en algunas versiones de iOS), el estado
+    // quedaría trabado en, por ejemplo, 'rutina'; un useEffect por-valor no
+    // volvería a dispararse si el alumno aprieta "Descargar en PDF" de la
+    // rutina una segunda vez (mismo valor = sin cambio = sin efecto). Acá,
+    // en cambio, cada clic llama a print() de nuevo sin importar el valor
+    // anterior. requestAnimationFrame espera al frame siguiente para que el
+    // atributo data-imprimiendo ya esté aplicado en el DOM antes de abrir el
+    // diálogo — si se llamara print() en el mismo tick, se arriesga a
+    // capturar el DOM de ANTES de ocultar la otra sección.
+    const descargarSeccion = (seccion) => {
+        setImprimiendoSeccion(seccion);
+        requestAnimationFrame(() => window.print());
+    };
 
     // Se llama una sola vez al montar (o si cambia el código de la URL):
     // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
@@ -338,7 +383,10 @@ const MiPlanPage = () => {
     const tienePlan = !!plan?.plan_nombre;
 
     return (
-        <div className="mp-pagina min-h-[100dvh] bg-background text-foreground">
+        <div
+            className="mp-pagina min-h-[100dvh] bg-background text-foreground"
+            data-imprimiendo={imprimiendoSeccion || undefined}
+        >
             <style>{ESTILOS_IMPRESION}</style>
             <Helmet>
                 <title>
@@ -390,19 +438,23 @@ const MiPlanPage = () => {
                             <p className="text-lg text-muted-foreground">
                                 Acá tenés tu rutina y tu plan de alimentación.
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => window.print()}
-                                className="mp-no-imprimir inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
-                            >
-                                <Printer className="h-6 w-6" aria-hidden="true" /> Descargar / Imprimir
-                            </button>
                         </section>
 
-                        <section aria-labelledby="mp-rutina-titulo" className="space-y-5">
-                            <h2 id="mp-rutina-titulo" className="font-display text-2xl font-extrabold uppercase">
-                                Tu rutina
-                            </h2>
+                        <section aria-labelledby="mp-rutina-titulo" className="mp-seccion-rutina space-y-5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <h2 id="mp-rutina-titulo" className="font-display text-2xl font-extrabold uppercase">
+                                    Tu rutina
+                                </h2>
+                                {tieneRutina && (
+                                    <button
+                                        type="button"
+                                        onClick={() => descargarSeccion('rutina')}
+                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98]"
+                                    >
+                                        <Download className="h-5 w-5" aria-hidden="true" /> Descargar en PDF
+                                    </button>
+                                )}
+                            </div>
 
                             {!tieneRutina ? (
                                 <EstadoVacio>
@@ -494,10 +546,27 @@ const MiPlanPage = () => {
                             )}
                         </section>
 
-                        <section aria-labelledby="mp-alimentacion-titulo" className="space-y-5">
-                            <h2 id="mp-alimentacion-titulo" className="font-display text-2xl font-extrabold uppercase">
-                                Tu plan de alimentación
-                            </h2>
+                        <section
+                            aria-labelledby="mp-alimentacion-titulo"
+                            className="mp-seccion-alimentacion space-y-5"
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <h2
+                                    id="mp-alimentacion-titulo"
+                                    className="font-display text-2xl font-extrabold uppercase"
+                                >
+                                    Tu plan de alimentación
+                                </h2>
+                                {tienePlan && (
+                                    <button
+                                        type="button"
+                                        onClick={() => descargarSeccion('alimentacion')}
+                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98]"
+                                    >
+                                        <Download className="h-5 w-5" aria-hidden="true" /> Descargar en PDF
+                                    </button>
+                                )}
+                            </div>
 
                             {!tienePlan ? (
                                 <EstadoVacio>

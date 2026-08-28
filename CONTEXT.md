@@ -791,3 +791,36 @@ import del ícono) — no quedó código muerto ni oculto. El cronómetro de des
 gustó, queda como estaba. Build y lint limpios, y confirmado en vivo (con una cuenta descartable,
 borrada después) que la calculadora ya no aparece y que "Descargar / Imprimir" e "Iniciar descanso"
 siguen funcionando igual.
+
+**26/08/2026 (mismo día, más tarde) — descarga de PDF separada por sección en `/mi-plan/:codigo`.**
+Nalux pidió que el alumno pueda descargar solo la rutina o solo el plan de comida, no las dos
+juntas en un PDF único. Se sacó el botón genérico "Descargar / Imprimir" de arriba y se puso un
+botón "Descargar en PDF" propio junto al título de cada sección (`Tu rutina` / `Tu plan de
+alimentación`), visible solo si esa sección tiene contenido.
+
+Sigue sin hacer falta ninguna librería de PDF: se usa `window.print()` igual que antes, pero ahora
+un estado (`imprimiendoSeccion`, `'rutina' | 'alimentacion' | null`) fija un `data-imprimiendo` en
+el contenedor de la página, y una regla `@media print` nueva oculta la sección que no corresponde
+justo para ese PDF — el header con el logo del gimnasio y el saludo se mantienen igual en los dos
+casos. Fuera de impresión esto no afecta nada: en pantalla siempre se ven las dos secciones.
+
+**Detalle de robustez que corregí yo mismo antes de probarlo, pensando en el público de celulares
+poco técnicos:** la primera versión disparaba `window.print()` desde un `useEffect` enganchado al
+valor de `imprimiendoSeccion`. El evento `afterprint` (estándar del navegador, dispara al cerrarse
+el diálogo de impresión) se usa para volver ese estado a `null` después — pero si `afterprint` no
+llegara a dispararse en algún navegador (pasa en ciertas versiones de iOS), el estado quedaría
+trabado en, por ejemplo, `'rutina'`, y un segundo clic en el MISMO botón "Descargar en PDF" de la
+rutina no volvería a llamar a `print()` (mismo valor de estado = React no re-dispara el efecto) —
+el alumno se quedaría sin poder reintentar si canceló el diálogo la primera vez. Corregido: ahora
+`print()` se llama directo en el `onClick` (vía `requestAnimationFrame`, para esperar al frame
+donde el atributo ya está aplicado en el DOM), sin pasar por ningún `useEffect` condicionado al
+valor — cada clic dispara el diálogo sin importar el estado anterior. `afterprint` sigue estando,
+pero ahora es pura prolijidad (limpia el estado cuando se puede), nunca el mecanismo que gatilla
+la impresión.
+
+Verificado en vivo con una cuenta descartable (rutina + plan de alimentación reales, borrada
+después): interceptando `window.print()` (igual que se hizo antes con `window.confirm`, porque el
+diálogo nativo no es interactuable desde acá) se confirmó que el botón de cada sección fija el
+`data-imprimiendo` correcto y que el selector CSS de "ocultar" matchea exactamente la sección
+contraria — nunca la propia; y que dos clics seguidos en el mismo botón (sin cambiar de sección)
+llaman a `print()` las dos veces, confirmando el fix del borde de arriba.
