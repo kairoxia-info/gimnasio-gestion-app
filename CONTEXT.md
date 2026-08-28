@@ -364,7 +364,9 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
      inventar otro mecanismo) antes de poder arrancar. Charlar con Nalux primero.
    - G4. Récords automáticos. También depende de G3 (necesita el historial de cargas), así que
      queda bloqueado por la misma razón.
-   - ~~G5. Cronómetro + calculadora de 1RM~~ **hecho** (26/08/2026), en `/mi-plan/:codigo`.
+   - ~~G5. Cronómetro~~ **hecho** (26/08/2026), en `/mi-plan/:codigo`. La calculadora de 1RM se
+     armó y se probó, pero Nalux pidió sacarla el mismo día — el profe ya le dice el peso al
+     alumno, no hacía falta. Se sacó del código, no quedó ni oculta ni a medio hacer.
    - G6. Notificaciones segmentadas.
    - G7-G9: gatillados por decisiones de negocio todavía sin resolver (ver preguntas abiertas
      abajo) — no arrancar sin resolver esas antes.
@@ -781,3 +783,11 @@ terminado!" y deshabilita "Pausar"; pausado 3 segundos reales queda congelado en
 (no sigue bajando) y "Seguir" retoma justo desde ahí; "Reiniciar" vuelve a la duración original; la
 calculadora da 76 kg para 60 kg × 8 reps (coincide con Epley a mano) y rechaza 16 repeticiones
 (fuera del rango 1-15) mostrando el aviso en vez de un resultado.
+
+**26/08/2026 (mismo día, minutos después) — se sacó la calculadora de 1RM.** Nalux la vio en uso y
+decidió que no hacía falta: el profesor ya le dice el peso al alumno, así que agregaba una pantalla
+más sin necesidad real. Sacada por completo de `MiPlanPage.jsx` (componente, botón, estado e
+import del ícono) — no quedó código muerto ni oculto. El cronómetro de descanso, que sí se probó y
+gustó, queda como estaba. Build y lint limpios, y confirmado en vivo (con una cuenta descartable,
+borrada después) que la calculadora ya no aparece y que "Descargar / Imprimir" e "Iniciar descanso"
+siguen funcionando igual.

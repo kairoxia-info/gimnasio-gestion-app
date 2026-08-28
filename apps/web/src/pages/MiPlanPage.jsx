@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
-import { AlertTriangle, Calculator, Dumbbell, Loader2, Pause, Play, Printer, RotateCcw, Timer, X } from 'lucide-react';
+import { AlertTriangle, Dumbbell, Loader2, Pause, Play, Printer, RotateCcw, Timer, X } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
 
@@ -186,103 +186,6 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
     );
 };
 
-// Calculadora de 1RM (repetición máxima estimada) con la fórmula de Epley,
-// la más usada para esto: 1RM = peso × (1 + reps/30). Es una ESTIMACIÓN
-// matemática a partir de una serie ya hecha, no una invitación a probar ese
-// peso solo/sin cuidado — el aviso de abajo lo deja explícito a propósito,
-// pensando en el mismo público mayor/poco técnico de toda esta pantalla.
-const Calculadora1RM = ({ onClose }) => {
-    const [peso, setPeso] = useState('');
-    const [reps, setReps] = useState('');
-
-    const pesoNum = Number(String(peso).replace(',', '.'));
-    const repsNum = Math.round(Number(reps));
-    const valido = Number.isFinite(pesoNum) && pesoNum > 0 && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= 15;
-    const resultado = valido ? Math.round(pesoNum * (1 + repsNum / 30) * 2) / 2 : null;
-
-    return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Calculadora de fuerza"
-            className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        >
-            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
-                    <p className="text-lg font-bold">¿Cuánto podés levantar?</p>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Cerrar calculadora"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
-                    >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                </div>
-
-                <p className="text-base text-muted-foreground">
-                    Contame un peso que ya levantaste y cuántas veces seguidas, y calculo tu máximo estimado.
-                </p>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                    <label className="flex flex-col gap-2">
-                        <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-                            Peso (kg)
-                        </span>
-                        <input
-                            type="number"
-                            inputMode="decimal"
-                            min="1"
-                            value={peso}
-                            onChange={(e) => setPeso(e.target.value)}
-                            placeholder="60"
-                            className="rounded-xl border border-input bg-background px-3 py-3 text-2xl font-bold text-foreground focus:border-primary focus:outline-none"
-                        />
-                    </label>
-                    <label className="flex flex-col gap-2">
-                        <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-                            Repeticiones
-                        </span>
-                        <input
-                            type="number"
-                            inputMode="numeric"
-                            min="1"
-                            max="15"
-                            value={reps}
-                            onChange={(e) => setReps(e.target.value)}
-                            placeholder="8"
-                            className="rounded-xl border border-input bg-background px-3 py-3 text-2xl font-bold text-foreground focus:border-primary focus:outline-none"
-                        />
-                    </label>
-                </div>
-
-                {reps && !valido && (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                        Las repeticiones tienen que ser un número entero entre 1 y 15 para que la
-                        estimación tenga sentido.
-                    </p>
-                )}
-
-                {resultado !== null && (
-                    <div className="mt-5 rounded-2xl bg-secondary p-5 text-center">
-                        <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-                            Tu máximo estimado
-                        </p>
-                        <p className="mt-1 font-display text-4xl font-extrabold text-primary">
-                            {resultado} kg
-                        </p>
-                    </div>
-                )}
-
-                <p className="mt-5 text-sm text-muted-foreground">
-                    Es una estimación matemática, no una indicación de que pruebes ese peso. Para
-                    probar un máximo de verdad, hacelo siempre acompañado por tu profe.
-                </p>
-            </div>
-        </div>
-    );
-};
-
 // Mensajes literales que devuelve la RPC ver_plan_por_codigo (migración
 // 0006_acceso_alumno_por_codigo.sql). Comparamos con una regex laxa en vez
 // de igualdad estricta para no depender de mayúsculas exactas, pero seguimos
@@ -373,7 +276,6 @@ const MiPlanPage = () => {
     // de arrancar de nuevo.
     const [cronometro, setCronometro] = useState(null);
     const cronometroIdRef = useRef(0);
-    const [calculadoraAbierta, setCalculadoraAbierta] = useState(false);
 
     // Se llama una sola vez al montar (o si cambia el código de la URL):
     // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
@@ -488,22 +390,13 @@ const MiPlanPage = () => {
                             <p className="text-lg text-muted-foreground">
                                 Acá tenés tu rutina y tu plan de alimentación.
                             </p>
-                            <div className="mp-no-imprimir flex flex-col gap-3 sm:flex-row">
-                                <button
-                                    type="button"
-                                    onClick={() => window.print()}
-                                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
-                                >
-                                    <Printer className="h-6 w-6" aria-hidden="true" /> Descargar / Imprimir
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCalculadoraAbierta(true)}
-                                    className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-primary px-6 py-4 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
-                                >
-                                    <Calculator className="h-6 w-6" aria-hidden="true" /> ¿Cuánto puedo levantar?
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="mp-no-imprimir inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
+                            >
+                                <Printer className="h-6 w-6" aria-hidden="true" /> Descargar / Imprimir
+                            </button>
                         </section>
 
                         <section aria-labelledby="mp-rutina-titulo" className="space-y-5">
@@ -655,7 +548,6 @@ const MiPlanPage = () => {
                             onClose={() => setCronometro(null)}
                         />
                     )}
-                    {calculadoraAbierta && <Calculadora1RM onClose={() => setCalculadoraAbierta(false)} />}
                 </>
             )}
         </div>
