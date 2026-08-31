@@ -40,6 +40,33 @@ const formatearMmSs = (segundos) => {
     return `${m}:${String(s).padStart(2, '0')}`;
 };
 
+// "Ver cómo se hace" abría el archivo en otra pestaña — en el celular, sin
+// una barra de pestañas visible, el alumno no encontraba cómo volver a la
+// app (reportado por Nalux). Para un archivo propio (subido al bucket
+// ejercicios-media, mismo criterio que EjerciciosPage.jsx) alcanza con
+// mostrarlo adentro en un modal — nunca hay pestaña de la que volver. Un
+// link externo (YouTube, Vimeo...) sigue abriendo aparte, porque no hay
+// forma simple y confiable de embeberlo acá.
+const EXTENSIONES_VIDEO = ['mp4', 'webm', 'mov'];
+const EXTENSIONES_IMAGEN = ['png', 'jpg', 'jpeg', 'webp'];
+
+const esArchivoPropio = (url) => (url || '').includes('/object/public/ejercicios-media/');
+
+const extensionDe = (url) => {
+    const limpio = (url || '').split('?')[0].split('#')[0];
+    const m = limpio.match(/\.([a-z0-9]+)$/i);
+    return m ? m[1].toLowerCase() : null;
+};
+
+// null = no hay preview posible acá (el botón usa el link externo tal cual).
+const tipoDePreview = (mediaUrl) => {
+    if (!esArchivoPropio(mediaUrl)) return null;
+    const ext = extensionDe(mediaUrl);
+    if (EXTENSIONES_VIDEO.includes(ext)) return 'video';
+    if (EXTENSIONES_IMAGEN.includes(ext)) return 'imagen';
+    return null;
+};
+
 // Beep sintetizado con Web Audio API en vez de un archivo de audio: cero
 // peso extra, cero request, y funciona igual sin conexión. Envuelto en
 // try/catch porque algunos navegadores exigen una interacción previa del
@@ -186,6 +213,38 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
     );
 };
 
+// Preview de la demostración de un ejercicio (video o imagen), mostrada
+// adentro de la app en vez de mandar al alumno a otra pestaña. Mismo
+// criterio visual que CronometroModal de arriba (overlay fijo, tarjeta
+// redondeada, botón de cerrar arriba a la derecha).
+const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => (
+    <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Demostración de ${nombre}`}
+        className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+    >
+        <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                <p className="truncate text-lg font-bold">{nombre}</p>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Cerrar demostración"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border"
+                >
+                    <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+            </div>
+            {tipo === 'video' ? (
+                <video src={url} controls autoPlay playsInline className="w-full rounded-2xl bg-black" />
+            ) : (
+                <img src={url} alt={`Demostración de ${nombre}`} className="w-full rounded-2xl" />
+            )}
+        </div>
+    </div>
+);
+
 // Mensajes literales que devuelve la RPC ver_plan_por_codigo (migración
 // 0006_acceso_alumno_por_codigo.sql). Comparamos con una regex laxa en vez
 // de igualdad estricta para no depender de mayúsculas exactas, pero seguimos
@@ -287,6 +346,9 @@ const MiPlanPage = () => {
     // de arrancar de nuevo.
     const [cronometro, setCronometro] = useState(null);
     const cronometroIdRef = useRef(0);
+    // Ejercicio cuya demostración se está mostrando en el modal de preview
+    // ("Ver cómo se hace"), o null si está cerrado.
+    const [previewItem, setPreviewItem] = useState(null);
     // 'rutina' | 'alimentacion' | null. Controla qué sección queda visible
     // a la hora de imprimir (ver ESTILOS_IMPRESION) — así "Descargar rutina"
     // y "Descargar plan de comida" arman cada uno su propio PDF con solo lo
@@ -571,15 +633,26 @@ const MiPlanPage = () => {
                                                                 </div>
                                                                 <div className="mp-no-imprimir mt-4 flex flex-col gap-3 sm:flex-row">
                                                                     {it.mediaUrl && (
-                                                                        <a
-                                                                            href={it.mediaUrl}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
-                                                                        >
-                                                                            <Play className="h-5 w-5" aria-hidden="true" />{' '}
-                                                                            Ver cómo se hace
-                                                                        </a>
+                                                                        tipoDePreview(it.mediaUrl) ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setPreviewItem(it)}
+                                                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
+                                                                            >
+                                                                                <Play className="h-5 w-5" aria-hidden="true" />{' '}
+                                                                                Ver cómo se hace
+                                                                            </button>
+                                                                        ) : (
+                                                                            <a
+                                                                                href={it.mediaUrl}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
+                                                                            >
+                                                                                <Play className="h-5 w-5" aria-hidden="true" />{' '}
+                                                                                Ver cómo se hace
+                                                                            </a>
+                                                                        )
                                                                     )}
                                                                     {descansoSeg && (
                                                                         <button
@@ -678,6 +751,14 @@ const MiPlanPage = () => {
                             key={cronometro.id}
                             duracionInicial={cronometro.duracion}
                             onClose={() => setCronometro(null)}
+                        />
+                    )}
+                    {previewItem && (
+                        <PreviewMediaModal
+                            nombre={previewItem.nombre}
+                            url={previewItem.mediaUrl}
+                            tipo={tipoDePreview(previewItem.mediaUrl)}
+                            onClose={() => setPreviewItem(null)}
                         />
                     )}
                 </>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { AlertTriangle, Dumbbell, ExternalLink, Plus } from 'lucide-react';
+import { AlertTriangle, Dumbbell, ExternalLink, Play, Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
@@ -19,6 +19,31 @@ const pathEnBucket = (mediaUrl) => {
     const marca = '/object/public/ejercicios-media/';
     const i = mediaUrl?.indexOf(marca) ?? -1;
     return i === -1 ? null : mediaUrl.slice(i + marca.length);
+};
+
+// Reportado por Nalux: "Ver demostración" abría el archivo en otra pestaña y
+// en el celular no se entendía cómo volver a la app. Para un archivo propio
+// (subido a nuestro bucket, mismas extensiones que ya valida onMediaChange)
+// alcanza con mostrarlo adentro, en un modal — nunca hay "pestaña" de la que
+// volver porque nunca se sale de la app. Para un link externo (YouTube,
+// Vimeo, etc.) no hay nada que embeber de forma simple y confiable, así que
+// ese caso sigue abriendo en pestaña nueva como antes.
+const EXTENSIONES_VIDEO = ['mp4', 'webm', 'mov'];
+const EXTENSIONES_IMAGEN = ['png', 'jpg', 'jpeg', 'webp'];
+
+const extensionDe = (url) => {
+    const limpio = (url || '').split('?')[0].split('#')[0];
+    const m = limpio.match(/\.([a-z0-9]+)$/i);
+    return m ? m[1].toLowerCase() : null;
+};
+
+// null = no hay preview posible acá (usar el link externo tal cual).
+const tipoDePreview = (mediaUrl) => {
+    if (!pathEnBucket(mediaUrl)) return null; // no es un archivo propio nuestro
+    const ext = extensionDe(mediaUrl);
+    if (EXTENSIONES_VIDEO.includes(ext)) return 'video';
+    if (EXTENSIONES_IMAGEN.includes(ext)) return 'imagen';
+    return null;
 };
 
 // Mismo criterio que 0005_ejercicios_media_storage.sql (bucket 'ejercicios-media'):
@@ -56,6 +81,11 @@ const EjerciciosPage = () => {
     const [mediaError, setMediaError] = useState('');
     const [mediaUrlActual, setMediaUrlActual] = useState('');
     const mediaInputRef = useRef(null);
+
+    // Ejercicio cuya demostración se está mostrando en el modal de preview,
+    // o null si está cerrado. Se guarda el ejercicio entero (no solo la url)
+    // para poder mostrar también su nombre como título del modal.
+    const [previewEj, setPreviewEj] = useState(null);
 
     const cargar = () => {
         setLoading(true);
@@ -250,14 +280,24 @@ const EjerciciosPage = () => {
                                 <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
                             )}
                             {ej.media_url && (
-                                <a
-                                    href={ej.media_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
-                                >
-                                    Ver demostración <ExternalLink className="h-3 w-3" />
-                                </a>
+                                tipoDePreview(ej.media_url) ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewEj(ej)}
+                                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                                    >
+                                        Ver demostración <Play className="h-3 w-3" />
+                                    </button>
+                                ) : (
+                                    <a
+                                        href={ej.media_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                                    >
+                                        Ver demostración <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                )
                             )}
                             <div className="mt-4 flex gap-2">
                                 <Btn
@@ -357,6 +397,27 @@ const EjerciciosPage = () => {
                         </Btn>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal
+                open={!!previewEj}
+                onClose={() => setPreviewEj(null)}
+                title={previewEj?.nombre || 'Demostración'}
+            >
+                {previewEj && tipoDePreview(previewEj.media_url) === 'video' ? (
+                    <video
+                        src={previewEj.media_url}
+                        controls
+                        autoPlay
+                        className="w-full rounded-xl bg-black"
+                    />
+                ) : previewEj ? (
+                    <img
+                        src={previewEj.media_url}
+                        alt={`Demostración de ${previewEj.nombre}`}
+                        className="w-full rounded-xl"
+                    />
+                ) : null}
             </Modal>
         </AppLayout>
     );

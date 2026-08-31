@@ -928,3 +928,26 @@ para el segmento "Atrasados": el alumno de ese segmento lo vio, uno "Al día" no
 lo sacó de pantalla al instante sin recargar, y la pantalla de Avisos reflejó "1/1 leyeron" de
 inmediato. "Archivar" lo movió a la sección de archivados con badge y botón "Reactivar". Datos de
 prueba borrados, confirmado por SQL que solo queda la cuenta real de Nalux.
+
+**31/08/2026 (más tarde) — primer bug reportado probando la app en vivo: la demostración de un
+ejercicio "se abre pero no hay cómo volver a la app".** Nalux empezó a probar la app real y avisó
+que al tocar "Ver demostración" en un ejercicio con imagen/video propio, el archivo se abría en
+`target="_blank"` (pestaña nueva) — en el celular, sin una forma obvia de volver atrás, justo el
+público "gente grande" para el que se diseñó todo el acceso por QR sin login. Corregido en las dos
+pantallas que tienen este botón: `EjerciciosPage.jsx` (el "Ver demostración" del lado profe) y
+`MiPlanPage.jsx` (el "Ver cómo se hace" del lado alumno, mismo bug, no reportado explícitamente
+pero mismo origen — corregido igual antes de que alguien lo pise). Ahora, si el archivo es un
+video o imagen subido a nuestro propio Storage (se detecta por `/object/public/ejercicios-media/`
+en la URL), se abre en un modal adentro de la app (`<video controls>` o `<img>`, con botón de
+cerrar) en vez de navegar afuera. Si en cambio es un link externo pegado a mano (YouTube, etc.),
+se mantiene el comportamiento viejo de pestaña nueva, porque esos no se pueden embeber de forma
+confiable.
+
+Verificado en vivo contra la cuenta real de Nalux: en `/ejercicios`, "Ver demostración" en "Press
+Frances" (imagen propia subida al Storage) abrió el modal correctamente y se cerró sin salir de la
+app. Para probar el lado alumno hizo falta una rutina activa con ese ejercicio — no había ninguna
+cargada, así que se insertó una rutina "ZZZ_test_preview" temporal por SQL, asignada a la alumna
+real (nadia tecera) solo para la prueba; "Ver cómo se hace" en `/mi-plan/:codigo` abrió el mismo
+tipo de modal correctamente. Rutina y asignación de prueba borradas después, confirmado por SQL
+(`COUNT` en 0) que no quedó nada de prueba en la cuenta real. `npm run lint` y `vite build` limpios
+antes de probar.
