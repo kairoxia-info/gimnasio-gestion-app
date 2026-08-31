@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
-import { AlertTriangle, Download, Dumbbell, Loader2, Pause, Play, RotateCcw, Timer, X } from 'lucide-react';
+import { AlertTriangle, Download, Dumbbell, Loader2, Megaphone, Pause, Play, RotateCcw, Timer, X } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
 
@@ -292,6 +292,13 @@ const MiPlanPage = () => {
     // y "Descargar plan de comida" arman cada uno su propio PDF con solo lo
     // que corresponde, en vez de un único PDF con todo mezclado.
     const [imprimiendoSeccion, setImprimiendoSeccion] = useState(null);
+    // Cartel de aviso (Bloque G6): "Entendido" se resuelve 100% client-side
+    // sin recargar la página. avisoOculto es un estado APARTE de `plan` (no
+    // se muta plan.aviso_id) para no tener que reconstruir el objeto entero
+    // que ya viene tal cual de la RPC.
+    const [avisoOculto, setAvisoOculto] = useState(false);
+    const [marcandoAviso, setMarcandoAviso] = useState(false);
+    const [avisoError, setAvisoError] = useState('');
 
     // 'afterprint' es un evento estándar del navegador que se dispara al
     // cerrarse el diálogo de impresión, se haya guardado el PDF o
@@ -322,6 +329,32 @@ const MiPlanPage = () => {
         requestAnimationFrame(() => window.print());
     };
 
+    // El alumno toca "Entendido" en el cartel de aviso (Bloque G6). Sin
+    // sesión, así que se llama con el mismo código de la URL -- la RPC
+    // valida server-side que el aviso sea del mismo gimnasio antes de
+    // insertar en notificaciones_leidas (0007). Manejo de error
+    // silencioso-pero-honesto: si falla, no rompe la pantalla ni deja el
+    // botón colgado -- el cartel simplemente sigue visible (se lo vuelve a
+    // mostrar la próxima vez, no es grave) con un aviso corto de que no se
+    // guardó.
+    const marcarAvisoLeido = async () => {
+        if (!plan?.aviso_id) return;
+        setMarcandoAviso(true);
+        setAvisoError('');
+        try {
+            const { error: err } = await supabase.rpc('marcar_notificacion_leida', {
+                p_codigo: codigo,
+                p_notificacion_id: plan.aviso_id,
+            });
+            if (err) throw err;
+            setAvisoOculto(true);
+        } catch (_) {
+            setAvisoError('No se pudo guardar. No es grave, podés seguir usando la pantalla igual.');
+        } finally {
+            setMarcandoAviso(false);
+        }
+    };
+
     // Se llama una sola vez al montar (o si cambia el código de la URL):
     // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
     useEffect(() => {
@@ -329,6 +362,8 @@ const MiPlanPage = () => {
         setLoading(true);
         setError('');
         setPlan(null);
+        setAvisoOculto(false);
+        setAvisoError('');
         supabase
             .rpc('ver_plan_por_codigo', { p_codigo: codigo })
             .then(({ data, error: err }) => {
@@ -431,6 +466,34 @@ const MiPlanPage = () => {
                     </header>
 
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6">
+                        {plan.aviso_id && !avisoOculto && (
+                            <section
+                                aria-live="polite"
+                                className="mp-no-imprimir rounded-2xl border-2 border-primary bg-primary/10 p-5 sm:p-6"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/20">
+                                        <Megaphone className="h-6 w-6 text-primary" strokeWidth={2.2} aria-hidden="true" />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xl font-extrabold sm:text-2xl">{plan.aviso_titulo}</p>
+                                        <p className="mt-2 text-lg text-foreground">{plan.aviso_mensaje}</p>
+                                    </div>
+                                </div>
+                                {avisoError && (
+                                    <p className="mt-3 text-base font-semibold text-primary">{avisoError}</p>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={marcarAvisoLeido}
+                                    disabled={marcandoAviso}
+                                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                                >
+                                    {marcandoAviso ? 'Guardando...' : 'Entendido'}
+                                </button>
+                            </section>
+                        )}
+
                         <section className="space-y-4 text-center sm:text-left">
                             <h1 className="font-display text-3xl font-extrabold leading-tight sm:text-4xl">
                                 Hola, {plan.alumno_nombre}

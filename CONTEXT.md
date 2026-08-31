@@ -388,7 +388,11 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
    - ~~G5. Cronómetro~~ **hecho** (26/08/2026), en `/mi-plan/:codigo`. La calculadora de 1RM se
      armó y se probó, pero Nalux pidió sacarla el mismo día — el profe ya le dice el peso al
      alumno, no hacía falta. Se sacó del código, no quedó ni oculta ni a medio hacer.
-   - G6. Notificaciones segmentadas.
+   - ~~G6. Notificaciones segmentadas~~ **hecho** (31/08/2026), en `/avisos` (staff) + cartel en
+     `/mi-plan/:codigo` (alumno). Con esto, **el Bloque G queda cerrado**: de los 9 ítems
+     originales, quedan G1/G2/G5/G6 hechos, G3/G4 bloqueados por la Decisión 20 (sin login no hay
+     forma de que el alumno escriba datos propios), y G7/G8/G9 resueltos/descartados por la
+     Decisión 21.
    - ~~G7. Comprobante manual vs. carga directa~~ **resuelto** (26/08/2026, Decisión 21): carga
      directa del profesor — es lo que `pagos` ya hace hoy, no hizo falta tocar código.
    - ~~G8. Sedes múltiples~~ y ~~G9. Faltas con penalización automática~~ **descartadas del
@@ -874,3 +878,53 @@ nombre temporal — ya es el nombre final, confirmado hace varios bloques.
 No queda ninguna pregunta de negocio pendiente por ahora. El único trabajo futuro real que dejan
 estas respuestas es la capa de facturación de Kairox a gimnasios clientes (Fase 3+, no ahora) —
 anotado en `PLAN.md`, sección "Nota de negocio".
+
+**31/08/2026 — Bloque G6 terminado: notificaciones segmentadas, y con esto se cierra el Bloque G.**
+El profesor manda avisos por estado de cuota (o a todos), y el alumno los ve como cartel en su
+`/mi-plan/:codigo` — mismo mecanismo sin login del Bloque G2, coherente con la Decisión 20.
+
+`supabase/migrations/0007_notificaciones_segmentadas.sql`: tablas `notificaciones` (staff CRUD
+completo) y `notificaciones_leidas` (staff **solo lectura** — esas filas nacen únicamente desde la
+RPC pública, nunca vía PostgREST directo). Son las primeras tablas nuevas de `public.*` desde el
+schema original de 0001 (0004/0005/0006 solo habían agregado columnas y funciones) — el `GRANT` a
+nivel de tabla se incluyó desde el arranque, sin repetir el error histórico de 0001/0002.
+`ver_plan_por_codigo()` extendida con 3 columnas nuevas (`aviso_id`/`aviso_titulo`/`aviso_mensaje`)
+vía `DROP FUNCTION` + `CREATE OR REPLACE` (Postgres no deja agregar columnas a un `RETURNS TABLE`
+existente de otra forma) — la lógica original (rate-limit, truncado, `mediaUrl`) quedó intacta,
+verificado línea por línea contra 0006 en la auditoría. Nueva `marcar_notificacion_leida()` para
+que el alumno descarte un aviso ("Entendido"), también pública y sin sesión.
+
+**Decisión de diseño con Nalux antes de construir:** el diseño original (`gestiongym.shop`) usaba
+6 categorías de audiencia, pero 2 (`con_deuda`/`sin_cuota`) no tenían ningún dato real conectado
+en la app — `pagos.monto_adeudado` existe en el schema desde el Bloque A pero ninguna pantalla lo
+carga todavía. Confirmado con Nalux: se construyen las 6 igual, sabiendo que "Con deuda" va a
+mostrar 0 alumnos hasta que en algún momento se conecte la carga de pagos parciales.
+
+**Hallazgo de la auditoría de `appsec-secure-coding` (severidad baja, corregido antes de aplicar):**
+el cálculo del segmento del alumno (a partir de su pago con `periodo_hasta` más reciente) no tenía
+desempate si dos pagos compartían exactamente la misma fecha — cuál "ganaba" dependía del plan de
+ejecución de Postgres, no determinístico, así que el segmento calculado podía variar entre llamadas
+para el mismo alumno sin que cambiara ningún dato real. Corregido agregando `p.created_at DESC`
+como desempate. Sin hallazgos críticos ni altos — auditoría dio luz verde para aplicar.
+
+Frontend: `AvisosPage.jsx` (`/avisos`) — crear aviso con selector de segmento que muestra la
+audiencia en vivo ("Atrasados (3)"), lista de activos/archivados con "X/Y leyeron" por aviso,
+archivar/reactivar (reversible, sin `window.confirm`). **Punto crítico de consistencia:** el
+cálculo de audiencia en JS (`segmentoNotificacion()`, nueva en `format.js`) tiene que coincidir
+EXACTO con lo que calcula la RPC en SQL — a propósito NO reutiliza `estadoDesdeVencimiento()` (la
+lógica vieja de `DashboardPage`/`PagosPage`, que funde `sin_cuota`/`con_deuda` dentro de
+`vencido`), sino una función nueva que replica el criterio fino de la migración. Cartel en
+`MiPlanPage.jsx`: arriba del saludo, "Entendido" se resuelve 100% client-side sin recargar la
+página (estado local `avisoOculto`), con manejo de error que no bloquea la pantalla si la RPC
+falla. Aprovechado también para sacar "morosos"/"en mora" de los labels de segmento (badges
+"Atrasados", igual criterio que el resto de la app desde el cambio de texto de hoy).
+
+Verificado de punta a punta contra la base real, con la cuenta real de Nalux (sin gimnasio de
+prueba — se cargaron alumnos "ZZZ" de prueba con distintos pagos, borrados después): el contador
+de audiencia en vivo del selector coincidió exacto con la realidad, y de paso confirmó que la
+distinción fina funciona en la práctica — la alumna real de Nalux (sin ningún pago cargado nunca)
+cayó en "Sin cuota", no en "Atrasados", que es justo la diferencia que se buscaba. Creado un aviso
+para el segmento "Atrasados": el alumno de ese segmento lo vio, uno "Al día" no; tocar "Entendido"
+lo sacó de pantalla al instante sin recargar, y la pantalla de Avisos reflejó "1/1 leyeron" de
+inmediato. "Archivar" lo movió a la sección de archivados con badge y botón "Reactivar". Datos de
+prueba borrados, confirmado por SQL que solo queda la cuenta real de Nalux.

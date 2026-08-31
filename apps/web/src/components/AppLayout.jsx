@@ -9,6 +9,7 @@ import {
     Dumbbell,
     LayoutDashboard,
     LogOut,
+    Megaphone,
     Menu,
     Moon,
     Settings,
@@ -27,6 +28,7 @@ const NAV = [
     { to: '/alimentos', label: 'Alimentos', icon: Apple },
     { to: '/asistencia', label: 'Asistencia', icon: CalendarCheck },
     { to: '/pagos', label: 'Pagos', icon: Wallet },
+    { to: '/avisos', label: 'Avisos', icon: Megaphone },
     { to: '/configuracion', label: 'Precios', icon: Settings },
 ];
 

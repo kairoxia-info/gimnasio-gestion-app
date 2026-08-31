@@ -54,3 +54,62 @@ export const estadoDesdeVencimiento = (hasta) => {
     if (dias <= 7) return 'proximo';
     return 'al_dia';
 };
+
+// Mapeo de segmento -> label legible para los badges de Avisos (Bloque G6).
+// "Atrasados", no "morosos"/"en mora" -- se sacó esa palabra de toda la app a
+// pedido del cliente (ver CONTEXT.md, historial).
+export const SEGMENTOS_NOTIFICACION = {
+    todos: 'Todos',
+    al_dia: 'Al día',
+    proximo: 'Por vencer',
+    vencido: 'Atrasados',
+    con_deuda: 'Con deuda',
+    sin_cuota: 'Sin cuota',
+};
+
+// Segmento de cuota de UN alumno, para armar/leer avisos (AvisosPage,
+// migración 0007). Tiene que coincidir EXACTO con lo que calcula
+// ver_plan_por_codigo() en SQL (0007, SECCIÓN 5) -- si se desincroniza, el
+// contador que ve el profesor ("X/Y leyeron") o el selector de audiencia al
+// crear un aviso van a mentir sobre a quién le llega de verdad.
+//
+// A propósito NO es lo mismo que estadoDesdeVencimiento() (arriba): esa
+// función es la lógica vieja de DashboardPage/PagosPage, que mete
+// "sin pagos" y "con deuda" dentro de 'vencido' sin distinguirlos -- acá hace
+// falta la distinción fina porque son segmentos de audiencia reales
+// ("mandale un aviso de bienvenida a quien nunca cargó una cuota" no es lo
+// mismo que "recordale a un atrasado").
+export const segmentoNotificacion = (alumno, pagos) => {
+    const pagosAlumno = (pagos || []).filter((p) => p.alumno_id === alumno.id);
+    if (pagosAlumno.length === 0) return 'sin_cuota';
+
+    // Mismo orden que el SQL: ORDER BY periodo_hasta DESC NULLS LAST,
+    // created_at DESC LIMIT 1. Comparación de strings alcanza porque las dos
+    // columnas llegan en formato ISO (YYYY-MM-DD / timestamptz), que ordena
+    // igual lexicográfica que cronológicamente.
+    const [pago] = [...pagosAlumno].sort((a, b) => {
+        const ha = a.periodo_hasta || '';
+        const hb = b.periodo_hasta || '';
+        if (ha !== hb) return hb > ha ? 1 : -1;
+        const ca = a.created_at || '';
+        const cb = b.created_at || '';
+        return cb > ca ? 1 : -1;
+    });
+
+    if (Number(pago.monto_adeudado || 0) > 0) return 'con_deuda';
+    if (!pago.periodo_hasta) return 'vencido';
+
+    // Días de calendario (fecha contra fecha, sin componente de hora) -- igual
+    // que el SQL (periodo_hasta - CURRENT_DATE, ambos DATE). Se usa hoy()
+    // (arriba, basado en toISOString) en vez de Date.now() a propósito: acá
+    // importa el día calendario, no el instante exacto -- Date.now() es lo
+    // que usa estadoDesdeVencimiento() y es justo la fuente de la pequeña
+    // discrepancia documentada en la migración SQL.
+    const fin = new Date(String(pago.periodo_hasta).slice(0, 10) + 'T00:00:00').getTime();
+    const inicio = new Date(`${hoy()}T00:00:00`).getTime();
+    const dias = Math.round((fin - inicio) / 86400000);
+
+    if (dias < 0) return 'vencido';
+    if (dias <= 7) return 'proximo';
+    return 'al_dia';
+};
