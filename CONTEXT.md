@@ -20,31 +20,35 @@
 App de gestión para gimnasios: alumnos, rutinas de entrenamiento, planes de alimentación,
 asistencia, cuotas/pagos y (a futuro) portal propio para el alumno.
 
-**Es un SaaS multi-tenant real, no un sistema a medida de un solo cliente**, aunque el modelo
-de negocio final (¿Kairox se lo vende a un gimnasio o a varios?) todavía es una decisión
-abierta — ver sección 5. Técnicamente ya está armado como multi-tenant desde el día uno,
-sea cual sea esa decisión:
+**Es un SaaS multi-tenant real, no un sistema a medida de un solo cliente.** Confirmado con
+Nalux el 26/08/2026 (Decisión 21): se va a vender a **varios gimnasios clientes**, no es solo
+para uno. Técnicamente ya estaba armado como multi-tenant desde el día uno, así que esta
+respuesta no obligó a cambiar nada — solo confirma que el trabajo de branding configurable por
+gimnasio (Bloque E) y, más adelante, la capa de facturación de Kairox a cada gimnasio cliente
+(nota de negocio en `PLAN.md`) tienen sentido real, no son "por las dudas":
 
 - **Nivel 1 de aislamiento (ya implementado, verificado contra la base real):** cada gimnasio
   es un tenant identificado por `gimnasio_id`. Ningún gimnasio puede ver ni un solo dato de
   otro — ni por accidente, ni por un bug del frontend, porque el aislamiento vive en la base
   de datos (Row Level Security de Postgres), no solo en el código.
-- **Nivel 2 de aislamiento (Fase 2, todavía no construido):** dentro de un mismo gimnasio,
-  cuando el alumno tenga login propio, un alumno tampoco va a poder ver los datos de otro
-  alumno del mismo gimnasio — solo los suyos.
+- **Nivel 2 de aislamiento, dentro de un mismo gimnasio:** resuelto, pero **no como se había
+  planeado originalmente.** La idea inicial era login propio del alumno + RLS por fila; se
+  descartó por completo (Decisión 20 — un login con contraseña hace que la gente mayor pierda
+  el acceso). En cambio, cada alumno ve solo lo suyo a través de un código individual
+  impredecible (`alumnos.codigo_acceso`, 128 bits) que resuelve exactamente su fila y nada más
+  — ver Bloque G2. No hay sesión que aislar porque no hay sesión.
 
-**Origen:** exportado desde Hostinger Horizons con backend PocketBase. Se está migrando a
-Supabase (ver sección 2). El PocketBase viejo **no se toca** — convive hasta que la migración
-esté probada de punta a punta. **Nota:** el código de `apps/pocketbase` no existe en este
-checkout local (solo aparece referenciado en `.gitignore`, previendo que se agregue) —
-pendiente confirmar con Nalux si hace falta recuperarlo de algún lado o si ya se puede dar de
-baja directamente.
+**Origen:** exportado desde Hostinger Horizons con backend PocketBase. Ya migrado por completo a
+Supabase. **El PocketBase viejo puede darse de baja definitivamente** — confirmado con Nalux el
+26/08/2026 (Decisión 21, pregunta 5): no hay datos reales cargados ahí, todo lo que tenía era de
+prueba. El código de `apps/pocketbase` tampoco existe en este checkout (solo queda referenciado
+en `.gitignore`) — no hace falta recuperarlo de ningún lado.
 
 **Repo:** `github.com/kairoxia-info/gimnasio-gestion-app` (privado, cuenta personal de Nalux).
 
-**Nombre de la app (temporal, hasta definir el nombre final):** "Gestión GYM Kairox IA". Ya
-reemplazó a "Fitness Gym Place" (el nombre de otro gimnasio real, que venía hardcodeado desde
-la exportación de Horizons) en todos los `<title>`/`<meta>`/logo de `apps/web`.
+**Nombre de la app:** "Gestión GYM Kairox IA" — nombre final, confirmado. Reemplazó a "Fitness
+Gym Place" (el nombre de otro gimnasio real, que venía hardcodeado desde la exportación de
+Horizons) en todos los `<title>`/`<meta>`/logo de `apps/web`.
 
 ---
 
@@ -344,6 +348,23 @@ Para que nadie las cuestione o las deshaga sin saber que ya se pensaron:
     (decisión de producto de Nalux): sin eso, todo el material que el profe sube en el Bloque F
     nunca le llegaba al alumno, que es justamente a quien más le sirve ver *cómo* se hace el
     ejercicio.
+21. **Las 7 preguntas abiertas de `PLAN.md` (sección "Preguntas abiertas para definir con vos"),
+    todas cerradas el 26/08/2026.** Dos ya habían quedado respondidas por el trabajo hecho antes de
+    preguntar (rutinas como plantilla desde el arranque — Bloque A/G1 — y mantener nutrición — en
+    uso desde el Bloque B). Las 5 restantes, con Nalux directamente:
+    - **¿Reservas/turnos?** No. Descarta también "faltas con penalización automática" (G9), que
+      dependía de esto — las dos quedan fuera del alcance, no solo pospuestas.
+    - **¿Uno o varios gimnasios?** Varios — SaaS real vendido a gimnasios clientes. Confirma que el
+      branding configurable (Bloque E) y la futura facturación de Kairox a gimnasios (nota de
+      negocio en `PLAN.md`) tienen sentido real. No obligó ningún cambio técnico — ya estaba
+      armado multi-tenant desde el día uno sea cual fuera la respuesta.
+    - **¿Comprobante manual o carga directa?** Carga directa del profesor. Coincide exactamente
+      con lo que `pagos` ya hace hoy — cierra la Decisión pendiente 9 sin tocar código. (Tiene
+      sentido además: el alumno no tiene login — Decisión 20 — así que no podría subir un
+      comprobante aunque quisiéramos ese modelo.)
+    - **¿Sedes múltiples?** No, una sola sede. Descarta 1.B.3/G8 del alcance, no solo pospuesto.
+    - **¿Datos reales en PocketBase para migrar?** No, todo era de prueba. Confirmado que
+      `apps/pocketbase` se puede dar de baja definitivamente — ver sección 1.
 
 ---
 
@@ -368,8 +389,12 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
      armó y se probó, pero Nalux pidió sacarla el mismo día — el profe ya le dice el peso al
      alumno, no hacía falta. Se sacó del código, no quedó ni oculta ni a medio hacer.
    - G6. Notificaciones segmentadas.
-   - G7-G9: gatillados por decisiones de negocio todavía sin resolver (ver preguntas abiertas
-     abajo) — no arrancar sin resolver esas antes.
+   - ~~G7. Comprobante manual vs. carga directa~~ **resuelto** (26/08/2026, Decisión 21): carga
+     directa del profesor — es lo que `pagos` ya hace hoy, no hizo falta tocar código.
+   - ~~G8. Sedes múltiples~~ y ~~G9. Faltas con penalización automática~~ **descartadas del
+     alcance** (26/08/2026, Decisión 21) — el cliente confirmó una sola sede y que no necesita
+     reservas/turnos (de donde dependía G9). No quedan pendientes, no hace falta revisarlas de
+     nuevo más adelante salvo que el cliente cambie de opinión.
 2. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
    construir cualquier feature de "invitar staff a mi gimnasio"):** el trigger `BEFORE UPDATE`
    sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17) antes de
@@ -378,9 +403,11 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
    pero **desde el Bloque E** eso además le da permiso a invalidar el código de invitación real
    del gimnasio (`regenerar_codigo_invitacion()`) sin ser el admin real.
 
-**Preguntas todavía sin responder con el cliente** (no bloquean el Bloque A, pero sí bloquean
-partes de Fase 2/3): ¿reservas/turnos?, ¿uno o varios gimnasios clientes?, ¿sedes múltiples?,
-¿comprobante manual o carga directa? Lista completa en `PLAN.md`, sección "Preguntas abiertas".
+**Las 7 preguntas abiertas de `PLAN.md` ya están todas respondidas** (26/08/2026, Decisión 21) —
+no queda ninguna pendiente con el cliente por ahora. Lo único que queda como trabajo futuro real
+(no bloqueante, no ahora) es la capa de facturación de Kairox a gimnasios clientes, ya que se
+confirmó el modelo "varios gimnasios" — es una decisión de negocio (qué plan, qué medio de cobro)
+que hay que planificar antes de tocar código, ver la nota en `PLAN.md`.
 
 ---
 
@@ -824,3 +851,26 @@ diálogo nativo no es interactuable desde acá) se confirmó que el botón de ca
 `data-imprimiendo` correcto y que el selector CSS de "ocultar" matchea exactamente la sección
 contraria — nunca la propia; y que dos clics seguidos en el mismo botón (sin cambiar de sección)
 llaman a `print()` las dos veces, confirmando el fix del borde de arriba.
+
+**26/08/2026 (cierre del día) — se cerraron las 7 preguntas abiertas de `PLAN.md`.** A pedido de
+Nalux ("frenamos el bloque G, cerremos las preguntas abiertas"), se repasaron las 7 preguntas de
+la sección "Preguntas abiertas para definir con vos": 2 ya estaban respondidas por el trabajo
+hecho (rutinas como plantilla, mantener nutrición), y las 5 restantes se cerraron directamente con
+Nalux. Ver Decisión 21 para el detalle completo de cada respuesta y sus consecuencias — resumen:
+sin reservas/turnos (descarta también G9), SaaS a varios gimnasios (confirma que el branding
+configurable y la futura facturación de Kairox tienen sentido real), pagos con carga directa del
+profesor (cierra la Decisión pendiente 9 sin tocar código, y de hecho es la única opción compatible
+con que el alumno no tenga login), una sola sede (descarta G8), y sin datos reales en PocketBase
+para migrar (confirmado que `apps/pocketbase` se puede dar de baja).
+
+Actualizado `PLAN.md` (checklist de G7-G9 y la sección de preguntas abiertas, todas marcadas con
+su respuesta) y `CONTEXT.md` (sección 1: multi-tenant confirmado en vez de "decisión abierta",
+Nivel 2 de aislamiento correctamente descripto como acceso por código en vez del login descartado,
+PocketBase confirmado para dar de baja; sección 5: G7-G9 movidos de "pendiente" a
+"resuelto/descartado", sacado el párrafo de preguntas sin responder). De paso, corregida una
+inexactitud que noté al pasar: la sección 1 todavía decía que "Gestión GYM Kairox IA" era un
+nombre temporal — ya es el nombre final, confirmado hace varios bloques.
+
+No queda ninguna pregunta de negocio pendiente por ahora. El único trabajo futuro real que dejan
+estas respuestas es la capa de facturación de Kairox a gimnasios clientes (Fase 3+, no ahora) —
+anotado en `PLAN.md`, sección "Nota de negocio".

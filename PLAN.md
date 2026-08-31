@@ -437,9 +437,12 @@ Hoy el plan (1.6, Fase 1) asume que el profesor carga el pago directamente ("Cob
 - [ ] G4. Récords automáticos.
 - [ ] G5. Cronómetro + calculadora de 1RM.
 - [ ] G6. Notificaciones segmentadas.
-- [ ] G7. Resolver la **Decisión pendiente 9** (comprobante manual vs. carga directa) con el cliente antes de tocar `pagos` para Fase 3.
-- [ ] G8. Sedes múltiples — solo si el cliente lo confirma (1.B.3).
-- [ ] G9. Faltas con penalización automática — solo si se implementa Reservas (1.B.5).
+- [x] G7. **Resuelto (26/08/2026, ver "Preguntas abiertas" abajo): carga directa del profesor.**
+      Coincide con lo que `pagos` ya hace hoy — no hace falta ningún cambio de código.
+- [~] G8. **Descartado del alcance (26/08/2026): el cliente confirmó una sola sede.** No solo
+      pospuesto — sacado de la lista.
+- [~] G9. **Descartado del alcance (26/08/2026): el cliente confirmó que no necesita
+      reservas/turnos**, y G9 dependía de eso.
 
 ---
 
@@ -448,16 +451,32 @@ Hoy el plan (1.6, Fase 1) asume que el profesor carga el pago directamente ("Cob
 **Facturación de Kairox a los gimnasios clientes, si esto se vende como SaaS a varios gimnasios.**
 Ultra Gym le cobra al dueño del gimnasio una suscripción mensual por usar la plataforma: es un SaaS multi-tenant donde el "meta-tenant" es la empresa dueña del software (Ultra Gym cobrándole a cada gimnasio, no cada gimnasio cobrándole a sus alumnos — eso ya lo tenemos con `pagos`). Si en algún momento Kairox decide vender esto a varios gimnasios clientes en lugar de un desarrollo a medida para uno solo, hace falta esa misma capa: Kairox facturando a cada `gimnasio_id` por el uso del software (plan, estado de suscripción, período de facturación, medio de cobro).
 
-**No se implementa nada de esto ahora.** Queda anotado como decisión de negocio pendiente, separada de las decisiones técnicas de 3.4, y directamente ligada a la pregunta abierta 3 de abajo (¿uno o varios gimnasios clientes?). Si la respuesta es "varios", esta capa de facturación entra en algún momento de Fase 3+; si es "uno solo", no hace falta nunca.
+**Actualización 26/08/2026: la pregunta 3 de abajo ya se respondió — "varios gimnasios" (SaaS
+real).** Esta capa de facturación deja de ser hipotética: entra en algún momento de Fase 3+, no
+ahora. Sigue sin implementarse nada de esto todavía — es una decisión de negocio que hay que
+planificar (qué plan, qué medio de cobro, etc.) antes de tocar código, no algo para arrancar sin
+más contexto.
 
 ---
 
 ## Preguntas abiertas para definir con vos
 
-1. **¿Rutinas como plantilla desde el arranque (opción b) o después?** Es la decisión más cara de revertir.
-2. **¿El cliente necesita reservas/turnos?** Cambia bastante el alcance, y de eso depende también si tiene sentido "faltas con penalización automática" (1.B.5).
-3. **¿Vamos a vender esto a varios gimnasios o es para uno solo?** Si es uno solo, buena parte del trabajo de branding configurable puede esperar (aunque el multi-tenant a nivel datos yo lo dejaría igual), y la capa de facturación de Kairox a gimnasios (Nota de negocio) no hace falta nunca. Si es "varios", condiciona esa nota.
-4. **¿Mantenemos el módulo de nutrición?** No está en la referencia, es nuestro diferencial, pero suma superficie a mantener.
-5. **¿Hay datos reales en PocketBase que haya que migrar**, o arrancamos la base de cero?
-6. **¿Comprobante con aprobación manual del alumno, o carga directa del profesor?** (Decisión pendiente 9). Son modelos alternativos, no ambos.
-7. **¿El gimnasio tiene o va a tener más de una sede?** Si la respuesta es no o "no todavía", 1.B.3 queda directamente descartado del alcance, no solo pospuesto.
+**Todas respondidas el 26/08/2026 — ver Decisión 21 en `CONTEXT.md` para el detalle completo y
+las consecuencias de cada una. Quedan acá tal cual se plantearon, como registro histórico.**
+
+1. ~~¿Rutinas como plantilla desde el arranque (opción b) o después?~~ **Respondida antes, en el
+   Bloque A: plantilla desde el arranque.** Construida entera en el Bloque G1.
+2. ~~¿El cliente necesita reservas/turnos?~~ **No.** Se descarta también "faltas con penalización
+   automática" (1.B.5 / G9), que dependía de esto.
+3. ~~¿Vamos a vender esto a varios gimnasios o es para uno solo?~~ **Varios gimnasios (SaaS
+   real).** La capa de facturación de Kairox a gimnasios (Nota de negocio de arriba) deja de ser
+   hipotética — entra en algún momento de Fase 3+.
+4. ~~¿Mantenemos el módulo de nutrición?~~ **Respondida antes por el propio uso: sí**, está activo
+   desde el Bloque B y el alumno ya lo ve en su QR (Bloque G2).
+5. ~~¿Hay datos reales en PocketBase que haya que migrar?~~ **No — todo lo que hay ahí es de
+   prueba.** Arrancamos con la base tal cual está. `apps/pocketbase` puede darse de baja
+   definitivamente (ver nota de la sección 1 de `CONTEXT.md`).
+6. ~~¿Comprobante con aprobación manual del alumno, o carga directa del profesor?~~ **Carga
+   directa del profesor.** Coincide con lo que `pagos` ya hace hoy — no hace falta tocar código.
+7. ~~¿El gimnasio tiene o va a tener más de una sede?~~ **No, una sola sede.** 1.B.3 (sedes
+   múltiples) queda descartado del alcance, no solo pospuesto.
