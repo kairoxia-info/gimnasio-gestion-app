@@ -307,13 +307,15 @@ El schema provisto ya resuelve la infraestructura; el trabajo es aplicarlo y hac
 19. **`notificaciones`** (ya diseñada) con segmentación por estado de cuota.
 
 **FASE 3 — Expansión (solo si el cliente lo pide, o decisiones pendientes explícitamente resueltas)**
-20. Finanzas con gastos y margen.
-21. Reportes exportables.
-22. Reservas/turnos.
-23. Tienda/stock.
-24. Web pública + PWA.
-25. **Sedes múltiples por gimnasio** (hallazgo Ultra Gym, ver 1.B.3) — solo si el cliente confirma que lo necesita. No se le reservan campos al schema del MVP.
-26. **Faltas con penalización automática configurable** (hallazgo Ultra Gym, ver 1.B.5) — solo si se implementa Reservas (22). No se activa sin eso.
+20. Finanzas con gastos y margen. *(sin decidir, nunca se preguntó — no es parte del alcance actual)*
+21. Reportes exportables. *(sin decidir, nunca se preguntó — no es parte del alcance actual)*
+22. ~~Reservas/turnos.~~ **Descartado (26/08/2026, Decisión 21): el cliente confirmó que no lo necesita.**
+23. Tienda/stock. *(sin decidir, nunca se preguntó — no es parte del alcance actual)*
+24. Web pública + PWA. *(sin decidir, nunca se preguntó — no es parte del alcance actual)*
+25. ~~Sedes múltiples por gimnasio~~ (hallazgo Ultra Gym, ver 1.B.3). **Descartado (26/08/2026,
+    Decisión 21): el cliente confirmó una sola sede.**
+26. ~~Faltas con penalización automática configurable~~ (hallazgo Ultra Gym, ver 1.B.5).
+    **Descartado — dependía de Reservas (22), que también se descartó.**
 27. **Comprobante con aprobación manual del alumno** (hallazgo Ultra Gym, ver 1.B.4) — **solo si la Decisión pendiente 9 (3.4) se resuelve a favor de este modelo** en lugar del flujo de "Cobrar y activar" ya diseñado en Fase 1. No se implementan los dos.
 
 ### 3.3 Qué sumar de la referencia y qué no
@@ -389,60 +391,72 @@ Hoy el plan (1.6, Fase 1) asume que el profesor carga el pago directamente ("Cob
 
 ### 3.5 Checklist de pasos concretos, en orden
 
-**Bloque A — Base de datos**
-- [ ] A1. Crear el proyecto en Supabase (o confirmar que ya existe) y guardar URL + anon key en `.env.local`.
-- [ ] A2. Decidir **Decisión 1** (modelo de rutinas) antes de escribir la migración.
-- [ ] A3. Agregar al schema los campos faltantes detectados (`fecha_nacimiento`, saldo/deuda en `pagos`, origen y clasificación en `ejercicios`).
-- [ ] A4. Escribir la migración SQL completa: `gimnasios`, `profiles`, trigger `handle_new_user`, `get_mi_gimnasio_id()`, `create_gimnasio()`, las 9 tablas de negocio + índices.
-- [ ] A5. Habilitar RLS y crear la policy en las 9 tablas.
-- [ ] A6. **Verificar la aislación con dos gimnasios de prueba**: crear gimnasio A y B, cargar datos en cada uno, confirmar que A no ve nada de B. No dar por buena la RLS sin este test.
-- [ ] A7. Sembrar datos default en `create_gimnasio()` (planes de ejemplo), respetando la nota de `ON CONFLICT`.
+**⚠️ Nota 31/08/2026: este checklist no se había marcado nunca a medida que se completaban los
+bloques — quedaba como si todo siguiera pendiente. Corregido ahora, reflejando el estado real
+documentado en el historial de `CONTEXT.md`.**
 
-**Bloque B — Capa de datos del frontend**
-- [ ] B1. Instalar `@supabase/supabase-js`, quitar `pocketbase` de las dependencias.
-- [ ] B2. Crear `src/lib/supabaseClient.js` y borrar `pocketbaseClient.js`.
-- [ ] B3. Reescribir `data.js` manteniendo la firma; **sacar `owner: ownerId()`**; separar helpers de UI a `format.js`.
-- [ ] B4. Reescribir `AuthContext.jsx` contra Supabase Auth (`signInWithPassword`, `onAuthStateChange`, `signOut`) y exponer también el gimnasio del usuario.
-- [ ] B5. Renombrar campos relacionales en todas las páginas (`alumno` → `alumno_id`, `created` → `created_at`, sorts).
-- [ ] B6. Reescribir los accesos directos a `pb` en `AlumnoPage.jsx` (`byAlumno`, `getOne`).
+**Bloque A — Base de datos** ✅ hecho
+- [x] A1. Crear el proyecto en Supabase (o confirmar que ya existe) y guardar URL + anon key en `.env.local`.
+- [x] A2. Decidir **Decisión 1** (modelo de rutinas) antes de escribir la migración.
+- [x] A3. Agregar al schema los campos faltantes detectados (`fecha_nacimiento`, saldo/deuda en `pagos`, origen y clasificación en `ejercicios`).
+- [x] A4. Escribir la migración SQL completa: `gimnasios`, `profiles`, trigger `handle_new_user`, `get_mi_gimnasio_id()`, `create_gimnasio()`, las 9 tablas de negocio + índices.
+- [x] A5. Habilitar RLS y crear la policy en las 9 tablas.
+- [x] A6. **Verificar la aislación con dos gimnasios de prueba**: crear gimnasio A y B, cargar datos en cada uno, confirmar que A no ve nada de B. No dar por buena la RLS sin este test.
+- [x] A7. Sembrar datos default en `create_gimnasio()` (planes de ejemplo), respetando la nota de `ON CONFLICT`.
 
-**Bloque C — Auth y rutas**
-- [ ] C1. Declarar la ruta `/login` en `App.jsx` (hoy no existe).
-- [ ] C2. Reemplazar `const guard = (element) => element` por `ProtectedRoute` real.
-- [ ] C3. Pantalla de registro: signup → `create_gimnasio(nombre)` → redirigir al panel.
-- [ ] C4. Manejo de sesión expirada y estado de carga inicial (evitar el parpadeo login→panel).
+**Bloque B — Capa de datos del frontend** ✅ hecho
+- [x] B1. Instalar `@supabase/supabase-js`, quitar `pocketbase` de las dependencias.
+- [x] B2. Crear `src/lib/supabaseClient.js` y borrar `pocketbaseClient.js`.
+- [x] B3. Reescribir `data.js` manteniendo la firma; **sacar `owner: ownerId()`**; separar helpers de UI a `format.js`.
+- [x] B4. Reescribir `AuthContext.jsx` contra Supabase Auth (`signInWithPassword`, `onAuthStateChange`, `signOut`) y exponer también el gimnasio del usuario.
+- [x] B5. Renombrar campos relacionales en todas las páginas (`alumno` → `alumno_id`, `created` → `created_at`, sorts).
+- [x] B6. Reescribir los accesos directos a `pb` en `AlumnoPage.jsx` (`byAlumno`, `getOne`).
 
-**Bloque D — Verificación del MVP**
-- [ ] D1. Probar el flujo completo de punta a punta con un gimnasio nuevo: registro → cargar ejercicios → cargar alumno → armar plan → marcar asistencia → registrar pago.
-- [ ] D2. Confirmar que el segundo gimnasio arranca vacío y no ve nada del primero.
-- [ ] D3. `npm run build` sin errores y `npm run lint` limpio.
+**Bloque C — Auth y rutas** ✅ hecho
+- [x] C1. Declarar la ruta `/login` en `App.jsx` (hoy no existe).
+- [x] C2. Reemplazar `const guard = (element) => element` por `ProtectedRoute` real.
+- [x] C3. Pantalla de registro: signup → `create_gimnasio(nombre)` → redirigir al panel.
+- [x] C4. Manejo de sesión expirada y estado de carga inicial (evitar el parpadeo login→panel).
 
-**Bloque E — Identidad de marca y onboarding del gimnasio (cierra el MVP vendible)**
-- [ ] E1. Pantalla de configuración del gimnasio (nombre, logo, color principal).
-- [ ] E2. Reemplazar `LOGO_URL` hardcodeado por el logo del gimnasio; inyectar `color_principal` como CSS variable.
-- [ ] E3. Quitar "Fitness Gym Place" de los `<title>`/`<meta>` de las 8 páginas (hoy está fijo en todas).
-- [ ] E4. Agregar `gimnasios.codigo_invitacion` + `autorregistro_activo` al schema (Decisión 8) y generarlo en `create_gimnasio()`.
-- [ ] E5. Función `join_gimnasio_por_codigo()` (`SECURITY DEFINER`) + pantalla pública de autorregistro: código/QR → alta del alumno → selección de plan deseado → queda pendiente de activación para el profesor (Cuotas).
-- [ ] E6. Generar y mostrar el QR del código de invitación en la pantalla de configuración (imagen descargable/imprimible).
+**Bloque D — Verificación del MVP** ✅ hecho
+- [x] D1. Probar el flujo completo de punta a punta con un gimnasio nuevo: registro → cargar ejercicios → cargar alumno → armar plan → marcar asistencia → registrar pago.
+- [x] D2. Confirmar que el segundo gimnasio arranca vacío y no ve nada del primero.
+- [x] D3. `npm run build` sin errores y `npm run lint` limpio.
 
-**Bloque F — Contenido propio: subir video de ejercicios (Fase 1, hallazgo 1.B.2)**
-- [ ] F1. Crear bucket de Supabase Storage para media de ejercicios, con políticas de acceso por `gimnasio_id`.
-- [ ] F2. UI de subida de archivo en `EjerciciosPage` (selector de archivo + progreso), manteniendo la opción de pegar una URL externa.
-- [ ] F3. Guardar la URL resultante (pública o firmada, según se defina el bucket) en `ejercicios.media_url`, sin cambiar el nombre del campo.
+**Bloque E — Identidad de marca y onboarding del gimnasio (cierra el MVP vendible)** ✅ hecho
+- [x] E1. Pantalla de configuración del gimnasio (nombre, logo, color principal).
+- [x] E2. Reemplazar `LOGO_URL` hardcodeado por el logo del gimnasio; inyectar `color_principal` como CSS variable.
+- [x] E3. Quitar "Fitness Gym Place" de los `<title>`/`<meta>` de las 8 páginas (hoy está fijo en todas).
+- [x] E4. Agregar `gimnasios.codigo_invitacion` + `autorregistro_activo` al schema (Decisión 8) y generarlo en `create_gimnasio()`.
+- [x] E5. Función `join_gimnasio_por_codigo()` (`SECURITY DEFINER`) + pantalla pública de autorregistro: código/QR → alta del alumno → selección de plan deseado → queda pendiente de activación para el profesor (Cuotas).
+- [x] E6. Generar y mostrar el QR del código de invitación en la pantalla de configuración (imagen descargable/imprimible).
 
-**Bloque G — Diferencial (post-MVP, replanificar con el resultado del MVP en mano)**
-- [ ] G1. Migrar rutinas a plantilla + asignación (si en A2 se eligió la opción (a)).
-- [ ] G2. Login del alumno + policies de fila.
-- [ ] G3. `cargas_ejercicio` + vista de rutina del alumno con "última carga".
-- [ ] G4. Récords automáticos.
-- [ ] G5. Cronómetro + calculadora de 1RM.
-- [ ] G6. Notificaciones segmentadas.
+**Bloque F — Contenido propio: subir video de ejercicios (Fase 1, hallazgo 1.B.2)** ✅ hecho
+- [x] F1. Crear bucket de Supabase Storage para media de ejercicios, con políticas de acceso por `gimnasio_id`.
+- [x] F2. UI de subida de archivo en `EjerciciosPage` (selector de archivo + progreso), manteniendo la opción de pegar una URL externa.
+- [x] F3. Guardar la URL resultante (pública o firmada, según se defina el bucket) en `ejercicios.media_url`, sin cambiar el nombre del campo.
+
+**Bloque G — Diferencial (post-MVP) — CERRADO 31/08/2026, ver Decisión 20/21 en `CONTEXT.md`**
+- [x] G1. Migrar rutinas a plantilla + asignación (si en A2 se eligió la opción (a)).
+- [x] G2. **Rediseñado (Decisión 20): NO es login+policies, es acceso por código individual sin
+      sesión.** El profesor pidió explícitamente sacar el login (gente mayor perdería el acceso).
+- [~] G3. `cargas_ejercicio` + vista de rutina del alumno con "última carga". **Bloqueado**: asume
+      un alumno que escribe datos propios, y el acceso por QR es de solo lectura sin sesión.
+- [~] G4. Récords automáticos. **Bloqueado** por lo mismo — depende de G3.
+- [x] G5. Cronómetro de descanso. La calculadora de 1RM se armó y se probó, pero se sacó a pedido
+      del cliente el mismo día (el profe ya le dice el peso al alumno).
+- [x] G6. Notificaciones segmentadas.
 - [x] G7. **Resuelto (26/08/2026, ver "Preguntas abiertas" abajo): carga directa del profesor.**
       Coincide con lo que `pagos` ya hace hoy — no hace falta ningún cambio de código.
 - [~] G8. **Descartado del alcance (26/08/2026): el cliente confirmó una sola sede.** No solo
       pospuesto — sacado de la lista.
 - [~] G9. **Descartado del alcance (26/08/2026): el cliente confirmó que no necesita
       reservas/turnos**, y G9 dependía de eso.
+
+**Lo único genuinamente sin decidir: FASE 3 (más abajo, ítems 20/21/23/24) — "solo si el cliente
+lo pide".** No están descartados ni son parte del plan actual, simplemente nunca se preguntaron
+porque no son parte del alcance por defecto. Si en algún momento los querés, se charlan igual que
+se cerraron las 7 preguntas de más abajo.
 
 ---
 
