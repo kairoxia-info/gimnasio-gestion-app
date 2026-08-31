@@ -951,3 +951,32 @@ real (nadia tecera) solo para la prueba; "Ver cómo se hace" en `/mi-plan/:codig
 tipo de modal correctamente. Rutina y asignación de prueba borradas después, confirmado por SQL
 (`COUNT` en 0) que no quedó nada de prueba en la cuenta real. `npm run lint` y `vite build` limpios
 antes de probar.
+
+**31/08/2026 (cierre del día) — un ejercicio ahora puede tener más de un grupo muscular.** Pedido
+de Nalux: `grupo_muscular` era un solo valor (un `<select>`), pero hay ejercicios que trabajan más
+de un grupo (ej. peso muerto: Piernas + Espalda). Migración `0008_ejercicios_grupo_muscular_multiple.sql`
+convierte la columna de `TEXT` a `TEXT[]` con un `USING` que envuelve cada valor existente en un
+array de un elemento (NULL/vacío pasa a array vacío) — sin tocar RLS ni ninguna función ni los
+GRANT de tabla, confirmado por grep contra las 8 migraciones que la columna no aparece en ninguna
+policy ni función (la única lectura relacionada es `ver_plan_por_codigo()`, que lee `rutinas.items`,
+una copia ya tomada al armar la rutina, no un join en vivo contra `ejercicios`).
+
+Frontend en `EjerciciosPage.jsx`: el `<select>` de grupo se reemplazó por los mismos "pills"
+tocables que ya se usaban para el filtro de arriba (ahora multi-selección, con al menos un grupo
+obligatorio — si se intenta guardar sin ninguno, un cartel de error aparece adentro del modal, no
+en el body de la página, porque el overlay del modal tapa por completo lo que hay atrás y ese
+cartel quedaría invisible). La card de cada ejercicio ahora muestra un badge por cada grupo. El
+filtro de arriba y la lista de ejercicios chequean con `.includes()` en vez de igualdad exacta.
+En `RutinasPage.jsx`, el selector de "ejercicio de la biblioteca" y el registro que se copia a
+`rutinas.items` al agregar un ejercicio unen los grupos con coma (`"Piernas, Espalda"`) — como
+`rutinas.items` es una foto fija tomada al armar la rutina (no un join en vivo), `MiPlanPage.jsx`
+y `AlumnoPage.jsx` siguen mostrando `it.grupo` como texto plano sin ningún cambio.
+
+Verificado en vivo contra la cuenta real de Nalux: se le agregó "Espalda" a "peso muerto" (que ya
+tenía "Piernas") desde el formulario, las dos pills quedaron marcadas, guardó bien y la card mostró
+los dos badges; el filtro "Espalda" mostró "peso muerto" pero no "Press Frances". En el armador de
+rutinas, el selector mostró "peso muerto · Piernas, Espalda" y, al agregarlo, el ejercicio en la
+lista de la rutina mostró el mismo texto. Se probó también guardar un ejercicio nuevo sin ningún
+grupo tildado: el cartel de error apareció dentro del modal y no dejó guardar. "peso muerto" se
+devolvió a su estado original (solo "Piernas") por SQL al terminar, para no dejar la cuenta real
+con un cambio que Nalux no pidió. `npm run lint` y `vite build` limpios antes de probar.

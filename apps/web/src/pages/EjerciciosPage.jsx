@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { AlertTriangle, Dumbbell, ExternalLink, Play, Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
+import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { GRUPOS } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
-const vacio = { nombre: '', grupo_muscular: GRUPOS[0], media_url: '', descripcion: '' };
+const vacio = { nombre: '', grupo_muscular: [], media_url: '', descripcion: '' };
 
 // Un ejercicio puede tener media_url apuntando a un archivo propio (bucket
 // ejercicios-media) o a un link externo (YouTube, Vimeo, etc.). Solo tiene
@@ -72,6 +72,11 @@ const EjerciciosPage = () => {
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [warning, setWarning] = useState('');
+    // Validación de "al menos un grupo" vive en el modal, no en `warning`
+    // (ese cartel se pinta en el body de la página, que el Modal tapa por
+    // completo con su overlay — quedaría invisible mientras el modal está
+    // abierto).
+    const [grupoError, setGrupoError] = useState('');
 
     // Archivo elegido para subir a Storage (equivalente a logoFile de
     // OnboardingPage/ConfiguracionPage). mediaUrlActual guarda el media_url
@@ -119,11 +124,20 @@ const EjerciciosPage = () => {
     };
 
     const grupos = useMemo(
-        () => Array.from(new Set([...GRUPOS, ...items.map((i) => i.grupo_muscular).filter(Boolean)])),
+        () => Array.from(new Set([...GRUPOS, ...items.flatMap((i) => i.grupo_muscular || [])])),
         [items],
     );
 
-    const visibles = filtro === 'todos' ? items : items.filter((i) => i.grupo_muscular === filtro);
+    const visibles =
+        filtro === 'todos' ? items : items.filter((i) => (i.grupo_muscular || []).includes(filtro));
+
+    const toggleGrupoForm = (g) =>
+        setForm((f) => ({
+            ...f,
+            grupo_muscular: f.grupo_muscular.includes(g)
+                ? f.grupo_muscular.filter((x) => x !== g)
+                : [...f.grupo_muscular, g],
+        }));
 
     const limpiarMedia = () => {
         setMediaFile(null);
@@ -135,6 +149,7 @@ const EjerciciosPage = () => {
     const cerrarModal = () => {
         setOpen(false);
         limpiarMedia();
+        setGrupoError('');
     };
 
     const onMediaChange = (e) => {
@@ -159,6 +174,11 @@ const EjerciciosPage = () => {
 
     const guardar = async (e) => {
         e.preventDefault();
+        if (form.grupo_muscular.length === 0) {
+            setGrupoError('Elegí al menos un grupo muscular.');
+            return;
+        }
+        setGrupoError('');
         setSaving(true);
         setWarning('');
         try {
@@ -219,6 +239,7 @@ const EjerciciosPage = () => {
                         setEditId(null);
                         limpiarMedia();
                         setWarning('');
+                        setGrupoError('');
                         setOpen(true);
                     }}
                 >
@@ -274,7 +295,17 @@ const EjerciciosPage = () => {
                                     </span>
                                     <p className="font-display text-base font-bold">{ej.nombre}</p>
                                 </div>
-                                <Badge className="border-border text-muted-foreground">{ej.grupo_muscular || '—'}</Badge>
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                    {ej.grupo_muscular?.length ? (
+                                        ej.grupo_muscular.map((g) => (
+                                            <Badge key={g} className="border-border text-muted-foreground">
+                                                {g}
+                                            </Badge>
+                                        ))
+                                    ) : (
+                                        <Badge className="border-border text-muted-foreground">—</Badge>
+                                    )}
+                                </div>
                             </div>
                             {ej.descripcion && (
                                 <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
@@ -306,7 +337,7 @@ const EjerciciosPage = () => {
                                     onClick={() => {
                                         setForm({
                                             nombre: ej.nombre || '',
-                                            grupo_muscular: ej.grupo_muscular || GRUPOS[0],
+                                            grupo_muscular: ej.grupo_muscular || [],
                                             media_url: ej.media_url || '',
                                             descripcion: ej.descripcion || '',
                                         });
@@ -314,6 +345,7 @@ const EjerciciosPage = () => {
                                         limpiarMedia();
                                         setMediaUrlActual(ej.media_url || '');
                                         setWarning('');
+                                        setGrupoError('');
                                         setOpen(true);
                                     }}
                                 >
@@ -337,17 +369,31 @@ const EjerciciosPage = () => {
                     <Field label="Nombre">
                         <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required />
                     </Field>
-                    <Field label="Grupo muscular">
-                        <Select
-                            value={form.grupo_muscular}
-                            onChange={(e) => setForm({ ...form, grupo_muscular: e.target.value })}
-                        >
-                            {grupos.map((g) => (
-                                <option key={g} value={g}>
-                                    {g}
-                                </option>
-                            ))}
-                        </Select>
+                    <Field label="Grupos musculares">
+                        <div className="flex flex-wrap gap-2">
+                            {grupos.map((g) => {
+                                const activo = form.grupo_muscular.includes(g);
+                                return (
+                                    <button
+                                        key={g}
+                                        type="button"
+                                        onClick={() => toggleGrupoForm(g)}
+                                        aria-pressed={activo}
+                                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                            activo
+                                                ? 'border-primary bg-primary text-primary-foreground'
+                                                : 'border-border text-muted-foreground hover:text-foreground'
+                                        }`}
+                                    >
+                                        {g}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                            Tocá los que correspondan — podés elegir más de uno.
+                        </span>
+                        {grupoError && <ErrorBox>{grupoError}</ErrorBox>}
                     </Field>
                     <Field label="Video o imagen demostrativa (URL externa opcional)">
                         <Input

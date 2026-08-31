@@ -99,7 +99,12 @@ const RutinasPage = () => {
                 key: `${ej.id}-${Date.now()}`,
                 ejercicioId: ej.id,
                 nombre: ej.nombre,
-                grupo: ej.grupo_muscular,
+                // Copia ya "aplanada" a string: rutinas.items es una foto fija
+                // tomada al armar la rutina (no un join en vivo contra
+                // ejercicios), así que MiPlanPage/AlumnoPage siguen mostrando
+                // `it.grupo` como texto sin enterarse de que ahora puede ser
+                // más de un grupo.
+                grupo: (ej.grupo_muscular || []).join(', '),
                 dia,
                 series: 4,
                 reps: 10,
@@ -312,7 +317,7 @@ const RutinasPage = () => {
                                     <Select value={sel} onChange={(e) => setSel(e.target.value)}>
                                         {ejercicios.map((e) => (
                                             <option key={e.id} value={e.id}>
-                                                {e.nombre} · {e.grupo_muscular}
+                                                {e.nombre} · {(e.grupo_muscular || []).join(', ')}
                                             </option>
                                         ))}
                                     </Select>
