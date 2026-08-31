@@ -76,7 +76,7 @@ const PagosPage = () => {
                         {[
                             ['Al día', resumen.alDia, 'text-ok'],
                             ['Próximos a vencer', resumen.proximos, 'text-warn'],
-                            ['En mora', resumen.vencidos, 'text-primary'],
+                            ['Atrasados', resumen.vencidos, 'text-primary'],
                         ].map(([label, valor, color]) => (
                             <Card key={label}>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

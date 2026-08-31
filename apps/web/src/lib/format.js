@@ -43,7 +43,7 @@ export const GRUPOS = ['Piernas', 'Espalda', 'Pecho', 'Hombros', 'Brazos', 'Core
 export const ESTADOS_PAGO = {
     al_dia: { label: 'Al día', className: 'text-ok border-current' },
     proximo: { label: 'Próximo a vencer', className: 'text-warn border-current' },
-    vencido: { label: 'Vencido / en mora', className: 'text-primary border-current' },
+    vencido: { label: 'Atrasado', className: 'text-primary border-current' },
 };
 
 export const estadoDesdeVencimiento = (hasta) => {

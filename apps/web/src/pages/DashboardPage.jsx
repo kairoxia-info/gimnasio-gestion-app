@@ -67,7 +67,7 @@ const DashboardPage = () => {
         { label: 'Alumnos activos', value: resumen.activos, icon: Users, to: '/alumnos' },
         { label: 'Al día con el pago', value: resumen.alDia, icon: Wallet, to: '/pagos' },
         { label: 'Asistencias (7 días)', value: resumen.presentes, icon: CalendarCheck, to: '/asistencia' },
-        { label: 'En mora o por vencer', value: resumen.deudores + resumen.proximos, icon: TrendingUp, to: '/pagos' },
+        { label: 'Atrasados o por vencer', value: resumen.deudores + resumen.proximos, icon: TrendingUp, to: '/pagos' },
     ];
 
     return (
@@ -79,7 +79,7 @@ const DashboardPage = () => {
                 <title>Panel general | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
-                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos en mora en Gestión GYM Kairox IA."
+                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos atrasados en Gestión GYM Kairox IA."
                 />
             </Helmet>
 
@@ -113,7 +113,7 @@ const DashboardPage = () => {
                             </p>
                             <p className="mt-4 font-display text-3xl font-extrabold">{money(resumen.cajaMes)}</p>
                             <p className="mt-2 text-sm opacity-90">
-                                {resumen.alDia} al día · {resumen.proximos} por vencer · {resumen.deudores} en mora
+                                {resumen.alDia} al día · {resumen.proximos} por vencer · {resumen.deudores} atrasados
                             </p>
                         </div>
 
