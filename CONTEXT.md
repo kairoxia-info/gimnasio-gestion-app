@@ -980,3 +980,20 @@ lista de la rutina mostró el mismo texto. Se probó también guardar un ejercic
 grupo tildado: el cartel de error apareció dentro del modal y no dejó guardar. "peso muerto" se
 devolvió a su estado original (solo "Piernas") por SQL al terminar, para no dejar la cuenta real
 con un cambio que Nalux no pidió. `npm run lint` y `vite build` limpios antes de probar.
+
+**31/08/2026 (mismo día, minutos después) — el video del modal de demostración se veía "muy
+grande".** Nalux subió un video real (grabado con el celular, vertical) a "Peso Muerto" y avisó que
+las imágenes se veían bien pero el video no. Causa: el modal de preview (`EjerciciosPage.jsx` y
+`MiPlanPage.jsx`, del fix de hoy más temprano) usaba `w-full` — ancho fijo al 100% del modal, alto
+libre en proporción a ese ancho. Con una imagen apaisada eso da un alto razonable; con un video
+vertical (alto > ancho) el resultado es una caja gigante que no entra en la pantalla. Cambiado a
+`max-h-[70vh] w-auto max-w-full h-auto`: el navegador elige el tamaño que entra a la vez en el
+ancho del modal Y en el alto de la pantalla — funciona igual en celular que en computadora, y no
+cambia nada para las imágenes que ya se veían bien (mismo criterio, caso general).
+
+Verificado en vivo con el video real que Nalux subió a "Peso Muerto" (no hizo falta generar un
+video de prueba): el modal lo mostró contenido dentro de la pantalla, sin desbordar, tanto en
+tamaño de escritorio como emulando celular (375×812). Para probar el lado alumno se insertó una
+rutina "ZZZ_test_video_size" temporal con ese mismo ejercicio, asignada a nadia tecera solo para la
+prueba, y se vio igual de bien en `/mi-plan/:codigo`; rutina y asignación borradas después,
+confirmado por SQL. `npm run lint` y `vite build` limpios.

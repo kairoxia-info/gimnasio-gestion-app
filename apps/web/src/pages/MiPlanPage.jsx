@@ -217,6 +217,12 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
 // adentro de la app en vez de mandar al alumno a otra pestaña. Mismo
 // criterio visual que CronometroModal de arriba (overlay fijo, tarjeta
 // redondeada, botón de cerrar arriba a la derecha).
+//
+// max-h-[70vh] + w-auto en vez de w-full: un video vertical (grabado con
+// el celular) se veía gigante con w-full porque la altura escalaba libre
+// en proporción a ese ancho fijo. Así el navegador elige el tamaño que
+// entra a la vez en el ancho de la tarjeta Y en el alto de la pantalla,
+// tanto en celular como en computadora — funciona igual para fotos.
 const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => (
     <div
         role="dialog"
@@ -237,9 +243,19 @@ const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => (
                 </button>
             </div>
             {tipo === 'video' ? (
-                <video src={url} controls autoPlay playsInline className="w-full rounded-2xl bg-black" />
+                <video
+                    src={url}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-2xl bg-black"
+                />
             ) : (
-                <img src={url} alt={`Demostración de ${nombre}`} className="w-full rounded-2xl" />
+                <img
+                    src={url}
+                    alt={`Demostración de ${nombre}`}
+                    className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-2xl"
+                />
             )}
         </div>
     </div>

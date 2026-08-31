@@ -445,6 +445,14 @@ const EjerciciosPage = () => {
                 </form>
             </Modal>
 
+            {/*
+              Reportado por Nalux: con w-full (ancho fijo al 100% del modal), un
+              video vertical (grabado con el celular, alto > ancho) terminaba
+              gigante en pantalla porque la altura escalaba libre en proporción
+              a ese ancho. max-h-[70vh] + w-auto deja que el navegador elija el
+              tamaño que entra a la vez en el ancho del modal Y en el alto de
+              la pantalla, funciona igual para fotos que ya se veían bien.
+            */}
             <Modal
                 open={!!previewEj}
                 onClose={() => setPreviewEj(null)}
@@ -455,13 +463,14 @@ const EjerciciosPage = () => {
                         src={previewEj.media_url}
                         controls
                         autoPlay
-                        className="w-full rounded-xl bg-black"
+                        playsInline
+                        className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-xl bg-black"
                     />
                 ) : previewEj ? (
                     <img
                         src={previewEj.media_url}
                         alt={`Demostración de ${previewEj.nombre}`}
-                        className="w-full rounded-xl"
+                        className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-xl"
                     />
                 ) : null}
             </Modal>
