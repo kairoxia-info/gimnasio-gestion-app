@@ -997,3 +997,36 @@ tamaño de escritorio como emulando celular (375×812). Para probar el lado alum
 rutina "ZZZ_test_video_size" temporal con ese mismo ejercicio, asignada a nadia tecera solo para la
 prueba, y se vio igual de bien en `/mi-plan/:codigo`; rutina y asignación borradas después,
 confirmado por SQL. `npm run lint` y `vite build` limpios.
+
+**31/08/2026 (cierre) — 3 filtros nuevos en la biblioteca de ejercicios.** Nalux pidió investigar
+qué filtros sumar antes de tocar nada. Investigación: comparé el estado actual (solo chips de
+grupo muscular) contra el research original de la competencia en `PLAN.md` (que documenta un
+buscador por nombre y un filtro por Origen propio/global) y contra el propio schema — encontré que
+`ejercicios.clasificacion` (patrón de movimiento: empuje/tracción/dominante de cadera, etc.) existe
+en la base **desde la migración 0001**, pensada para esto mismo, pero nunca se construyó ni el
+campo para cargarla ni ningún filtro. De las 4 opciones que planteé (buscador, clasificación,
+con/sin demostración, filtro por Origen) Nalux eligió las primeras 3 y descartó Origen (esa
+implica un catálogo compartido entre gimnasios, feature más grande, no aplica al modelo actual).
+
+Como `clasificacion` ya existía en la tabla, **esto no necesitó ninguna migración** — todo el
+trabajo fue frontend. Se agregó `CLASIFICACIONES` a `format.js` (mismo criterio que `GRUPOS`),
+con una lista propia de patrón de movimiento (empuje horizontal/vertical, tracción horizontal/
+vertical, dominante de cadera/rodilla/tobillo, core, cardio, compuesto) — a propósito sin mezclar
+músculos puntuales (bíceps, cuádriceps, etc.) como hacía la referencia, para no pisar el eje de
+grupo muscular que ya existe. A diferencia de grupo muscular (que ahora es multi-selección),
+`clasificacion` es un solo valor por ejercicio y opcional (no obligatorio como grupo).
+
+En `EjerciciosPage.jsx`: buscador por nombre (`<Input>` con ícono, filtra por substring
+case-insensitive) + 2 `<Select>` (patrón de movimiento, con/sin demostración) arriba de los chips
+de grupo que ya existían. Los 4 filtros se combinan con AND. Los chips de grupo siguen siendo
+chips (el filtro que más se usa, tap grande); patrón y demostración son selects más chicos para no
+saturar la pantalla en el celular. El formulario de alta/edición suma "Patrón de movimiento
+(opcional)" con "Sin clasificar" como default. La card de cada ejercicio muestra el patrón (si
+tiene) como texto chico en mayúscula, antes de la descripción.
+
+Verificado en vivo contra la cuenta real de Nalux: buscar "press" mostró solo "Press Frances";
+filtrar "Sin demostración" no mostró nada (los 3 ejercicios reales ya tienen media cargada, esperable);
+se editó "Peso Muerto" para asignarle "Dominante de cadera", guardó bien, apareció en la card, y el
+filtro por ese patrón mostró solo ese ejercicio — después revertido a "Sin clasificar" por SQL para
+no dejar un dato que Nalux no pidió. Probado también en 375×812 (celular): los 3 controles se
+apilan en columna, sin desbordar. `npm run lint` y `vite build` limpios antes de probar.

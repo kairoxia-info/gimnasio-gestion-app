@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { AlertTriangle, Dumbbell, ExternalLink, Play, Plus } from 'lucide-react';
+import { AlertTriangle, Dumbbell, ExternalLink, Play, Plus, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Textarea } from '@/components/ui-kit';
+import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
-import { GRUPOS } from '@/lib/format';
+import { CLASIFICACIONES, GRUPOS } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
-const vacio = { nombre: '', grupo_muscular: [], media_url: '', descripcion: '' };
+const vacio = { nombre: '', grupo_muscular: [], clasificacion: '', media_url: '', descripcion: '' };
 
 // Un ejercicio puede tener media_url apuntando a un archivo propio (bucket
 // ejercicios-media) o a un link externo (YouTube, Vimeo, etc.). Solo tiene
@@ -67,6 +67,9 @@ const EjerciciosPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [filtro, setFiltro] = useState('todos');
+    const [busqueda, setBusqueda] = useState('');
+    const [filtroClasificacion, setFiltroClasificacion] = useState('todos');
+    const [filtroDemo, setFiltroDemo] = useState('todos'); // 'todos' | 'con' | 'sin'
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
@@ -128,8 +131,23 @@ const EjerciciosPage = () => {
         [items],
     );
 
-    const visibles =
-        filtro === 'todos' ? items : items.filter((i) => (i.grupo_muscular || []).includes(filtro));
+    const clasificaciones = useMemo(
+        () => Array.from(new Set([...CLASIFICACIONES, ...items.map((i) => i.clasificacion).filter(Boolean)])),
+        [items],
+    );
+
+    // Los 4 filtros se combinan con AND: cada uno reduce la lista, no la
+    // reemplaza. El de grupo sigue siendo chips (es el que más se usa, tapa
+    // grande); patrón y demostración son selects más chicos (se usan menos
+    // seguido) para no saturar la pantalla en el celular.
+    const visibles = items.filter((ej) => {
+        if (filtro !== 'todos' && !(ej.grupo_muscular || []).includes(filtro)) return false;
+        if (filtroClasificacion !== 'todos' && ej.clasificacion !== filtroClasificacion) return false;
+        if (filtroDemo === 'con' && !ej.media_url) return false;
+        if (filtroDemo === 'sin' && ej.media_url) return false;
+        if (busqueda.trim() && !ej.nombre?.toLowerCase().includes(busqueda.trim().toLowerCase())) return false;
+        return true;
+    });
 
     const toggleGrupoForm = (g) =>
         setForm((f) => ({
@@ -255,6 +273,43 @@ const EjerciciosPage = () => {
                 />
             </Helmet>
 
+            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr,1fr]">
+                <div className="relative">
+                    <Search
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                    <Input
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        placeholder="Buscar por nombre..."
+                        className="pl-9"
+                        aria-label="Buscar ejercicio por nombre"
+                    />
+                </div>
+                <Select
+                    value={filtroClasificacion}
+                    onChange={(e) => setFiltroClasificacion(e.target.value)}
+                    aria-label="Filtrar por patrón de movimiento"
+                >
+                    <option value="todos">Todos los patrones</option>
+                    {clasificaciones.map((c) => (
+                        <option key={c} value={c}>
+                            {c}
+                        </option>
+                    ))}
+                </Select>
+                <Select
+                    value={filtroDemo}
+                    onChange={(e) => setFiltroDemo(e.target.value)}
+                    aria-label="Filtrar por demostración cargada"
+                >
+                    <option value="todos">Con o sin demostración</option>
+                    <option value="con">Con demostración</option>
+                    <option value="sin">Sin demostración</option>
+                </Select>
+            </div>
+
             <div className="mb-6 flex flex-wrap gap-2">
                 {['todos', ...grupos].map((g) => (
                     <button
@@ -283,7 +338,7 @@ const EjerciciosPage = () => {
             {loading ? (
                 <Loading rows={4} />
             ) : visibles.length === 0 ? (
-                <Empty>No hay ejercicios en este grupo muscular.</Empty>
+                <Empty>No hay ejercicios que coincidan con estos filtros.</Empty>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     {visibles.map((ej) => (
@@ -307,6 +362,11 @@ const EjerciciosPage = () => {
                                     )}
                                 </div>
                             </div>
+                            {ej.clasificacion && (
+                                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-primary/80">
+                                    {ej.clasificacion}
+                                </p>
+                            )}
                             {ej.descripcion && (
                                 <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
                             )}
@@ -338,6 +398,7 @@ const EjerciciosPage = () => {
                                         setForm({
                                             nombre: ej.nombre || '',
                                             grupo_muscular: ej.grupo_muscular || [],
+                                            clasificacion: ej.clasificacion || '',
                                             media_url: ej.media_url || '',
                                             descripcion: ej.descripcion || '',
                                         });
@@ -394,6 +455,19 @@ const EjerciciosPage = () => {
                             Tocá los que correspondan — podés elegir más de uno.
                         </span>
                         {grupoError && <ErrorBox>{grupoError}</ErrorBox>}
+                    </Field>
+                    <Field label="Patrón de movimiento (opcional)">
+                        <Select
+                            value={form.clasificacion}
+                            onChange={(e) => setForm({ ...form, clasificacion: e.target.value })}
+                        >
+                            <option value="">Sin clasificar</option>
+                            {CLASIFICACIONES.map((c) => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
+                        </Select>
                     </Field>
                     <Field label="Video o imagen demostrativa (URL externa opcional)">
                         <Input

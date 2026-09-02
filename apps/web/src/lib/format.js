@@ -40,6 +40,26 @@ export const DIAS = ['Día 1', 'Día 2', 'Día 3', 'Día 4', 'Día 5', 'Día 6']
 
 export const GRUPOS = ['Piernas', 'Espalda', 'Pecho', 'Hombros', 'Brazos', 'Core', 'Glúteos', 'Cardio'];
 
+// Patrón de movimiento de un ejercicio (EjerciciosPage) — eje complementario
+// al grupo muscular, no un reemplazo: un ejercicio tiene 1 sólo patrón
+// principal (a diferencia de grupo_muscular, que puede ser varios), así que
+// se guarda como un solo valor en ejercicios.clasificacion, no como array.
+// A propósito no incluye músculos puntuales (Bíceps, Cuádriceps, etc.): eso
+// ya lo cubre grupo_muscular, mezclar los dos ejes le sacaría el sentido a
+// tener uno separado.
+export const CLASIFICACIONES = [
+    'Empuje horizontal',
+    'Empuje vertical',
+    'Tracción horizontal',
+    'Tracción vertical',
+    'Dominante de cadera',
+    'Dominante de rodilla',
+    'Dominante de tobillo',
+    'Core',
+    'Cardio',
+    'Compuesto',
+];
+
 export const ESTADOS_PAGO = {
     al_dia: { label: 'Al día', className: 'text-ok border-current' },
     proximo: { label: 'Próximo a vencer', className: 'text-warn border-current' },
