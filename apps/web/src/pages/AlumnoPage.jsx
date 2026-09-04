@@ -3,7 +3,6 @@ import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import QRCode from 'qrcode';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -1224,150 +1223,201 @@ const PagosAlumno = ({ alumnoId, pagos, config, onChange }) => {
     );
 };
 
-/* ---------------- QR de acceso del alumno ---------------- */
+/* ---------------- Acceso del alumno (usuario y contraseña) ---------------- */
 
-// Mismo patrón que la sección "Código de invitación" de ConfiguracionPage.jsx
-// (QR client-side con la librería qrcode, fondo blanco fijo, descarga y
-// regenerar), pero acá el código es individual por alumno (codigo_acceso,
-// migración 0006) en vez de uno solo por gimnasio. La RPC pública que lee
-// ese código (ver_plan_por_codigo) no requiere sesión: por eso el link
-// apunta a /mi-plan/:codigo, la pantalla que el alumno abre desde el QR.
-const QrAlumno = ({ alumno, onRegenerado }) => {
-    const [qrDataUrl, setQrDataUrl] = useState('');
-    const [copiado, setCopiado] = useState(false);
-    const [regenerando, setRegenerando] = useState(false);
-    const [qrError, setQrError] = useState('');
+// Reemplaza al QR/link (migración 0028, pedido de Nalux 04/09/2026: "que el
+// profesor se lo cree y el alumno pueda ingresar" -- nada de QR, "sencillo
+// y claro" del lado del alumno). El profesor le pone un usuario corto y
+// una contraseña; el alumno entra con eso en /alumno, en vez de depender
+// de un link/QR para imprimir o reenviar. crear_acceso_alumno() hashea la
+// contraseña -- nunca se guarda ni se puede volver a mostrar en texto
+// plano después, por eso justo al crearla/cambiarla se ofrece mandarla por
+// WhatsApp: es la única vez que el profesor la tiene a mano para copiarla.
+const AccesoAlumno = ({ alumno, onCambiado }) => {
+    const [abierto, setAbierto] = useState(false);
+    const [usuarioForm, setUsuarioForm] = useState('');
+    const [contrasenaForm, setContrasenaForm] = useState('');
+    const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
+    // {usuario, contrasena} en texto plano, solo en memoria del componente
+    // -- se pierde al cerrar el formulario, navegar o recargar. Es la única
+    // vez que la contraseña existe en algún lado fuera del hash guardado.
+    const [creado, setCreado] = useState(null);
+    const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
+    const [quitando, setQuitando] = useState(false);
 
-    const link = alumno?.codigo_acceso ? `${window.location.origin}/mi-plan/${alumno.codigo_acceso}` : '';
+    const abrirForm = () => {
+        setUsuarioForm(alumno?.usuario || '');
+        setContrasenaForm('');
+        setError('');
+        setCreado(null);
+        setAbierto(true);
+    };
 
-    // Sin número de teléfono: wa.me abre WhatsApp (o WhatsApp Web) con el
-    // mensaje ya cargado y deja elegir el contacto ahí mismo -- evita tener
-    // que adivinar el formato del número (código de país, el "9" de
-    // celular en Argentina, etc.) a partir de alumnos.contacto, que es
-    // texto libre sin ese formato garantizado.
-    const linkWhatsapp = link
+    const guardar = async (e) => {
+        e.preventDefault();
+        setGuardando(true);
+        setError('');
+        try {
+            const { error: err } = await supabase.rpc('crear_acceso_alumno', {
+                p_alumno_id: alumno.id,
+                p_usuario: usuarioForm.trim(),
+                p_contrasena: contrasenaForm,
+            });
+            if (err) throw err;
+            setCreado({ usuario: usuarioForm.trim(), contrasena: contrasenaForm });
+            setAbierto(false);
+            onCambiado(usuarioForm.trim());
+        } catch (err) {
+            setError(err?.message || 'No se pudo guardar el acceso.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const quitar = async () => {
+        setQuitando(true);
+        setError('');
+        try {
+            const { error: err } = await supabase.rpc('quitar_acceso_alumno', { p_alumno_id: alumno.id });
+            if (err) throw err;
+            setCreado(null);
+            setConfirmandoQuitar(false);
+            onCambiado(null);
+        } catch (_) {
+            setError('No se pudo quitar el acceso.');
+        } finally {
+            setQuitando(false);
+        }
+    };
+
+    const urlIngreso = `${window.location.origin}/alumno`;
+    const linkWhatsapp = creado
         ? `https://wa.me/?text=${encodeURIComponent(
-              `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}! Este es el link para ver tu rutina y tu plan de alimentación, sin necesidad de usuario ni contraseña: ${link}`,
+              `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}! Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`,
           )}`
         : '';
 
-    useEffect(() => {
-        if (!link) {
-            setQrDataUrl('');
-            return;
-        }
-        let cancelado = false;
-        QRCode.toDataURL(link, { width: 240 })
-            .then((url) => {
-                if (!cancelado) setQrDataUrl(url);
-            })
-            .catch(() => {
-                if (!cancelado) setQrDataUrl('');
-            });
-        return () => {
-            cancelado = true;
-        };
-    }, [link]);
-
-    const copiarLink = async () => {
-        if (!link) return;
-        try {
-            await navigator.clipboard.writeText(link);
-            setCopiado(true);
-            setTimeout(() => setCopiado(false), 1500);
-        } catch (_) {
-            setQrError('No se pudo copiar el link. Copialo a mano.');
-        }
-    };
-
-    const regenerar = async () => {
-        if (!alumno?.id) return;
-        if (
-            !window.confirm(
-                '¿Seguro que quiere regenerar el código? El QR y el link ya compartidos con este alumno dejan de funcionar al toque.',
-            )
-        ) {
-            return;
-        }
-        setRegenerando(true);
-        setQrError('');
-        try {
-            const { data: nuevoCodigo, error: err } = await supabase.rpc('regenerar_codigo_acceso_alumno', {
-                p_alumno_id: alumno.id,
-            });
-            if (err) throw err;
-            onRegenerado(nuevoCodigo);
-        } catch (_) {
-            setQrError('No se pudo regenerar el código.');
-        } finally {
-            setRegenerando(false);
-        }
-    };
-
     return (
         <Card className="mb-6">
-            <h2 className="font-display text-lg font-bold">QR para el alumno</h2>
+            <h2 className="font-display text-lg font-bold">Acceso del alumno</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-                Imprimir o enviarle este QR al alumno para que vea su rutina y su plan desde el celular, sin
-                necesidad de usuario ni contraseña.
+                Usuario y contraseña para que entre a ver su rutina y su plan desde el celular, en{' '}
+                <span className="font-mono">{urlIngreso}</span>.
             </p>
 
-            {!alumno?.codigo_acceso ? (
-                <div className="mt-4">
-                    <Empty>Este alumno todavía no tiene un código de acceso propio.</Empty>
+            {creado && (
+                <div className="mt-4 space-y-3 rounded-xl border border-ok bg-ok/10 p-4">
+                    <p className="text-sm font-semibold">
+                        Acceso guardado. Enviarle estos datos al alumno -- después no se van a poder
+                        volver a ver.
+                    </p>
+                    <p className="text-sm">
+                        Usuario <span className="font-mono font-semibold">{creado.usuario}</span>
+                        {' · '}
+                        Contraseña <span className="font-mono font-semibold">{creado.contrasena}</span>
+                    </p>
+                    <Btn
+                        type="button"
+                        variant="ghost"
+                        onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
+                    >
+                        <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+                    </Btn>
                 </div>
-            ) : (
-                <div className="mt-4 grid gap-6 md:grid-cols-2">
-                    <div className="space-y-4">
-                        <Field label="Link al panel del alumno">
-                            <div className="flex gap-2">
-                                <Input readOnly value={link} className="font-mono text-xs" />
-                                <Btn type="button" variant="ghost" onClick={copiarLink} className="shrink-0">
-                                    {copiado ? '¡Copiado!' : 'Copiar'}
+            )}
+
+            {!abierto && !creado && alumno?.usuario && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <p className="text-sm">
+                        Usuario actual: <span className="font-mono font-semibold">{alumno.usuario}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        <Btn type="button" variant="ghost" className="px-3 py-2 text-xs" onClick={abrirForm}>
+                            Cambiar contraseña
+                        </Btn>
+                        {confirmandoQuitar ? (
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">¿Seguro?</span>
+                                <Btn
+                                    type="button"
+                                    variant="danger"
+                                    className="px-3 py-2 text-xs"
+                                    disabled={quitando}
+                                    onClick={quitar}
+                                >
+                                    {quitando ? 'Quitando...' : 'Sí, quitar'}
+                                </Btn>
+                                <Btn
+                                    type="button"
+                                    variant="ghost"
+                                    className="px-3 py-2 text-xs"
+                                    onClick={() => setConfirmandoQuitar(false)}
+                                >
+                                    Cancelar
                                 </Btn>
                             </div>
-                        </Field>
-
-                        <div className="flex flex-wrap gap-2">
+                        ) : (
                             <Btn
                                 type="button"
-                                variant="ghost"
-                                onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
+                                variant="danger"
+                                className="px-3 py-2 text-xs"
+                                onClick={() => setConfirmandoQuitar(true)}
                             >
-                                <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+                                Quitar acceso
                             </Btn>
-                            <Btn type="button" variant="ghost" onClick={regenerar} disabled={regenerando}>
-                                {regenerando ? 'Regenerando...' : 'Regenerar código'}
-                            </Btn>
-                        </div>
-
-                        {qrError && <ErrorBox>{qrError}</ErrorBox>}
-                    </div>
-
-                    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-4">
-                        {qrDataUrl ? (
-                            <>
-                                {/* Fondo blanco fijo a propósito (no bg-card): un QR necesita
-                                    contraste real para escanear, no el tema claro/oscuro de la app. */}
-                                <img
-                                    src={qrDataUrl}
-                                    alt="Código QR del alumno"
-                                    className="h-48 w-48 rounded-lg bg-white p-2"
-                                />
-                                <a
-                                    href={qrDataUrl}
-                                    download={`qr-${(alumno.nombre || 'alumno').replace(/\s+/g, '-').toLowerCase()}.png`}
-                                    className="text-sm font-semibold text-primary hover:underline"
-                                >
-                                    Descargar QR
-                                </a>
-                            </>
-                        ) : (
-                            <span className="text-sm text-muted-foreground">Generando QR...</span>
                         )}
                     </div>
                 </div>
             )}
+
+            {!abierto && !alumno?.usuario && !creado && (
+                <div className="mt-4">
+                    <Empty>
+                        Este alumno todavía no tiene acceso.{' '}
+                        <button type="button" onClick={abrirForm} className="font-semibold text-primary">
+                            Crear usuario y contraseña
+                        </button>
+                        .
+                    </Empty>
+                </div>
+            )}
+
+            {abierto && (
+                <form onSubmit={guardar} className="mt-4 space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="Usuario">
+                            <Input
+                                value={usuarioForm}
+                                onChange={(e) => setUsuarioForm(e.target.value)}
+                                placeholder="nadia1"
+                                required
+                                minLength={3}
+                            />
+                        </Field>
+                        <Field label="Contraseña">
+                            <Input
+                                value={contrasenaForm}
+                                onChange={(e) => setContrasenaForm(e.target.value)}
+                                placeholder="Mínimo 4 caracteres"
+                                required
+                                minLength={4}
+                            />
+                        </Field>
+                    </div>
+                    {error && <ErrorBox>{error}</ErrorBox>}
+                    <div className="flex flex-wrap gap-2">
+                        <Btn type="submit" disabled={guardando}>
+                            {guardando ? 'Guardando...' : 'Guardar acceso'}
+                        </Btn>
+                        <Btn type="button" variant="ghost" onClick={() => setAbierto(false)}>
+                            Cancelar
+                        </Btn>
+                    </div>
+                </form>
+            )}
+
+            {!abierto && error && <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>}
         </Card>
     );
 };
@@ -1561,10 +1611,10 @@ const AlumnoPage = () => {
                             </Card>
                         )}
 
-                        <QrAlumno
+                        <AccesoAlumno
                             alumno={alumno}
-                            onRegenerado={(nuevoCodigo) =>
-                                setData((d) => ({ ...d, alumno: { ...d.alumno, codigo_acceso: nuevoCodigo } }))
+                            onCambiado={(nuevoUsuario) =>
+                                setData((d) => ({ ...d, alumno: { ...d.alumno, usuario: nuevoUsuario } }))
                             }
                         />
 

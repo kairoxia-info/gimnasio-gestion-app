@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
     AlertTriangle,
     Download,
     Dumbbell,
     Lock,
     Loader2,
+    LogOut,
     Megaphone,
     Pause,
     Play,
@@ -283,6 +284,11 @@ const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => (
 const esCodigoInvalido = (msg = '') => /codigo de acceso invalido/i.test(msg);
 const esRateLimit = (msg = '') => /demasiadas consultas/i.test(msg);
 
+// Misma clave que usa AlumnoLoginPage.jsx para guardar el codigo_acceso
+// después de loguearse (migración 0028) -- acá solo se borra, para
+// "Cerrar sesión".
+const CLAVE_SESION = 'kairox_alumno_codigo';
+
 // Logo del gimnasio con el mismo criterio de fallback que GimnasioMark
 // (AppLayout.jsx): si la imagen no carga (link roto, etc.) cae a un ícono
 // genérico en vez de romper el header. No se reusa GimnasioMark tal cual
@@ -371,7 +377,7 @@ const EstadoRestringido = ({ gimnasioNombre }) => (
         <div className="min-w-0 flex-1">
             <p className="text-xl font-extrabold">En pausa por cuota vencida</p>
             <p className="mt-2 text-lg text-foreground">
-                Pasá por {gimnasioNombre || 'el gimnasio'} para renovarla y volver a verlo.
+                Pasar por {gimnasioNombre || 'el gimnasio'} para renovarla y volver a verlo.
             </p>
         </div>
     </div>
@@ -379,9 +385,28 @@ const EstadoRestringido = ({ gimnasioNombre }) => (
 
 const MiPlanPage = () => {
     const { codigo } = useParams();
+    const navigate = useNavigate();
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    // Solo para el cartel "sin conexión" de abajo -- no cambia en nada cómo
+    // se pide el plan (eso lo resuelve public/sw.js sirviendo la última
+    // respuesta guardada si no hay red). navigator.onLine puede arrancar en
+    // true por unos segundos aunque no haya señal real (algunos navegadores
+    // solo detectan que "hay una red" wifi/datos, no que esa red llegue a
+    // internet) -- por eso esto es un aviso, no la fuente de verdad de si el
+    // plan que se ve es viejo o no.
+    const [sinConexion, setSinConexion] = useState(!navigator.onLine);
+    useEffect(() => {
+        const marcarOnline = () => setSinConexion(false);
+        const marcarOffline = () => setSinConexion(true);
+        window.addEventListener('online', marcarOnline);
+        window.addEventListener('offline', marcarOffline);
+        return () => {
+            window.removeEventListener('online', marcarOnline);
+            window.removeEventListener('offline', marcarOffline);
+        };
+    }, []);
     // { duracion, id } del cronómetro activo, o null si está cerrado. El id
     // incremental (no solo la duración) es a propósito: si dos ejercicios
     // comparten el mismo descanso ("90 s" los dos) y se pide el segundo
@@ -523,6 +548,19 @@ const MiPlanPage = () => {
         };
     }, [codigo]);
 
+    // Por si el celular es compartido con otra persona, o el alumno quiere
+    // volver a entrar con otro usuario -- borra la sesión guardada y manda
+    // de nuevo al login (AlumnoLoginPage.jsx). No hace falta avisarle nada
+    // al servidor: la "sesión" acá es solo el codigo_acceso en localStorage.
+    const cerrarSesion = () => {
+        try {
+            localStorage.removeItem(CLAVE_SESION);
+        } catch (_) {
+            // nada que limpiar si el navegador ya bloqueaba localStorage
+        }
+        navigate('/alumno', { replace: true });
+    };
+
     // Agrupada por semana y día con el mismo helper que usa el profe, para
     // que el alumno vea exactamente la estructura que se armó. Si la rutina
     // usa una sola semana (el caso normal), no se muestra ningún encabezado
@@ -596,6 +634,19 @@ const MiPlanPage = () => {
                         <AlertTriangle className="h-8 w-8 text-primary" strokeWidth={2} aria-hidden="true" />
                     </span>
                     <p className="max-w-sm text-xl font-bold">{error}</p>
+                    <Link
+                        to="/alumno"
+                        onClick={() => {
+                            try {
+                                localStorage.removeItem(CLAVE_SESION);
+                            } catch (_) {
+                                // nada que limpiar
+                            }
+                        }}
+                        className="text-sm font-semibold text-primary hover:underline"
+                    >
+                        Volver a ingresar
+                    </Link>
                 </div>
             )}
 
@@ -612,11 +663,25 @@ const MiPlanPage = () => {
                                     {plan.gimnasio_nombre || 'Tu gimnasio'}
                                 </p>
                             </div>
-                            <div className="mp-no-imprimir shrink-0">
+                            <div className="mp-no-imprimir flex shrink-0 items-center gap-2">
                                 <ThemeToggle />
+                                <button
+                                    type="button"
+                                    onClick={cerrarSesion}
+                                    aria-label="Cerrar sesión"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:text-foreground"
+                                >
+                                    <LogOut className="h-4 w-4" strokeWidth={2} />
+                                </button>
                             </div>
                         </div>
                     </header>
+
+                    {sinConexion && (
+                        <p className="mp-no-imprimir bg-warn/15 px-4 py-2 text-center text-xs font-semibold text-warn">
+                            Sin conexión -- mostrando la última versión guardada.
+                        </p>
+                    )}
 
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6">
                         {/* Recordatorio automático de cuota (migración 0015). A

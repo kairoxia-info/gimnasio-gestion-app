@@ -8,6 +8,7 @@ import LoginPage from '@/pages/LoginPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import UnirsePage from '@/pages/UnirsePage';
 import MiPlanPage from '@/pages/MiPlanPage';
+import AlumnoLoginPage from '@/pages/AlumnoLoginPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AlumnosPage from '@/pages/AlumnosPage';
@@ -57,6 +58,12 @@ function App() {
                             propia (el acceso se resuelve 100% por el código individual del
                             alumno vía la RPC ver_plan_por_codigo, público/anon). */}
                         <Route path="/mi-plan/:codigo" element={<MiPlanPage />} />
+                        {/* Sin ProtectedRoute, mismo criterio que /mi-plan/:codigo: es la
+                            puerta de entrada del alumno, sin sesión propia (migración 0028,
+                            reemplaza al QR). Usuario/contraseña los crea el profesor desde la
+                            ficha del alumno; acá solo se valida y se guarda el codigo_acceso
+                            resultante en localStorage antes de mandarlo a /mi-plan/:codigo. */}
+                        <Route path="/alumno" element={<AlumnoLoginPage />} />
                         <Route path="/onboarding" element={guard(<OnboardingPage />)} />
                         <Route path="/panel" element={guard(<DashboardPage />)} />
                         <Route path="/alumnos" element={guard(<AlumnosPage />)} />
