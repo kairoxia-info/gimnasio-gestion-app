@@ -5,7 +5,6 @@ import { ArrowUpRight, Cake, CalendarCheck, TrendingUp, UserPlus, Users, Wallet 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import AppLayout from '@/components/AppLayout';
 import { Card, Empty, Loading } from '@/components/ui-kit';
-import CountUp from '@/components/CountUp';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 import { ESTADOS_PAGO, estadoAlumno, estadoDesdeVencimiento, fmtFecha, fmtMes, money } from '@/lib/format';
@@ -295,9 +294,7 @@ const DashboardPage = () => {
                                     <Icon className="h-5 w-5 text-primary" strokeWidth={2} />
                                     <ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
                                 </div>
-                                <p className="mt-5 font-display text-4xl font-extrabold">
-                                    <CountUp value={value} />
-                                </p>
+                                <p className="mt-5 font-display text-4xl font-extrabold">{value}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">{label}</p>
                             </Link>
                         ))}

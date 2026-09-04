@@ -781,7 +781,7 @@ const MiPlanPage = () => {
                                                                                         <p className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
                                                                                             Superserie
                                                                                         </p>
-                                                                                        <div className="flex items-stretch gap-1.5">
+                                                                                        <div className="flex flex-col items-stretch gap-1.5 sm:flex-row">
                                                                                             {it.comboItems.map(
                                                                                                 (sub, i) => (
                                                                                                     <React.Fragment
@@ -792,20 +792,20 @@ const MiPlanPage = () => {
                                                                                                         {i >
                                                                                                             0 && (
                                                                                                             <span
-                                                                                                                className="flex shrink-0 items-center text-lg font-bold text-primary"
+                                                                                                                className="flex shrink-0 items-center justify-center text-lg font-bold text-primary"
                                                                                                                 aria-hidden="true"
                                                                                                             >
                                                                                                                 +
                                                                                                             </span>
                                                                                                         )}
                                                                                                         <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2">
-                                                                                                            <p className="truncate text-sm font-bold leading-tight sm:text-base">
+                                                                                                            <p className="text-sm font-bold leading-tight sm:truncate sm:text-base">
                                                                                                                 {
                                                                                                                     sub.nombre
                                                                                                                 }
                                                                                                             </p>
                                                                                                             {sub.grupo && (
-                                                                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                                                                <p className="text-xs text-muted-foreground sm:truncate">
                                                                                                                     {
                                                                                                                         sub.grupo
                                                                                                                     }

@@ -1091,9 +1091,9 @@ const PlanesAlimentacionPage = () => {
                                                             {r.items.map((it) => (
                                                                 <li
                                                                     key={it.alimentoId}
-                                                                    className="flex items-center gap-3 px-3 py-2"
+                                                                    className="flex flex-wrap items-center gap-3 px-3 py-2"
                                                                 >
-                                                                    <span className="flex-1 text-sm font-medium">
+                                                                    <span className="min-w-0 basis-full text-sm font-medium sm:basis-auto sm:flex-1">
                                                                         {it.nombre}
                                                                     </span>
                                                                     <Input
@@ -1106,7 +1106,7 @@ const PlanesAlimentacionPage = () => {
                                                                             )
                                                                         }
                                                                         placeholder="Cantidad"
-                                                                        className="w-24"
+                                                                        className="w-24 shrink-0"
                                                                     />
                                                                     <button
                                                                         type="button"
@@ -1123,32 +1123,43 @@ const PlanesAlimentacionPage = () => {
                                                         </ul>
                                                     </div>
                                                 ) : (
+                                                    // Checkbox+nombre agrupados con basis-full en mobile: el
+                                                    // renglón completo (checkbox + nombre + cantidad + Opcional +
+                                                    // eliminar) no entra en una fila de celular sin que el campo
+                                                    // de cantidad quede ilegible -- con flex-wrap y este grupo
+                                                    // ocupando toda la línea, cantidad/Opcional/eliminar bajan a
+                                                    // su propia fila en vez de comprimirse (bug encontrado en
+                                                    // revisión mobile, 04/09/2026).
                                                     <div
                                                         key={r.item.alimentoId}
-                                                        className="flex items-center gap-2 rounded-xl border border-border px-3 py-2"
+                                                        className="flex flex-wrap items-center gap-2 rounded-xl border border-border px-3 py-2"
                                                     >
-                                                        <input
-                                                            type="checkbox"
-                                                            aria-label={`Elegir ${r.item.nombre} para agrupar como alternativa`}
-                                                            checked={seleccionComida.has(r.item.alimentoId)}
-                                                            onChange={() => toggleSeleccion(c.key, r.item.alimentoId)}
-                                                            className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
-                                                        />
-                                                        <span className="flex-1 text-sm font-medium">
-                                                            {r.item.nombre}
-                                                            {r.item.opcional && (
-                                                                <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                                                                    (opcional)
-                                                                </span>
-                                                            )}
-                                                        </span>
+                                                        <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                aria-label={`Elegir ${r.item.nombre} para agrupar como alternativa`}
+                                                                checked={seleccionComida.has(r.item.alimentoId)}
+                                                                onChange={() =>
+                                                                    toggleSeleccion(c.key, r.item.alimentoId)
+                                                                }
+                                                                className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                                            />
+                                                            <span className="min-w-0 flex-1 text-sm font-medium">
+                                                                {r.item.nombre}
+                                                                {r.item.opcional && (
+                                                                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                                                        (opcional)
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
                                                         <Input
                                                             value={r.item.cantidad}
                                                             onChange={(e) =>
                                                                 editarCantidad(c.key, r.item.alimentoId, e.target.value)
                                                             }
                                                             placeholder="Cantidad"
-                                                            className="w-24"
+                                                            className="w-24 shrink-0"
                                                         />
                                                         <button
                                                             type="button"

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Printer, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import QRCode from 'qrcode';
 import supabase from '@/lib/supabaseClient';
@@ -378,23 +378,28 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                         // Superserie: cada ejercicio en su propia caja chica, uno al
                                                         // lado del otro (mismo criterio que MiPlanPage) — descanso e
                                                         // intensidad son del combo entero, se muestran una sola vez.
+                                                        // Apiladas (flex-col) en pantallas angostas: con 3 o 4
+                                                        // ejercicios comprimidos en una fila de celular, el nombre
+                                                        // quedaba truncado a 3-4 letras, ilegible (bug encontrado en
+                                                        // revisión mobile, 04/09/2026). En sm+ vuelve a la fila
+                                                        // horizontal comprimida de siempre.
                                                         <div key={it.key} className="rounded-xl border-2 border-primary/30 p-3">
                                                             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary">
                                                                 Superserie
                                                             </p>
-                                                            <div className="flex items-stretch gap-1.5">
+                                                            <div className="flex flex-col items-stretch gap-1.5 sm:flex-row">
                                                                 {it.comboItems.map((sub, i) => (
                                                                     <React.Fragment key={sub.key}>
                                                                         {i > 0 && (
                                                                             <span
-                                                                                className="flex shrink-0 items-center text-sm font-bold text-primary"
+                                                                                className="flex shrink-0 items-center justify-center text-sm font-bold text-primary"
                                                                                 aria-hidden="true"
                                                                             >
                                                                                 +
                                                                             </span>
                                                                         )}
                                                                         <div className="min-w-0 flex-1 rounded-lg bg-secondary p-2">
-                                                                            <p className="truncate text-xs font-bold leading-tight">
+                                                                            <p className="text-xs font-bold leading-tight sm:truncate">
                                                                                 {sub.nombre}
                                                                             </p>
                                                                             <p className="mt-1 text-xs text-muted-foreground">
@@ -1235,6 +1240,17 @@ const QrAlumno = ({ alumno, onRegenerado }) => {
 
     const link = alumno?.codigo_acceso ? `${window.location.origin}/mi-plan/${alumno.codigo_acceso}` : '';
 
+    // Sin número de teléfono: wa.me abre WhatsApp (o WhatsApp Web) con el
+    // mensaje ya cargado y deja elegir el contacto ahí mismo -- evita tener
+    // que adivinar el formato del número (código de país, el "9" de
+    // celular en Argentina, etc.) a partir de alumnos.contacto, que es
+    // texto libre sin ese formato garantizado.
+    const linkWhatsapp = link
+        ? `https://wa.me/?text=${encodeURIComponent(
+              `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}! Este es el link para ver tu rutina y tu plan de alimentación, sin necesidad de usuario ni contraseña: ${link}`,
+          )}`
+        : '';
+
     useEffect(() => {
         if (!link) {
             setQrDataUrl('');
@@ -1303,7 +1319,7 @@ const QrAlumno = ({ alumno, onRegenerado }) => {
             ) : (
                 <div className="mt-4 grid gap-6 md:grid-cols-2">
                     <div className="space-y-4">
-                        <Field label="Link del alumno">
+                        <Field label="Link al panel del alumno">
                             <div className="flex gap-2">
                                 <Input readOnly value={link} className="font-mono text-xs" />
                                 <Btn type="button" variant="ghost" onClick={copiarLink} className="shrink-0">
@@ -1312,9 +1328,18 @@ const QrAlumno = ({ alumno, onRegenerado }) => {
                             </div>
                         </Field>
 
-                        <Btn type="button" variant="ghost" onClick={regenerar} disabled={regenerando}>
-                            {regenerando ? 'Regenerando...' : 'Regenerar código'}
-                        </Btn>
+                        <div className="flex flex-wrap gap-2">
+                            <Btn
+                                type="button"
+                                variant="ghost"
+                                onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
+                            >
+                                <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+                            </Btn>
+                            <Btn type="button" variant="ghost" onClick={regenerar} disabled={regenerando}>
+                                {regenerando ? 'Regenerando...' : 'Regenerar código'}
+                            </Btn>
+                        </div>
 
                         {qrError && <ErrorBox>{qrError}</ErrorBox>}
                     </div>
