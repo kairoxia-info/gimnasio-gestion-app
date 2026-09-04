@@ -1030,3 +1030,1004 @@ se editó "Peso Muerto" para asignarle "Dominante de cadera", guardó bien, apar
 filtro por ese patrón mostró solo ese ejercicio — después revertido a "Sin clasificar" por SQL para
 no dejar un dato que Nalux no pidió. Probado también en 375×812 (celular): los 3 controles se
 apilan en columna, sin desbordar. `npm run lint` y `vite build` limpios antes de probar.
+
+**Nuevo acuerdo de flujo de trabajo (02/09/2026):** a partir de acá, Nalux prueba cada cambio en
+local (`localhost:3001`) y avisa explícitamente cuándo subirlo a GitHub para que Vercel lo
+despliegue — se descontinúa el patrón anterior de commitear y pushear cada fix apenas quedaba
+verificado. Los cambios de abajo (filtro de patrón sacado de la lista de ejercicios, y todo el
+bloque de "alumnos: 5 campos/mejoras nuevos") quedaron listos y verificados en local, pero **sin
+subir a git** hasta que ella lo pida.
+
+**02/09/2026 — se sacó el filtro de "patrón de movimiento" de la lista de ejercicios (quedó solo el
+campo).** Nalux probó el filtro nuevo y pidió sacarlo — pero aclaró que el campo del formulario
+(para poder seguir etiquetando ejercicios) se queda. En `EjerciciosPage.jsx`: se sacó el `<Select>`
+del filtro y el estado `filtroClasificacion`; el campo "Patrón de movimiento (opcional)" del
+formulario, la clasificación en la card, y la columna en la base **no se tocaron**. Verificado en
+local: la biblioteca quedó con buscador + con/sin demostración + chips de grupo, y el formulario de
+alta/edición sigue teniendo "Patrón de movimiento". `npm run lint` y `vite build` limpios.
+
+**02/09/2026 (mismo día) — investigación de "Alumnos" + 6 mejoras a pedido de Nalux.** Mismo
+método que con ejercicios: investigué el código actual (`AlumnosPage.jsx`/`AlumnoPage.jsx`), la
+base de datos y el research original en `PLAN.md` antes de tocar nada. Dos hallazgos:
+`alumnos.fecha_nacimiento` era **otro campo fantasma** — existe desde la migración 0001, puesta ahí
+específicamente para el aviso de "cumpleaños de hoy" que el research marcó como destacable, pero
+nunca se construyó ni el campo para cargarla ni el aviso; y `email` se podía cargar en el
+formulario pero no se mostraba en ningún lado. Nalux pidió las 6 mejoras planteadas, con el DNI
+opcional ("no sé para qué puede servir en un gimnasio").
+
+Migración `0009_alumnos_datos_extra.sql`: 3 columnas nuevas en `alumnos` — `dni`, `contacto_emergencia`,
+`objetivo`, las 3 `TEXT` nullable, sin `UNIQUE` en `dni` a propósito (es un dato de referencia, no la
+fuente de verdad de identidad del alumno). `fecha_nacimiento` no se tocó, ya existía. Sin impacto en
+RLS/GRANT (mismo razonamiento que la migración 0008 de ejercicios).
+
+Frontend:
+- **Cumpleaños**: `fecha_nacimiento` ahora se carga en el formulario de `AlumnosPage.jsx` (con nota
+  de para qué sirve) y se calcula en `DashboardPage.jsx` (compara mes+día contra hoy, ignora el
+  año). Un banner con ícono de torta aparece arriba de todo el panel, **solo** si hay al menos un
+  cumpleañero hoy (no ocupa lugar los otros 364 días del año) — link directo a la ficha de cada uno.
+- **Email visible**: se agregó a la card del listado (`AlumnosPage.jsx`) y a la ficha
+  (`AlumnoPage.jsx`, sección nueva "Datos personales").
+- **Filtro de estado**: chips "Todos / Activos / Pendientes / Inactivos" en `AlumnosPage.jsx`,
+  mismo criterio que ya usaba el badge de cada card (`ESTADO_ALUMNO()`, nueva función). Se combina
+  con la búsqueda por nombre. Mensaje de "sin resultados" ahora distingue "no hay ningún alumno
+  cargado" de "no hay alumnos que coincidan con estos filtros" (mismo ajuste que se había hecho en
+  ejercicios).
+- **DNI, contacto de emergencia, objetivo**: 3 campos nuevos en el formulario, todos opcionales,
+  sin ninguna validación especial. `objetivo` también se muestra en la card del listado (dato corto,
+  útil de un vistazo); `dni` y `contacto de emergencia` solo en la ficha completa (`AlumnoPage.jsx`,
+  misma sección "Datos personales" que el email), para no saturar la card de la lista.
+- Bug chico evitado antes de probar: `fecha_nacimiento` es `DATE` en la base — un `''` (input vacío)
+  rompe el insert/update ("invalid input syntax for type date"), a diferencia de un campo `TEXT`
+  donde `''` es válido. `guardar()` convierte `'' → null` antes de mandar el payload.
+
+Verificado en vivo contra la cuenta real (2 alumnos de prueba, "Alumno 1"/"Alumno 2" — Nalux los
+había renombrado desde la sesión de pruebas anterior, no hubo ninguna pérdida de datos ahí, solo
+verificación de que el patrón "renombrar en vez de crear" seguía dando los mismos IDs): filtro de
+estado probado (Pendientes dio "sin resultados" correctamente, ambos alumnos son manual+activo);
+se cargaron los 5 campos nuevos en "Alumno 1" con fecha de nacimiento = hoy, guardó bien, apareció
+"Objetivo" en la card, la ficha mostró los 5 en "Datos personales", y el Dashboard mostró el
+banner "Hoy cumple años Alumno 1." Datos de prueba revertidos por SQL después (los 4 campos
+nuevos volvieron a NULL), confirmado que el banner desaparece limpio sin dejar hueco cuando no hay
+cumpleañeros. `npm run lint` y `vite build` limpios antes de probar. **No subido a git — Nalux
+prueba en local primero y avisa cuándo subirlo (ver acuerdo de flujo de arriba).**
+
+**02/09/2026 (mismo día, más tarde) — "Pendiente de aprobación" más visible.** Nalux probó el
+formulario de alta y preguntó "¿cuáles serían los alumnos pendientes? porque solo puedo ponerlos
+como activos o inactivos" — confusión legítima: el checkbox "Alumno activo" del formulario nunca
+pone a nadie en "Pendiente", ese estado es exclusivo del flujo de autorregistro por QR (Bloque E,
+`origen = 'autorregistro' AND activo = false`) y se resuelve con "Aprobar" desde la lista, no desde
+el formulario. Le pregunté el alcance (solo hacerlo más visible, o además dejar que el profe
+también pueda marcarlo a mano) — eligió **solo hacerlo más visible**, sin agregar una forma manual
+de marcar "Pendiente" (ese estado se mantiene 100% automático).
+
+Tres cambios, todo frontend, sin migración:
+- `AlumnosPage.jsx`: los 4 chips de filtro ahora muestran la cantidad al lado ("Activos (2)",
+  "Pendientes (1)", etc. — nuevo `conteos` con `useMemo`), y el chip "Pendientes" suma un punto
+  naranja cuando hay al menos 1 y no es el filtro activo, para que salte a la vista sin tener que
+  leer el número. Se agregó una nota debajo del checkbox "Alumno activo" explicando en el propio
+  formulario, con las palabras de Nalux, por qué no hay una opción para elegir "Pendiente" ahí.
+- `DashboardPage.jsx`: banner nuevo (mismo patrón que el de cumpleaños de la entrada anterior,
+  pero en color `warn` en vez de `primary` — mismo criterio de color que ya usaba el badge de
+  "Pendiente" en la card) que aparece solo si hay alumnos esperando aprobación, con link directo a
+  `/alumnos`. Aparece arriba del banner de cumpleaños (más urgente/accionable primero).
+
+Verificado en vivo: como no había ningún alumno pendiente real, se simuló uno por SQL (
+`origen = 'autorregistro'` en un alumno de prueba existente) para ver el chip con conteo y punto
+naranja, el badge en la card, y el banner del Dashboard con su link a `/alumnos` — los tres
+aparecieron correctos, revertido el `origen` después por SQL. `npm run lint` y `vite build`
+limpios. **Tampoco subido a git.**
+
+**02/09/2026 (mismo día, más tarde) — "Pendiente" ahora se puede marcar a mano, no solo por
+autorregistro.** Nalux hizo una observación importante: cuando alguien se autorregistra por QR
+(`UnirsePage.jsx`), la pantalla de confirmación solo dice "ya avisamos a tu profe" — **nunca le
+muestra su propio código/QR de acceso** (`ver_plan_por_codigo()` exige `activo=true`, y en ese
+momento el alumno todavía está `activo=false`). Confirmé el flujo completo: no es un dead-end,
+porque el profesor puede compartirlo manualmente después desde la ficha del alumno (`AlumnoPage.jsx`
+ya tiene "QR para el alumno" con link para copiar), pero es un paso manual, no automático. A partir
+de esto, Nalux pidió simplificar: que el profesor pueda cargar y marcar "Pendiente" directamente
+(ej. "se anotó pero no arrancó todavía"), no solo como resultado del autorregistro — y un ícono de
+info que explique qué significa cada uno de los 3 estados.
+
+Migración `0010_alumnos_pendiente_manual.sql`: nueva columna `alumnos.pendiente BOOLEAN NOT NULL
+DEFAULT false`, independiente de `origen` (antes "Pendiente" se inferia de
+`origen='autorregistro' AND activo=false`; ahora es su propio flag, así el profesor lo puede
+prender/apagar en cualquier alumno, manual o autorregistrado). `join_gimnasio_por_codigo()`
+(0004) se actualizó con `CREATE OR REPLACE` para dejar `pendiente=true` en el INSERT de
+autorregistro — sin tocar el resto de la lógica (rate limit, validación de código), comparado
+línea por línea contra el original antes de aplicar. Probado con `SET ROLE anon` contra la función
+real: el autorregistro sigue funcionando igual y ahora deja `pendiente=true`, dato de prueba
+borrado después.
+
+Regla de lectura centralizada en `format.js` (`estadoAlumno()` + `ESTADOS_ALUMNO`, mismo patrón que
+`ESTADOS_PAGO`): `activo` siempre gana (un alumno activo nunca se lee "pendiente" aunque el flag
+haya quedado prendido de antes), si no `pendiente` gana, si no es `inactivo`. Usado ahora en las 3
+pantallas (antes cada una tenía su propia lógica ligeramente distinta — `AlumnoPage.jsx`, por
+ejemplo, ni siquiera distinguía "Pendiente" en su badge, solo Activo/Inactivo, un bug chico que
+esto de paso corrigió).
+
+Frontend:
+- `AlumnosPage.jsx`: el checkbox "Alumno activo" se reemplazó por un selector de 3 estados
+  (Activo/Pendiente/Inactivo, mismos "pills" que ya se usaban en otros lados de la app) — al
+  elegir "Pendiente" pone `activo=false, pendiente=true`. El botón "Aprobar" pasó a llamarse
+  "Activar" (ya no es específico de autorregistro) y ahora aparece para cualquier alumno en estado
+  pendiente, sea cual sea su origen; al activarlo también apaga el flag `pendiente`.
+- Ícono de info (ⓘ) al lado de los chips de filtro: al tocarlo abre/cierra un cartel con la
+  explicación de qué significa cada estado, con las palabras de Nalux ("Pendiente: cargado pero
+  todavía no arrancó — se autorregistró por QR y falta aprobarlo, o lo marcaste así a propósito").
+- `DashboardPage.jsx`: el banner de pendientes (de la entrada anterior) ahora dice "N alumnos
+  pendientes — todavía no arrancaron o están esperando que los actives" en vez de asumir que
+  siempre vienen del QR.
+
+Verificado en vivo: se marcó "Alumno 2" (real, estaba Inactivo) como "Pendiente" a mano desde el
+formulario — el badge, el contador del chip, y la ficha (`AlumnoPage.jsx`) lo mostraron correcto,
+incluso confirmando de paso que la ficha SÍ tiene el QR para compartir manualmente. Se probó
+también el botón "Activar", que lo pasó a Activo correctamente. Todo revertido después por SQL a
+su estado real anterior (Inactivo, sin pendiente). `npm run lint` y `vite build` limpios. **Tampoco
+subido a git.**
+
+**02/09/2026 (cierre) — Bloque de mejoras a Rutinas (9 cosas, sin ninguna migración).** Nalux pidió
+investigar la sección de rutinas ("está un poco pelada") comparándola contra las apps de
+referencia, y después implementar todo lo que salió. La investigación salió casi entera de
+`PLAN.md` sección 1.2, que ya tenía documentado el armador de la competencia (`gestion_rutinas.php`,
+marcado ahí como "el módulo más fuerte" y "donde está la mayor distancia respecto a lo que
+tenemos"). Contra eso, faltaban: buscador, duplicar, exportar PDF, reordenar ejercicios, bloques
+con nombre libre dentro del día, semanas (rutina que cambia semana a semana), comentario del
+profesor e intensidad por ejercicio, la fecha de inicio de la asignación y el historial de rutinas
+anteriores del alumno.
+
+**Todo entró sin tocar el schema**: `rutinas.items` es JSONB libre, así que `semana`, `bloque`,
+`intensidad` y `comentario` son campos nuevos dentro de cada item; `rutinas_asignadas.fecha_inicio`
+ya existía (y encima con `DEFAULT CURRENT_DATE`, o sea que el dato siempre se guardó bien — lo que
+faltaba era mostrarlo); y el historial sale de las asignaciones con `activa = false`, que ya se
+generaban desde el Bloque G ("Cambiar rutina" nunca borró la fila, justamente la desactiva).
+
+**Retrocompatibilidad, el punto delicado:** las rutinas ya armadas no tienen ninguno de los campos
+nuevos. Por eso toda la lectura pasa por helpers compartidos nuevos en `format.js`
+(`semanaDeItem()`, `agruparPorBloque()`, `agruparItemsRutina()`) que aplican defaults: un item sin
+`semana` cuenta como semana 1, uno sin `bloque` cae en un grupo sin encabezado. Verificado con la
+rutina real de Nalux ("Rutina baja intensidad", armada antes de todo esto): se sigue viendo
+exactamente igual que siempre.
+
+**Decisión de diseño para no ensuciar la pantalla del alumno:** los encabezados de semana solo
+aparecen si la rutina realmente usa más de una. Una rutina de una sola semana (el caso normal) se
+ve igual que antes, sin ninguna capa extra — es el mismo criterio que la referencia resolvía con
+dos modos ("por semanas" vs "rutina fija"), pero sin obligar al profe a elegir un modo: se deduce
+de lo que armó.
+
+En `RutinasPage.jsx`: buscador por nombre; "Duplicar" (copia con "(copia)" en el nombre y **sin**
+arrastrar las asignaciones, así el profe versiona tranquilo sin tocar lo que ya tienen los
+alumnos); "PDF" que imprime UNA rutina entera (tabla por día, con bloques y comentarios) usando el
+truco de `visibility` en vez de `display:none`, porque esconder el body con display rompería el
+layout de lo que sí se quiere imprimir; selector de Semana y campo Bloque al agregar un ejercicio;
+y por ejercicio, campos de Intensidad, Bloque y "Comentario para el alumno" más flechas ↑/↓ para
+reordenar dentro de su propio día.
+
+En `AlumnoPage.jsx`: la vista de solo lectura ahora agrupa igual (semana → día → bloque) y muestra
+intensidad y comentario; la tarjeta de la rutina dice "desde el DD/MM/AAAA"; y se agregó la sección
+"Rutinas anteriores". A propósito el historial solo muestra desde cuándo la tenía y no hasta
+cuándo: no hay columna de fecha de baja, e inventar una fecha de fin a partir de otra cosa sería
+mentir. También se corrigió de paso que la ficha nunca mostraba el estado "Pendiente" (solo
+Activo/Inactivo), ahora usa el mismo `estadoAlumno()` que el resto.
+
+En `MiPlanPage.jsx` (lado alumno): misma agrupación, con el comentario del profe destacado en un
+recuadro grande (es un mensaje para el alumno, no un dato más) e intensidad como línea aparte.
+
+Verificado en vivo de punta a punta contra la base real, sobre una rutina duplicada de prueba para
+no tocar la de Nalux: se agregó un ejercicio en Semana 2 con bloque "Entrada en calor", se cargó
+comentario e intensidad, se reordenaron dos ejercicios (confirmado por SQL que el orden quedó
+intercambiado en el JSONB y que los items viejos siguen sin campo `semana`), se generó el PDF
+interceptando `print()` para leer la hoja (salió con semanas, bloques, tabla y comentario), se
+probó el buscador, y del lado del alumno se vio la agrupación completa. El historial se verificó
+cambiando la rutina de un alumno descartable. Todos los datos de prueba borrados después
+(confirmado por SQL: queda 1 rutina, 3 alumnos, y la única asignación activa es la real de
+Nalux). `npm run lint` y `vite build` limpios. **No subido a git — sigue vigente el acuerdo de que
+Nalux prueba en local y avisa cuándo subirlo.**
+
+**02/09/2026 (cierre, más tarde) — el armador de rutinas pasó a ser por día, con selección
+múltiple de ejercicios (para superseries) y días explícitos.** Dos pedidos seguidos de Nalux sobre
+el armador recién terminado:
+
+1. *"quiero que en vez de seleccionar un solo ejercicio, se puedan seleccionar varios, porque
+   algunos pueden ser superseries y así"* — antes el selector era un único `<Select>`, un
+   ejercicio por click.
+2. *"que en el mismo bloque se puedan ir agregando los ejercicios, en vez de tenerlo arriba... y
+   otro que diga de agregar día"* — el buscador de agregar vivía fijo arriba de todo el modal,
+   lejos de la tarjeta que iba creciendo abajo a medida que se cargaban ejercicios; y pidió que los
+   días de la rutina sean explícitos ("Día 1", "Día 2"...) en vez de aparecer solos al elegir un
+   día en un desplegable.
+
+Nalux también describió en el mismo mensaje el modelo de "armar el plan una vez, ponerle cuántas
+semanas dura, y tenerlo para varias personas, agregando los alumnos que tiene cada plan" — eso
+**ya existe tal cual** desde el Bloque G (`duracion_semanas` + "Asignar a alumnos" + contador de
+alumnos en la card), no hizo falta tocar nada ahí; se lo confirmé para que quede claro que no es
+un pedido nuevo sin atender.
+
+**Rediseño del armador, sin cambiar el modelo de datos** (`rutinas.items` sigue siendo el mismo
+JSONB, con las mismas claves de la entrada anterior): el modal pasó de "un buscador fijo arriba +
+una vista de solo-lectura con TODOS los días abajo" a un **editor por día**: arriba, los días de la
+rutina como chips (`diasRutina`, nuevo estado — antes los días eran implícitos, se inferían de lo
+que hubiera en `items`) con un botón "Agregar día" que suma el siguiente día libre de `DIAS` y lo
+deja seleccionado; si la rutina usa varias semanas, debajo aparecen también chips de semana. Elegido
+un día (y semana), una sola tarjeta muestra sus ejercicios ya cargados (agrupados por bloque, cada
+uno editable: series/reps/peso/descanso/intensidad/bloque/comentario, con las flechas ↑/↓ de la
+entrada anterior) y **justo debajo, en la misma tarjeta**, el buscador para seguir agregando: campo
+de texto + lista con checkbox por ejercicio + campo de bloque + botón "Agregar (N)". Como el
+buscador vive al final de la tarjeta, cada ejercicio nuevo aparece arriba de él — el buscador se
+va corriendo hacia abajo con el bloque que se arma, nunca queda separado arriba de todo.
+
+Selección múltiple real: se tilda cualquier cantidad de ejercicios y "Agregar (N)" los suma todos
+juntos, en el orden en que aparecen en la lista, al mismo día/semana/bloque elegidos — exactamente
+lo que hace falta para cargar una superserie de una. Al cambiar de día (tanto tocando un chip
+existente como con "Agregar día") el campo Bloque se limpia solo, para no arrastrar el nombre de un
+bloque del día anterior; cambiar de semana sí lo conserva, porque ahí puede tener sentido repetir
+el mismo bloque semana a semana.
+
+Verificado en vivo sobre una rutina de prueba (`ZZZ_test_multiselect`, vacía): se tildaron 2
+ejercicios a la vez con bloque "Superserie" en Día 1, se confirmó que "Agregar" mostraba el
+contador ("Agregar (2)") y que ambos entraron juntos al mismo bloque; se agregó Día 2 con
+"Agregar día" y se confirmó que el campo Bloque había quedado vacío (primero falló — `agregarDia()`
+llamaba a `setDia()` directo, sin pasar por el `onClick` del chip que sí lo limpiaba — corregido
+agregando el mismo `setBloque('')` ahí); se repitió la prueba también volviendo a un chip de día ya
+existente. Guardado y confirmado por SQL: el JSONB quedó con los 2 ejercicios de Día 1 en bloque
+"Superserie" y el de Día 2 en su propio bloque, cada uno con su `dia`/`semana`/`bloque` correctos.
+Rutina de prueba borrada después. `npm run lint` y `vite build` limpios. **Tampoco subido a git.**
+
+**02/09/2026 (cierre, más tarde todavía) — "seleccionar varios ejercicios" en realidad era pedir
+superseries combinadas en una sola tarjeta.** Nalux aclaró con un ejemplo concreto lo que había
+pedido antes: no alcanzaba con agregar varios ejercicios juntos bajo el mismo bloque (lo que ya
+estaba armado) — quería que se **vean como una sola tarjeta combinada**: "peso muerto + Búlgara,
+3 series, 10 repeticiones + 8 repeticiones con cada pierna" (mismas series para los dos porque van
+en el mismo combo, reps distintas porque Búlgara es unilateral).
+
+**Diseño: `comboId`, no `bloque`.** `bloque` sigue siendo una etiqueta de texto libre para
+organizar (como ya estaba); combinar dos ejercicios en una tarjeta es una señal aparte, más
+explícita: cuando se tildan 2+ ejercicios y se agregan juntos con un solo click de "Agregar (N)",
+esos items comparten un `comboId` nuevo (`combo-<timestamp>`) además de su `bloque`. Cargar un
+ejercicio solo, o los mismos dos pero en clicks separados, no genera `comboId` — quedan como
+tarjetas independientes aunque compartan bloque. Evita el problema de "cualquier bloque con 2+
+ejercicicios se fusiona sola" (que hubiera roto bloques usados solo para organizar, no para
+combos reales) y hace que fusionar sea un gesto explícito del profesor, no una inferencia.
+
+Nuevo `agruparCombos()` en `format.js` (mismo criterio de "no migrar nada, solo helpers con
+default" que ya usan `agruparPorBloque()`/`agruparItemsRutina()`): agrupa items consecutivos con
+el mismo `comboId` y fusiona sus valores en un solo objeto -- **series se muestra una sola vez si
+todos coinciden, si no se unen con "+"; reps/peso/intensidad siempre se unen con "+" (uno por
+ejercicio, en el mismo orden que el nombre)**; nombre y grupo también se unen/deduplican;
+comentario se concatena con "·". Se usa SOLO en las 3 pantallas de solo lectura (MiPlanPage,
+AlumnoPage, el PDF de `RutinasPage`) -- el armador sigue editando cada ejercicio por separado
+(series/reps/peso propios), porque ahí sí hace falta tocar cada campo individualmente; ahí lo único
+que cambia es una caja visual "COMBO (N ejercicios)" alrededor de los que comparten `comboId`, para
+que el profesor vea que están vinculados mientras los edita.
+
+Dos detalles resueltos al implementar:
+- **Video de demostración por combo**: un combo tiene 2 ejercicios, cada uno con su propio video
+  potencial -- en vez de un solo botón "Ver cómo se hace" (que no tendría sentido, ¿cuál de los
+  dos?), se muestra un botón por cada ejercicio del combo que tenga su propio `media_url`, con su
+  nombre ("Ver Peso Muerto"). Nuevo componente `BotonVerDemo` en `MiPlanPage.jsx` que reusa la
+  misma lógica de antes (`tipoDePreview`), ahora parametrizada.
+- **Cronómetro de descanso**: si el descanso de los ejercicios del combo no coincide, queda
+  combinado con "+" (ej. "60 s + 90 s") -- en ese caso NO se ofrece el botón de cronómetro, porque
+  sería ambiguo cuál de los dos tiempos arrancar. Si coinciden (el caso normal, se descansa una vez
+  después de terminar el combo), el cronómetro funciona igual que siempre.
+
+Verificado en vivo de punta a punta contra el ejemplo exacto de Nalux, sobre una rutina y un
+alumno descartables: se tildaron Búlgara + Peso Muerto juntos (bloque "Superserie"), en el
+armador apareció la caja "COMBO (2 ejercicios)"; se les puso 3 series a los dos y reps "10" /
+"8 c/pierna" por separado; guardado y confirmado que la vista del alumno mostró exactamente
+"Búlgara (cuadriceps) + Peso Muerto" / "3" series / "8 c/pierna + 10" reps / un botón "Ver Peso
+Muerto" (Búlgara no tiene video cargado) / cronómetro funcionando (mismo descanso en los dos); la
+ficha del profesor y el PDF mostraron lo mismo combinado. Datos de prueba borrados después,
+confirmado por SQL que solo quedan las 3 rutinas/alumnos reales. `npm run lint` y `vite build`
+limpios. **Tampoco subido a git.**
+
+**02/09/2026 (cierre, más tarde todavía) — corrección: la superserie no va fusionada en un texto,
+va cada ejercicio en su propia caja chica, lado a lado.** Nalux corrigió el diseño anterior: "no no
+entendiste... es un ejercicio al lado del otro... achica las cajas para que entre todo". El
+combo NO se muestra como "Búlgara + Peso Muerto / 3 series / 8+10 reps" (un solo renglón de texto
+fusionado, lo que se había hecho antes) sino como **dos cajas chicas, una al lado de la otra,
+conectadas con un "+"**, cada una con su propio nombre/series/reps/peso — descanso, intensidad y
+comentario sí se comparten abajo, porque son del combo entero (el descanso pasa una sola vez, al
+terminar los dos ejercicios de la vuelta).
+
+`agruparCombos()` en `format.js` se reescribió: ya NO fusiona nombre/series/reps/peso en texto
+(eso vuelve a ser por-ejercicio, vía `comboItems` sin tocar) — solo combina descanso/intensidad/
+comentario, y con `combinarValor()` como red de seguridad nomás (en la práctica siempre vienen
+iguales, ver el punto siguiente). El PDF (`RutinaImprimible`) se revirtió a NO fusionar nada: cada
+ejercicio en su fila de tabla, el encabezado de bloque ("Superserie") ya alcanza para que se
+entienda que van juntos en papel.
+
+**Los campos compartidos ahora se editan una sola vez y se propagan.** En el armador
+(`RutinasPage.jsx`), `editarItem()` ahora distingue: `series`/`reps`/`peso` solo tocan el ejercicio
+que se está editando; `descanso`/`intensidad`/`bloque`/`comentario` (`CAMPOS_COMPARTIDOS_EN_COMBO`)
+se propagan a TODOS los ejercicios con el mismo `comboId`. Sin esto, el campo compartido que se ve
+una sola vez en la UI hubiera actualizado solo uno de los dos ejercicios en los datos, y habrían
+terminado con descansos distintos sin que se notara hasta imprimir o ver el plan.
+
+El armador también se rediseñó: un combo ahora muestra sus ejercicios en cajas chicas lado a lado
+(nombre + Series/Reps/Peso en 3 columnas angostas, con su propio botón de eliminar), separadas por
+un "+", y UNA sola fila de Descanso/Intensidad/Comentario compartidos debajo — en vez de dos
+tarjetas completas apiladas como antes. `MiPlanPage.jsx` y `AlumnoPage.jsx` (las 2 pantallas de
+solo lectura) siguen el mismo patrón visual, adaptado al estilo de cada una.
+
+**Ajuste tras la primera prueba en celular:** las cajas usaban `flex-wrap` con un ancho mínimo fijo
+(`min-w-[8.5rem]`), que en un celular angosto (375px) hacía que se apilaran una debajo de la otra
+en vez de quedar en la misma línea — justo lo que Nalux pidió evitar. Cambiado a `flex` sin wrap +
+`min-w-0` + `truncate` en el nombre: así el navegador SIEMPRE las mantiene en una sola fila,
+comprimiendo el ancho de cada caja (y truncando el nombre con "..." si hace falta) en vez de
+mandar la segunda caja a una fila nueva. Se aplicó igual en `MiPlanPage.jsx` y `AlumnoPage.jsx`; en
+el armador (`RutinasPage.jsx`) se dejó el fallback a apilarse en pantallas muy angostas, porque ahí
+son campos editables de verdad (inputs), no texto, y es una herramienta de trabajo que en la
+práctica se usa más en computadora.
+
+Verificado en vivo de nuevo con el mismo ejemplo (Búlgara + Peso Muerto, 3 series, 8 c/pierna + 10)
+sobre datos descartables: en el armador aparecieron las dos cajas chicas lado a lado con el "+", el
+descanso editado en una se reflejó en la otra automáticamente; guardado y confirmado en las 3
+pantallas de lectura que se ven en una sola línea, tanto en escritorio como en 375px de ancho (antes
+del ajuste se apilaban a ese ancho, después ya no). Datos de prueba borrados, confirmado por SQL
+que solo quedan las 3 rutinas/alumnos reales. `npm run lint` y `vite build` limpios. **Tampoco
+subido a git.**
+
+**02/09/2026 (cierre de la sesión) — PDF con el formato de Nalux, plan de alimentación
+rediseñado por completo, y vencimiento de planes con avisos en el panel general.** Nalux trajo
+dos PDF de ejemplo (una rutina y un plan de comida, armados aparte) y pidió que el sistema
+descargue y arme los planes así. Investigación rápida: la RUTINA ya calzaba con el modelo que se
+armó hoy (bloques + superseries), era 100% un cambio de cómo se ve el PDF; el PLAN DE COMIDA era
+distinto de raíz — hoy se cargaban alimentos sueltos con gramos/calorías de una biblioteca, el
+ejemplo es "Comida N.º 1 (elegir una opción)" con alternativas en texto libre + "Observaciones
+generales". Le pregunté el alcance del cambio de dieta (reemplazar el modelo actual, o tener las
+dos formas) — eligió reemplazar.
+
+**PDF, rediseño completo (antes imprimía el mismo DOM de pantalla, ahora hojas dedicadas):**
+`MiPlanPage.jsx` imprimía literalmente lo que se veía en pantalla (tarjetas grandes, cajas de
+colores) apagando el modo oscuro con variables CSS. Se reemplazó por el mismo criterio que
+`RutinaImprimible` de `RutinasPage.jsx`: dos componentes nuevos (`RutinaImprimiblePDF`,
+`PlanAlimentacionImprimiblePDF`), montados aparte y ocultos en pantalla (`.mp-hoja { display:none }`
++ `body * { visibility:hidden }` en `@media print`, mismo truco de visibility en vez de
+display:none para no romper el layout del resto de la página). Rutina: tabla "Ejercicio | Series x
+Reps" por bloque (combos se combinan en el texto -- "3x12+10" -- exactamente como pidió Nalux con
+su propio ejemplo), banda de color por día, rango de fechas arriba ("2/9 – 30/9", calculado de
+`fecha_inicio` + `duracion_semanas`). Comida: bandas "Comida N.º X (elegir una opción)" + viñetas,
+"Observaciones generales" al final. Los dos usan el color de marca real del gimnasio
+(`gimnasio_color_principal`, con `#E10600` de fallback) y ahora también el logo real
+(`gimnasio_logo_url`, pedido aparte en el mismo hilo) -- ambos datos ya venían de
+`ver_plan_por_codigo()` pero nunca se usaban en el PDF, solo en la pantalla.
+
+**Bug encontrado y corregido en la propia verificación:** el rango de fechas salía "2/9 – " (sin
+la fecha de fin) -- `sumarDias()` devolvía un objeto `Date`, pero `fmtFechaCorta()` espera un
+string; `String(date)` no es un ISO parseable, así que fallaba en silencio y devolvía `''`. Se
+corrigió haciendo que `sumarDias()` devuelva el string ISO directo.
+
+**`ver_plan_por_codigo()` (migración 0011):** se agregó `rutina_fecha_inicio` (ya existía en
+`rutinas_asignadas` desde 0001, nunca se devolvía) para poder calcular el rango de fechas del PDF.
+`DROP FUNCTION` + `CREATE` porque cambia la firma de `RETURNS TABLE` (mismo motivo que 0007) --
+se repitió el `GRANT EXECUTE` a `anon`/`authenticated` explícito después de recrearla (verificado
+antes y después con `SET ROLE anon` que la función sigue siendo invocable sin sesión).
+
+**Plan de alimentación, modelo nuevo:** `planes_alimentacion.items` pasó de "alimentos sueltos con
+gramos/calorías de una biblioteca" a un array de comidas `{ key, opciones: [texto, texto...] }` --
+el número de comida es la posición en el array + 1, no un campo propio (reordenar con ↑/↓ renumera
+solo). "(elegir una opción)" se muestra solo si `opciones.length > 1`, no es un campo aparte. Se
+reusó `planes_alimentacion.notas` para "Observaciones generales" (un renglón por observación,
+viñeta al mostrarla) -- esa columna existe desde el arranque del proyecto y ya la devolvía
+`ver_plan_por_codigo()` como `plan_notas`, pero ningún formulario la exponía: otro campo fantasma
+como los que se vinieron encontrando toda la sesión (`clasificacion`, `fecha_nacimiento`), así que
+esto **no necesitó ninguna migración**. La biblioteca de alimentos (`/alimentos`, con calorías)
+sigue existiendo intacta, solo se dejó de usar para armar planes -- `PlanAlimentacion` en
+`AlumnoPage.jsx` se reescribió por completo (agregar/quitar/reordenar comidas y opciones), y la
+carga de la biblioteca de alimentos se sacó de `AlumnoPage.jsx` por quedar huérfana.
+
+**Vencimiento de planes (pedido aparte, en el mismo hilo): fecha de inicio y fin por alumno, con
+aviso en el panel general.** Migración `0012_vencimiento_planes.sql`: `rutinas_asignadas.fecha_fin`
+nueva (fecha_inicio ya existía); `planes_alimentacion.fecha_inicio`/`fecha_fin` nuevas, las dos.
+Todo nullable a propósito -- sin fecha de fin cargada, ese plan no entra nunca en el cálculo de
+vencimiento (no se "inventa" un vencimiento para algo al que nunca se le puso fecha, eso hubiera
+convertido silenciosamente en "vencidos" a todos los alumnos que ya tenían rutina/dieta asignada
+antes de este cambio).
+
+Se puede cargar la fecha de fin en 3 lugares: al asignar una rutina masivamente
+(`RutinasPage.jsx`, "Asignar a alumnos" -- misma fecha para todos los tildados, tiene sentido
+porque es una sola acción), al asignar/cambiar una rutina individual (`AlumnoPage.jsx`,
+`PlanEntrenamiento`), y ahora también **editable sin reasignar** -- un campo + botón "Guardar
+fecha" en la propia tarjeta "Rutina asignada", para el caso común de "extenderle una semana más"
+sin generar una entrada nueva en el historial por algo que no cambió de verdad. Mismos 2 campos en
+`PlanAlimentacion` junto al nombre del plan.
+
+`DashboardPage.jsx` ahora carga también `rutinas_asignadas` (activas) y `planes_alimentacion`, y
+calcula "Planes por vencer": mismo criterio de 7 días que ya usa el estado de cuotas
+(`estadoDesdeVencimiento`), pero acá sin estado por default -- si no hay `fecha_fin`, ese alumno
+simplemente no aparece. Nueva `Card` "Planes por vencer" (mismo patrón que "Atención requerida"),
+lista por alumno con el tipo (Rutina / Plan de comida), la fecha, y un badge Vencido (rojo) o Por
+vencer (naranja) -- vencidos primero, ordenados por fecha.
+
+Verificado en vivo de punta a punta: se armó un plan de comida completo con el ejemplo real de
+Nalux (2 comidas, una con 2 opciones y otra con 1, más 3 observaciones), se vio en pantalla
+exactamente como el PDF de referencia, y ambos PDF (rutina real con datos de "Alumno 3", y el plan
+de comida recién armado) se inspeccionaron forzando la hoja de impresión a visible -- coinciden
+con los dos ejemplos que trajo Nalux. El vencimiento se probó con la rutina real: fecha de fin a
+mañana (apareció "Por vencer" en naranja) y fecha en el pasado (apareció "Vencido" en rojo),
+confirmado en el panel general en los dos casos. Todo revertido/borrado después (rutina sin
+fecha_fin de nuevo, plan de comida de prueba eliminado), confirmado por SQL. `npm run lint` y
+`vite build` limpios. **Tampoco subido a git — sigue vigente el acuerdo de que Nalux prueba en
+local y avisa cuándo subirlo.**
+
+---
+
+## 02/09/2026 — Biblioteca de alimentos (filtros + carga real) y bloque de mejoras a Asistencia
+
+**Alimentos.** Nalux pidió revisar el módulo ("lo veo muy pelado"). El research no daba ayuda acá:
+la app de referencia (`gestiongym.shop`) **no tiene módulo de nutrición** — PLAN.md lo marca como
+diferencial propio a defender, no como hueco a copiar — y Ultra Gym tampoco aporta nada del tema.
+El hallazgo real fue otro: desde que el plan de comida pasó a texto libre por comida, la
+biblioteca quedó **desconectada** del resto (ya no alimenta el armador de dietas), y en la base
+había **1 solo alimento con todo en 0**. Se ofreció sacarla del menú; Nalux eligió esa opción,
+pero al ver el cambio pidió revertirlo ("la sigo usando igual") — **queda en el menú como estaba**,
+y el "Flujo recomendado" del panel vuelve a mencionar alimentos. Revertido por completo.
+
+Sobre eso se sumó lo que sí pidió: **buscador por nombre** y **filtro "con / sin información
+nutricional"** (mismo patrón que Ejercicios: chips de categoría + select chico + buscador,
+combinados con AND), y se **cargó la biblioteca de verdad**: se completaron los macros del único
+alimento que había ("arroz hervido", estaba en 0/0/0/0) y se sumaron 38 más repartidos en las 8
+categorías, con calorías y macros por porción — 39 en total. Son datos reales de referencia, no
+de prueba: quedan cargados a propósito.
+
+**Asistencia.** Mismo pedido ("fijate cómo lo hicieron otros y mejorémoslo"). Del research salieron
+dos cosas ya decididas que **no** se tocan: el registro de acceso por DNI/QR en tótem (requiere
+hardware, "es otro producto") y Reservas/turnos con cupo (Fase 3, sin confirmar). Lo que sí estaba
+flojo eran 4 cosas, y Nalux las eligió todas:
+
+1. **Navegación entre semanas** (`AsistenciaPage.jsx`): antes la grilla mostraba solo la semana
+   actual, sin forma de mirar atrás. Ahora hay flechas ‹ ›, el rango de fechas visible, la leyenda
+   "Semana actual" y un botón "Hoy" que aparece solo cuando estás parada en otra semana. Las
+   fechas se arman con los campos locales y no con `toISOString()` (que pasa a UTC), para que el
+   día sea siempre el que ve el profesor.
+2. **Buscador por nombre** en la grilla semanal, con su propio estado vacío.
+3. **Alerta "Dejaron de venir"** (`DashboardPage.jsx`): nueva `Card`, mismo patrón que "Planes por
+   vencer". Mide contra la última fecha con `presente = true` (ausente y sin registro no cuentan
+   como venir). Corte en **10 días**, no 7 como los vencimientos: la asistencia se carga a mano y
+   el profesor puede saltearse un día, así que la ventana más ancha evita falsos avisos. Un alumno
+   activo que **nunca** tuvo un presente no aparece — no se puede distinguir al que dejó de venir
+   del recién dado de alta (ese caso ya lo cubre "alumnos pendientes").
+4. **Más estadística por alumno** (`AsistenciaAlumno` en `AlumnoPage.jsx`): **% de asistencia** del
+   mes y **racha de faltas seguidas**. El % se calcula sobre los días *registrados* del mes, no
+   sobre los días del mes — un día sin registro no es una falta, meterlo en el divisor haría bajar
+   el número por días que nadie tocó. La racha cuenta desde el registro más reciente hacia atrás
+   sobre todo el historial y corta en el primer presente.
+
+Verificado en vivo: toda la asistencia real es de Alumno 1 y 2 (los dos inactivos) y el único
+activo no tenía ninguna, así que se cargaron 3 registros de prueba para Alumno 3 (un presente el
+18/08 y ausentes el 31/08 y 01/09). Con eso se confirmó: la grilla navegó hasta la semana del
+17/08 y mostró la "P" verde en el martes 18 (+ apareció el botón "Hoy"), el panel mostró "Alumno 3
+— Última vez 18/08/2026 · Hace 15 días", y la ficha mostró "0 presentes · 1 ausentes · 0% de
+asistencia" en septiembre, "1 presentes · 1 ausentes · 50%" en agosto, y "Viene de 2 faltas
+seguidas" en los dos meses. **Los 3 registros de prueba se borraron después**, confirmado por SQL:
+quedaron solo las 7 filas reales de Alumno 1 y 2. `npm run lint` limpio, sin errores de consola.
+**Nada subido a git** — sigue vigente el acuerdo de que Nalux prueba en local y avisa cuándo subir.
+
+**Vista de mes completo en Asistencia** (mismo día, pedido enseguida después): "a veces el profesor
+quiere ver cuántos días fue o faltó en el mes, por cada alumno". Se sumó un toggle **Por semana /
+Mes completo** en `AsistenciaPage.jsx`; el mismo click cíclico sirve para las dos vistas y las
+flechas ‹ › pasan a moverse de mes en mes.
+
+La vista de mes se hizo primero como una fila de 31 celdas por alumno, y Nalux la corrigió
+enseguida: **"al mes hazlo como un calendario, para verlo mejor"**. Quedó entonces **una tarjeta
+con almanaque por alumno** (7 columnas, semanas como filas, huecos hasta que cae el día 1 — mismo
+patrón que el calendario que ya existía en la ficha del alumno), con **Fue / Faltó / %** en el
+encabezado de cada tarjeta. Bastante mejor que la fila larga: entra entero en el celular, sin
+scroll horizontal. El % usa el mismo criterio que la ficha del alumno (sobre días registrados, no
+sobre días del mes).
+
+Verificado con 5 registros de prueba en Alumno 3 (4 presentes + 1 ausente en septiembre): la
+tarjeta mostró "4 fue · 1 faltó (80%)", el día 1 cayó en la columna MA (martes, correcto), los
+días 1/2/8/28 en verde y el 3 en rojo, y el mes cerró en 30. Revisado también a 375 px: entra
+completo sin scroll lateral. El toggle vuelve a la vista semanal sin romper nada. **Datos de
+prueba borrados**, confirmado por SQL (quedaron las 7 filas reales de Alumno 1 y 2). Lint limpio,
+sin errores de consola.
+
+**Vista "Pasar lista del día"** (mismo día, tercer pedido sobre Asistencia): "en el día arranca el
+día y poner todos los alumnos en una lista y que solo se ponga presente o ausente (...) hasta
+cerrar el día, después eso se registra automáticamente en la semana y mes". Se sumó una tercera
+vista al toggle, y pasó a ser **la vista por defecto** — pasar lista es la operación diaria;
+semana y mes son para mirar hacia atrás.
+
+La lista muestra un alumno por fila con **dos botones explícitos (Presente / Ausente)** en vez del
+click cíclico de las grillas — en la operación diaria conviene pedir el estado expresamente y no
+que dependa de cuántas veces tocaste. Volver a tocar el botón activo borra la marca (así se
+corrige un error). Arriba, contador "X presentes · Y ausentes · Z sin marcar" y el botón **Cerrar
+el día**, que marca ausentes de una a **los que no tienen ninguna marca** (a los ya marcados no
+los toca), con modal de confirmación que lista por nombre a quiénes va a marcar. Opera sobre todos
+los alumnos activos y no sobre el filtro del buscador, para no cerrar el día a medias.
+
+Nalux preguntó después **qué pasa si se olvida de cerrar el día**. No hace falta hacer nada:
+**cada botón escribe en la base al instante**, así que todo lo marcado ya queda registrado y se ve
+en semana/mes — "cerrar el día" es solo el atajo para el resto. **No se implementó ningún cierre
+automático a propósito**: marcar ausente a todo el que no tenga registro en días que nadie tocó
+inventaría faltas los domingos, feriados y cualquier día que el gimnasio no abrió, ensuciando el
+% de asistencia y la alerta de "dejaron de venir". En vez de eso se aclara en pantalla que cada
+marca se guarda sola.
+
+Verificado con 3 alumnos de prueba (ZZZ_test_lista_A/B/C) más Alumno 3: se marcó 1 presente y 1
+ausente a mano (contador "1 presentes · 1 ausentes · 2 sin marcar"), se cerró el día (el modal
+listó a los 2 pendientes por nombre; quedó "1 presentes · 3 ausentes · 0 sin marcar" y el botón
+desapareció), se comprobó en la vista semanal que aparecían la P y las 3 A en el miércoles 02, y
+se verificó que volver a tocar un botón activo borra la marca. **Los 3 alumnos de prueba y todas
+sus asistencias fueron borrados**, confirmado por SQL (quedaron las 7 filas reales de Alumno 1 y
+2). Lint limpio, sin errores de consola.
+
+---
+
+## 03/09/2026 — Bloque de Pagos + separación Configuración / Precios
+
+**Investigación previa.** `PagosPage` era solo lectura (no se podía cobrar desde ahí: el estado
+vacío mandaba a la ficha del alumno), sin buscador ni filtros. Aparecieron dos features a medio
+construir: `pagos.monto_adeudado` existía en la base y `format.js` ya tenía la lógica de "con
+deuda", pero **el formulario nunca escribía ese campo**, así que el estado no se podía activar
+nunca; y Avisos segmentaba por "Con deuda"/"Sin cuota" mientras Pagos/Dashboard/ficha solo tenían
+3 estados — los dos módulos hablaban idiomas distintos.
+
+**Migración 0013.** `gimnasios.dias_gracia_cuota` (default 0) y `gimnasios.dias_aviso_vencimiento`
+(default 7 — deja el comportamiento anterior igual), más `pagos.numero` correlativo **por
+gimnasio** con trigger `asignar_numero_comprobante()` (SECURITY DEFINER + `FOR UPDATE` sobre la
+fila del gimnasio para serializar, y UNIQUE (gimnasio_id, numero)). Probado: 3 inserts seguidos
+dieron 1, 2, 3.
+
+**Decisión de modelado (importante).** La deuda **no se guarda como filas**: el estado "deudor" y
+el recargo se CALCULAN desde `periodo_hasta` + la config del gimnasio. Es el mismo criterio que
+Nalux aprobó para asistencia ("sino se llenaría la base de datos que serían basura"). Lo mismo con
+el comprobante: no se guarda un PDF, cada fila de `pagos` ES el comprobante y se reimprime — un
+archivo guardado quedaría desactualizado si se corrige el pago. Y el % de recargo NO se duplicó a
+nivel gimnasio: ya existía `configuracion_precios.interes_mora` por plan.
+
+**`format.js`.** Nuevos `estadoCuota(pago, config)` (6 estados: al_dia, proximo, en_gracia,
+vencido, con_deuda, sin_cuota) y `deudaEstimada(alumno, estado, planes)` (lo que le tocaría pagar
+según su `plan_precio_nombre`, con recargo, devolviendo null si no hay plan/precio para no mostrar
+un número inventado). NO se tocaron `estadoDesdeVencimiento()` ni `segmentoNotificacion()`: la
+segunda está espejada en SQL y desincronizarlas haría mentir al contador de audiencia de Avisos.
+
+**`PagosPage` reescrita.** Cobrar desde la propia pantalla (botón general + "Cobrar" por fila),
+buscador y filtro por estado, métricas de Deuda total y desglose de estados, **"Activar sin
+cobrar"** (registra el período con importe 0 y todo como saldo pendiente, así queda "Con deuda" y
+no como si hubiera pagado), pago parcial, y formas de pago efectivo / transferencia / tarjeta.
+**Comprobante**: numerado, con logo y color del gimnasio, 12pt, cada dato en su fila (nada de
+posicionamiento absoluto que se encime). Nalux pidió después **poder verlo en la app**, así que
+se muestra en un modal y desde ahí se imprime, en vez de disparar la impresión directo.
+
+**Bugs encontrados y arreglados en el camino** (los dos aparecieron en la consola, no los reportó
+Nalux): (1) los valores del comprobante salían **blanco sobre blanco** porque el `color:#000` solo
+estaba dentro del `@media print` y fuera de impresión heredaba el tema oscuro — ahora va explícito
+en el style inline; (2) en Asistencia, tocar dos veces rápido la misma celda insertaba dos veces
+la misma `(alumno_id, fecha)` y reventaba con 23505 sin avisar nada — se agregó un lock por celda
+(`enVuelo`) y `cargar()` ahora devuelve la promesa para que el lock se suelte recién cuando el
+estado ya se actualizó.
+
+**Separación Configuración / Precios** (pedido de Nalux: "un modulo mas de configuracion y ahi
+pasar todo lo que se pueda configurar de la app, y en precios dejar solo configuracion de
+precios"). `/configuracion` queda con datos del gimnasio (nombre, logo, color), autorregistro +
+QR y vencimiento de cuotas. `/precios` es nueva (`PreciosPage.jsx`) con planes y **períodos
+configurables** — migración 0014, tabla `configuracion_periodos` (nombre + días + activo, con RLS
+y GRANT), sembrada con Clase suelta / Diario / Semanal / Mensual / Trimestral / Anual. La duración
+va en **días** y no en "meses" para que pueda crear cualquier cosa (un pase de 15 días) sin que el
+sistema tenga que interpretar nombres. Un período usado por un plan no se puede borrar (avisa
+cuántos planes lo usan). Menú: "Precios" (icono Tag) y "Configuración" (Settings).
+
+Verificado en vivo las 3 pantallas, sin errores de consola en carga limpia, `eslint` limpio. Ojo:
+`Wallet2` NO existe en esta versión de lucide-react (rompió el HMR de AppLayout hasta cambiarlo
+por `Tag`). Los datos de prueba propios se borraron; **el pago de $20.000 de Alumno 3 y su
+asistencia del 02/09 son de Nalux probando, no se tocan.** Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Bloque de Avisos: editar, ver quién leyó, aviso automático de cuota
+
+**Investigación previa.** A diferencia de los módulos anteriores, Avisos ya era el más completo:
+segmentación por 6 estados de cuota con contador de audiencia en vivo, acuse de lectura ("X / Y
+leyeron"), y archivar/reactivar sin borrar nunca (para no perder el historial de
+`notificaciones_leidas`). Lo que faltaba: no se podía editar un aviso ya creado, "X/Y leyeron" no
+decía QUIÉN faltaba, y no había forma de avisar automáticamente sin crearlo a mano cada vez —
+aunque ya existía `gimnasios.dias_aviso_vencimiento` (migración 0013) sin usarse para disparar
+nada, solo para pintar el estado "Próximo a vencer".
+
+**`AvisosPage.jsx`**: `abrirEditar(aviso)` + `editId` reutilizan el mismo modal de "Nuevo aviso"
+(ahora "Editar aviso" cuando corresponde) y el mismo `guardar()` (create vs update según
+`editId`). "X / Y leyeron" pasó a ser un botón que abre un modal con **dos listas de nombres**
+(`detalleLectura()`): quiénes leyeron y quiénes no — calculado recalculando la audiencia HOY
+(`segmentoNotificacion`) y restándole los que están en `notificaciones_leidas`, así un alumno que
+cambió de segmento desde que se creó el aviso ya no aparece como pendiente de algo que hoy no le
+corresponde.
+
+**Migración 0015 — Aviso automático de cuota.** Mismo criterio que Nalux ya aprobó para
+asistencia y deuda ("sino se llenaría la base de datos que serían basura"): **no genera filas**.
+Una sola plantilla por gimnasio (`gimnasios.aviso_cuota_activo/titulo/mensaje`, con variables
+`{nombre} {vence} {plan} {gimnasio}`) que `ver_plan_por_codigo()` arma AL VUELO para cada alumno
+según su propio vencimiento — no hay un aviso por alumno por día, y por eso tampoco pasa por
+`notificaciones_leidas` (no hay qué "marcar como leído" de algo que no existe como fila; el
+recordatorio simplemente desaparece solo cuando el alumno paga). Firma nueva de la RPC (4 columnas
+más: `cuota_vence, cuota_estado, cuota_aviso_titulo, cuota_aviso_mensaje`) → DROP + CREATE +
+re-GRANT a anon/authenticated (mismo patrón que 0011).
+
+Se muestra solo si: el gimnasio lo tiene prendido, Y el alumno está vencido/con deuda O le vence
+dentro de la ventana de `dias_aviso_vencimiento`, Y **no** es "sin_cuota" (a quien nunca pagó no se
+lo alarma con esto — no es que se atrasó, nunca empezó). Ojo con una decisión técnica: el corte de
+"próximo" adentro de la función quedó con el mismo `<= 7` hardcodeado que ya tenía (no se cambió a
+usar `dias_aviso_vencimiento` ahí), porque ese bloque está espejado con `segmentoNotificacion()`
+(JS) que cuenta la audiencia de los avisos manuales en la pantalla del profesor — si uno usara la
+config y el otro no, el contador "X / Y leyeron" mentiría. La config sí se usa, más abajo, para
+decidir si mostrar el recordatorio automático.
+
+**`ConfiguracionPage.jsx`**: tarjeta nueva "Aviso automático de cuota" (checkbox activo + título +
+mensaje con pista de las variables disponibles), debajo de "Vencimiento de cuotas".
+
+**`MiPlanPage.jsx`**: banner nuevo con ícono de billetera (`text-warn`/`border-warn`, distinto del
+cartel rojo del aviso manual) que muestra `plan.cuota_aviso_titulo/mensaje` cuando vienen no-nulos
+— sin botón "Entendido" (no hay nada que reconocer, es un estado que se resuelve pagando).
+
+**Verificado en vivo, de punta a punta:**
+- 3 alumnos de prueba SQL (vencido / próximo-a-vencer / sin-cuota) contra `ver_plan_por_codigo()`
+  real vía `SET ROLE anon`: el vencido y el próximo mostraron título/mensaje con las 4 variables
+  bien reemplazadas; el sin-cuota devolvió `cuota_aviso_titulo: null` — no se le muestra nada.
+- La tarjeta de Configuración: tildé el checkbox, guardé, confirmé por SQL que `aviso_cuota_activo`
+  quedó `true` en la base real — después lo volví a `false` (default), porque activarlo con el
+  mensaje genérico es una decisión de Nalux, no algo para dejar prendido sin que lo haya elegido.
+- Alumno 3 (real, cuota vigente hasta 03/10) no mostró ningún banner — cero falsos positivos.
+- Avisos: creé un aviso de prueba, "ver quiénes" mostró a Alumno 3 en "Todavía no lo vieron",
+  Editar abrió el modal prellenado con los valores existentes, guardé un cambio de título y lo
+  confirmé por SQL. **Nota de la sesión (cambié de Opus a Sonnet a mitad de esta verificación):**
+  el screenshot del navegador dejó de pintar el modal en un momento (aunque el DOM, los estilos
+  computados y el hit-testing confirmaban que SÍ estaba ahí, visible y funcionando) — es un
+  artefacto de la herramienta de captura, no un bug de la app; se verificó todo por el DOM real en
+  vez de confiar en la imagen.
+
+Todos los datos de prueba (`ZZZ_test_aviso_*`, `ZZZ_test_lista_*` de antes) fueron borrados y
+confirmados por SQL. `eslint` limpio en todo el workspace y `vite build` sin errores (2690 módulos).
+Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Campanita de notificaciones para el profesor
+
+Pedido: "que la misma aplicación tenga notificaciones (...) las cuotas vencidas o las que se estén
+por vencer o deudas, que lleguen como una notificación arriba, una campanita que avise y redirija
+a donde tiene que ir el profesor". Distinto de los avisos de Avisos/MiPlanPage (esos son para el
+ALUMNO); esto es para el PROFESOR, dentro de su propia app.
+
+**`NotificacionesCampana.jsx`** (componente nuevo, vive en el header de `AppLayout.jsx`, antes del
+toggle de tema): un ícono de campana con badge de cantidad. Al hacer click abre un panel con la
+lista de alumnos activos en estado `vencido`, `con_deuda`, `en_gracia` o `proximo` (reusa
+`estadoCuota()` de `format.js`, mismo cálculo que ya usa Pagos — sin filas nuevas, se recalcula al
+vuelo). A propósito **no incluye "sin_cuota"**: un alumno que nunca pagó no es la misma alerta
+urgente, y llenaría la campanita de ruido en un gimnasio con altas recientes. Cada fila es
+clickeable y **redirige directo a `/alumnos/:id?tab=pagos`** — la pestaña de Pagos de la ficha del
+alumno, ya abierta, sin que el profesor tenga que buscarla. Un botón al pie manda a `/pagos`
+entero. Se cierra clickeando afuera (primer uso de ese patrón en la app; no había otro dropdown).
+
+**`AlumnoPage.jsx`**: ahora lee `?tab=` de la URL al montar (`useSearchParams`) para poder abrir
+directo en cualquier pestaña válida — hasta ahora la pestaña inicial era siempre "entrenamiento",
+sin forma de deep-linkear.
+
+Como `AppLayout` se remonta en cada página (no hay layout raíz persistente), la campanita vuelve a
+pedir alumnos+pagos en cada navegación — mismo criterio ya usado en Dashboard/Pagos, liviano con
+el volumen real de un gimnasio.
+
+**Bug real encontrado y arreglado en la propia verificación** (no lo vio Nalux): en mobile, el
+panel se abría desbordado por el borde izquierdo de la pantalla (`left: -26px` medido a 375px de
+ancho) — la campana no queda pegada al borde derecho real (el toggle de tema va después en el
+header), así que anclar el panel con `right-0` relativo al botón lo corría de más hacia la
+izquierda. Solucionado con el mismo recurso que ya usa el drawer del menú lateral: `fixed` con
+margen fijo a los dos bordes en mobile, y recién de `sm:` en adelante vuelve a anclarse como
+dropdown normal bajo la campana.
+
+**Verificado en vivo:** 2 alumnos de prueba (uno vencido, uno con deuda parcial) hicieron aparecer
+"2" en la campana; el panel los listó ordenados (vencido antes que con_deuda) con su badge de
+estado; click en uno navegó a `/alumnos/:id?tab=pagos` y la ficha abrió directo en "Estado de
+cuota: Atrasado". Probado el desborde mobile (arreglado, confirmado `left:16` a 375px) y el layout
+en desktop (`left:216`, dentro de un viewport de 655px). Alumno 3 (real, al día) no genera ninguna
+alerta — cero falsos positivos. Datos de prueba borrados, confirmado por SQL (quedó el único pago
+real). `eslint` limpio y `vite build` sin errores (2691 módulos). Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Investigación de Precios: 3 bugs reales corregidos
+
+Pedido: "vamos a la sección precios, investiga y veamos si nos falta algo o corregir algo". A
+diferencia de las investigaciones anteriores (que eran mayormente features faltantes), acá
+aparecieron **bugs reales de datos/lógica**, corregidos directamente en vez de preguntados:
+
+**1) Períodos "Mensual"/"Trimestral" sembrados en minúscula.** `create_gimnasio()` (0001) siembra
+dos planes de ejemplo con `periodo: 'mensual'/'trimestral'` -- desde la migración 0014 (períodos
+configurables), el período de un plan se matchea por NOMBRE EXACTO contra
+`configuracion_periodos.nombre` (sembrado en mayúscula: "Mensual", "Trimestral"...). Con la
+minúscula, el <select> de "Editar plan" no tenía nada seleccionado. **Migración 0016**: corrige los
+2 planes reales de este gimnasio (`UPDATE ... SET periodo = 'Mensual' WHERE periodo = 'mensual'`,
+ídem trimestral) y reescribe `create_gimnasio()` (mismo nombre de función, `CREATE OR REPLACE` —
+no resetea grants) para sembrar también los 6 períodos base y los 2 planes de ejemplo ya en
+mayúscula, para que un gimnasio nuevo arranque bien desde el alta.
+
+**2) `aplicarPlan()` (Pagos) ignoraba `configuracion_periodos`.** Adivinaba la duración comparando
+`p.periodo` contra 4 strings fijos ('Trimestral'/'Anual'/'Semanal'/'Diario'); cualquier período que
+Nalux creara ella misma (una "Clase suelta", un "Pase de 15 días") caía en el `else` y el sistema
+lo trataba como un mes completo, sin avisar -- contradecía el sentido mismo de haber hecho los
+períodos configurables. **Corregido** en `PagosPage.jsx`: ahora busca el período por nombre en
+`configuracion_periodos` y usa sus días reales (`hasta.setDate(hasta.getDate() + dias)`), con 30
+días de piso si el nombre no matchea nada (plan viejo con texto libre). **Mismo bug existía
+duplicado** en el viejo formulario de pago de la ficha del alumno -- ver punto 3.
+
+**3) Formulario de pago duplicado y desactualizado en `AlumnoPage.jsx`.** La ficha del alumno
+tenía su PROPIO "Registrar pago" (componente `PagosAlumno`), separado del que se armó en Pagos
+esta sesión: sin pago parcial, sin "activar sin cobrar", sin comprobante, con el mismo bug de
+período de arriba, y calculando el estado de cuota con `estadoDesdeVencimiento()` (3 estados, sin
+la config de días de gracia/aviso del gimnasio) en vez de `estadoCuota()` (6 estados, la que ya
+usan Pagos/Dashboard/la campanita). Podía mostrar **"Atrasado" en la ficha y "Con deuda" en Pagos
+para el mismo alumno al mismo tiempo** -- inconsistencia real, no cosmética. Se sacó la
+duplicación: `PagosAlumno` quedó como vista de solo lectura (estado + historial, con
+`estadoCuota()`) y el botón "Registrar pago" ahora manda a `/pagos?alumno=<id>` -- `PagosPage`
+lee ese query param al montar, abre el modal de cobro con el alumno ya elegido, y lo limpia de la
+URL con `replace` para que no se reabra solo si se recarga. Mismo patrón que `?tab=pagos` (bloque
+de la campanita). `AlumnoPage.jsx` dejó de pedir `configuracion_precios` (ya no arma el cobro acá)
+y ahora pide `dias_gracia_cuota`/`dias_aviso_vencimiento` de `gimnasios` (RLS ya filtra por tenant,
+no hace falta pasar el id a mano).
+
+**Verificado en vivo:** "Editar plan" en Mensual mostró el período ya seleccionado (antes vacío).
+Se creó un período de prueba de 15 días + un plan apuntándolo -- ninguno de los 4 strings que el
+código viejo reconocía -- y "Registrar pago" calculó correctamente 03/09 → 18/09 (15 días exactos;
+con el bug viejo hubiera dado 03/10, un mes). El flujo `/alumnos/:id → Registrar pago → /pagos`
+abrió el modal con Alumno 3 ya preseleccionado (confirmado por DOM: option "Alumno 3" con su id).
+La ficha del alumno mostró "Al día" para su cuota real, coincidiendo ahora con Pagos. Sin errores
+de consola. Datos de prueba borrados, confirmado por SQL. `eslint` limpio, `vite build` sin errores
+(2691 módulos).
+
+**Pendiente de decisión de Nalux, no bugs sino features faltantes** (se le va a preguntar):
+`configuracion_precios.dias_semana` es puramente decorativo (se guarda y se muestra en la tarjeta
+del plan, pero nada más en la app lo lee ni lo usa); los métodos de pago de Pagos siguen
+hardcodeados (Efectivo/Transferencia/Tarjeta), no configurables desde Precios como si lo tiene la
+referencia; y los descuentos son un único % libre por plan, no una lista de descuentos con nombre
+para elegir (también algo que tiene la referencia). Nada de esto se tocó todavía.
+
+Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Descuentos con nombre
+
+De las 3 opciones no-bug que quedaron pendientes en la investigación de Precios, Nalux eligió
+"Descuentos con nombre". **Migración 0017**: tabla `configuracion_descuentos` (nombre, porcentaje,
+activo), mismo patrón que `configuracion_periodos` (RLS + GRANT a authenticated). A propósito NO
+queda referenciada por ningún plan (a diferencia de `periodo`, que si es un campo de
+`configuracion_precios`): un descuento con nombre se elige AL COBRAR, no al armar el plan, así que
+borrarlo nunca deja nada huérfano y no hace falta el chequeo de "en uso" que sí tiene
+`borrarPeriodo()`.
+
+**`PreciosPage.jsx`**: tarjeta "Descuentos" nueva, mismo ABM que "Períodos" (crear/editar/eliminar,
+sin período de gracia porque no aplica acá).
+
+**`PagosPage.jsx`**: select "Aplicar descuento" en el modal de cobro (solo aparece si hay al menos
+uno activo cargado) que pisa el campo numérico "Descuento (%)" ya existente al elegir uno — el
+campo sigue editable a mano después, para un descuento puntual que no está en la lista.
+
+Verificado en vivo: creado un descuento de prueba (10%) desde Precios, apareció en el select de
+Pagos con el formato "ZZZ_test_descuento (-10%)", y al elegirlo el campo numérico pasó a "10"
+correctamente. Sin errores de consola. Datos de prueba borrados, confirmado por SQL. `eslint`
+limpio, `vite build` sin errores (2691 módulos).
+
+Con esto queda cerrado el bloque de Precios (3 bugs corregidos + esta feature). Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Configuración: color, logo+nombre y comprobante
+
+**Bug real: el color del gimnasio no pintaba la app.** Nalux: "recién cambié a un color morado
+pero la app no cambió de color". Causa: `--primary`/`--accent`/`--ring` están hardcodeados al rojo
+de Kairox en `index.css`, y NADA en el código los sobreescribía con
+`gimnasios.color_principal` -- el picker de Configuración guardaba el valor perfecto, pero solo se
+leía suelto en el PDF del comprobante y en los PDF de MiPlanPage, nunca para pintar la interfaz en
+vivo. Nuevo `lib/colorTema.js`: `aplicarColorGimnasio(hex)` convierte HEX → HSL (mismo formato "H
+S% L%" que ya usan las custom properties, sin tocar ningún className) e inyecta
+`--primary/--accent/--ring` + sus `-foreground` (blanco o casi-negro según luminancia relativa
+WCAG, para que un color pastel no deje texto blanco invisible) directo en `<html>` vía JS. Se llama
+desde dos lugares: `AuthContext.jsx` (toda la app del profesor, dispara solo apenas cambia
+`profile.gimnasios.color_principal` -- se re-ejecuta solo con `refreshProfile()`, que
+`guardarDatosGimnasio()` ya llamaba) y `MiPlanPage.jsx` (pantalla pública del alumno, con
+`plan.gimnasio_color_principal` que ya traía la RPC). **A propósito NO se tocó `--destructive`**:
+los botones "Eliminar" quedan siempre rojos aunque el gimnasio elija otro color -- más seguro que
+un peligro del mismo tono que la marca. Verificado con el morado real que ya tenía cargado
+(`#7b00e0`): `--primary` computado dio `273 100% 44%` (matemáticamente correcto) y se vio en
+botones, íconos y acentos en Panel/Configuración, desktop y mobile.
+
+**Bug real: el nombre del gimnasio desaparecía si había logo.** `GimnasioMark` (AppLayout.jsx)
+devolvía SOLO el `<img>` en cuanto había `logo_url` -- el nombre nunca se mostraba al lado, solo en
+el caso sin-logo (ahí sí, grande y en mayúscula, porque tenía que sostener la marca solo). Nalux:
+"el nombre del gym, que se vea al lado del logo (...) chico y sutil, pero que la firma de kairox ia
+no se pierda". Ahora logo (o el ícono de respaldo) y nombre van siempre juntos; con logo real el
+texto es chico/gris/sin mayúsculas (subordinado al logo), sin logo sigue siendo grande/en mayúscula
+(sostiene la marca solo). La firma de Kairox (`KairoxFooterMark`, en el pie del sidebar/drawer) no
+se tocó -- sigue ahí.
+
+**Código de invitación: aclarado, no removido.** Nalux dijo no verle sentido "si no hay login para
+los alumnos" -- posible confusión con el código de ACCESO individual del alumno (QR sin login,
+Decisión 20). Se le explicó la diferencia: el código de invitación es para AUTORREGISTRO (un
+alumno nuevo se anota solo, queda "pendiente" hasta que el profesor aprueba) -- de hecho ya estaba
+en uso: el Dashboard mostraba "1 alumno pendiente" real. Sigue sin resolverse si lo quiere de todos
+modos ahora que entiende qué hace -- no se tocó nada de esta sección.
+
+**Investigación "qué falta en Configuración"** (comparando contra PLAN.md 1.16, Personalización de
+marca): la mayoría ya estaba hecha o superada (comprobante numerado, aviso de cuota con 4
+variables vs. las 4 de la referencia). 3 gaps reales encontrados, presentados con AskUserQuestion:
+- **Bloquear el plan si la cuota está vencida** -- **Nalux eligió NO, dejarlo como está** (el
+  alumno siempre puede ver su plan, deba o no).
+- **Cambiar la propia contraseña desde Configuración** -- **Nalux eligió NO sumarlo** (solo existe
+  hoy el flujo de "olvidé mi contraseña" por mail).
+- **Texto de pie del comprobante editable** -- **Nalux SÍ lo quiso.** Implementado: migración 0018
+  agrega `gimnasios.comprobante_texto_pie` (default = el texto fijo que ya había, para no
+  cambiarle nada a nadie que no toque la configuración), tarjeta nueva "Comprobante" en
+  ConfiguracionPage.jsx (Textarea, tope 255 caracteres con contador), y `PagosPage.jsx` ahora lee
+  `gimnasio.comprobante_texto_pie` en vez del string hardcodeado (el párrafo del pie directamente
+  no se renderiza si el campo queda vacío).
+
+Verificado en vivo: color morado real reflejado correctamente app-wide; logo+nombre juntos y
+chicos, confirmado por captura en desktop y mobile; texto de comprobante cambiado a un valor de
+prueba, confirmado que aparece en el PDF/vista del comprobante, y restaurado al texto original
+después. Sin errores de consola en ningún paso. `eslint` limpio, `vite build` sin errores (2692
+módulos). Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Código de invitación, sacado
+
+Después de aclarar qué hacía (autorregistro, no login del alumno), Nalux fue tajante: "code de
+invitación, sacalo". Se sacó de `ConfiguracionPage.jsx`: la tarjeta completa (código, checkbox
+"Autorregistro activo", QR, botón "Regenerar código"), las funciones `copiarCodigo`/
+`toggleAutorregistro`/`regenerarCodigo`, el `useEffect` que generaba el QR, los 5 estados que solo
+servían para esto (`codigoError`/`copiado`/`autorregistroSaving`/`regenerando`/`qrDataUrl`), el
+import de `qrcode`, y las menciones a "autorregistro" en el subtítulo/meta de la página.
+
+**Alcance de la decisión, importante dejarlo claro:** se sacó de la UI y se **apagó
+`autorregistro_activo` en la base para este gimnasio** (chequeado server-side de verdad, no
+decorativo -- `join_gimnasio_por_codigo()` y `listar_planes_para_codigo()` exigen
+`autorregistro_activo = true`, así que un link/QR viejo que alguien tuviera guardado ya no
+funciona). **NO se borró el esquema** (columnas `codigo_invitacion`/`autorregistro_activo`, las
+RPC, `UnirsePage.jsx`, la ruta `/unirse/:codigo`) -- queda como capacidad muerta pero reutilizable,
+no como decisión de producto para siempre. Motivo: esto es un SaaS pensado para venderse a otros
+gimnasios (ver la nota de negocio de "Facturación de Kairox a los gimnasios clientes" en este mismo
+CONTEXT.md); sacar el autorregistro de SU gimnasio es una preferencia operativa de Nalux, no
+necesariamente algo que un futuro cliente distinto también querría sacado del producto entero. Si
+en algún momento se decide sacarlo también del código/esquema para siempre, es un paso aparte.
+
+`eslint` limpio, `vite build` sin errores (2692 módulos). **No pude reverificar visualmente en el
+navegador** -- la sesión se cerró sola mientras tanto y no hay re-login posible sin escribir la
+contraseña de Nalux (regla dura, nunca se hace). Pendiente que ella lo confirme en local. Nada
+subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Rediseño premium de Login/Registro/Recuperar contraseña
+
+Pedido: "vamos con el loguin, ya que no tiene color definido (...) yo pensaba en un gris ocuro con
+ondas de grises claron (...) dorados (...) profesional y premium (...) que impacte, no tan cargado
+ni tan pelado. llama al agente fronend para que te ayude". Se delegó al subagente
+`frontend-architect` con un brief detallado (contexto de negocio, cita textual del pedido,
+restricciones técnicas). **Dos intentos fallaron por sobrecarga transitoria del servidor en Opus
+(529 Overloaded)** antes de tocar ningún archivo -- el tercer intento, con Sonnet, se completó
+limpio.
+
+**Hallazgo del propio agente, correcto:** `LoginPage.jsx`, `OnboardingPage.jsx` y
+`ResetPasswordPage.jsx` compartían EXACTAMENTE el mismo shell visual (mismos blobs `bg-primary/20`,
+misma barra, misma card) -- rediseñar solo el login hubiera dejado un salto visual roto al pasar a
+Registro o a "Olvidé mi contraseña". Se extrajo a un componente nuevo compartido,
+`src/components/AuthBackdrop.jsx`, aplicado en las tres.
+
+**Paleta (fija, no depende del theme claro/oscuro):** base `#110f0d` con gradiente sutil a
+`#0e0c0a`/`#17140f`. "Ondas": 2 radiales de gris cálido con blur (`#433c30`, `#242019`) + 1 halo
+dorado casi imperceptible (`#c9a86a` al 8%) detrás de la card, con un drift lentísimo (22-32s) vía
+`@keyframes` CSS puro (nada de JS/librerías nuevas), respetando `prefers-reduced-motion`. Dorado de
+acento: `#d8b876` (links/kickers) y gradiente `#e3c98f → #c9a86a` (botones primarios, texto encima
+`#1c1509` -- ~8:1 de contraste, verificado). Línea superior: antes una barra sólida roja, ahora un
+hairline dorado con degradé + resplandor radial detrás.
+
+**Decisión de diseño explícita:** esta identidad es fija (Kairox, pre-login), NO se adapta al modo
+claro/oscuro del sistema -- se sacó el `<ThemeToggle />` de las 3 pantallas. Truco técnico para no
+tocar `ui-kit.jsx`: la raíz de `AuthBackdrop` lleva `className="dark"`, forzando que
+`Input`/`Btn`/`Field`/`ErrorBox` (que leen `--background`/`--card`/`--border` de `index.css`)
+resuelvan siempre a sus valores oscuros sin importar qué theme haya quedado guardado en la sesión
+del navegador. `index.css` y `colorTema.js` (theming por-gimnasio de post-login) NO se tocaron. El
+`<Logo />` compartido (ícono + "Kairox" en rojo, usado en 6 lugares de la app) se dejó intacto a
+propósito -- es la firma de marca, no se toca.
+
+**Repasado y corregido después de la entrega del agente** (fuera del alcance que se le dio, pero
+necesario para consistencia real): el botón "Enviar enlace" del `PasswordRecoveryModal` (componente
+aparte, no listado en el brief) seguía en rojo -- se le aplicó el mismo gradiente dorado. Y en
+Onboarding, el selector nativo `<input type="file">` del logo (`file:bg-primary`) también quedaba
+rojo -- corregido al mismo gradiente. Confirmado con `grep` que no queda ningún `bg-primary`/
+`text-primary` crudo en las 3 páginas.
+
+**Verificado en vivo:** Login (modo ingreso y modo registro), modal de recuperar contraseña
+(dorado consistente después del fix), ResetPasswordPage en su estado "enlace inválido" (no se pudo
+probar el estado de éxito real sin un token de recuperación válido), mobile a 375px sin desborde
+horizontal (`scrollWidth === clientWidth`), sin errores de consola en ningún paso. **Onboarding NO
+se pudo probar en vivo** (ruta protegida, requiere sesión, y la sesión del navegador seguía cerrada
+de antes -- no hay re-login sin escribir la contraseña de Nalux, regla dura) -- se revisó a fondo
+por código en cambio (mismo patrón que las otras dos, sin ningún `bg-primary` crudo salvo el que se
+corrigió). `eslint` limpio, `vite build` sin errores (2693 módulos).
+
+**Fuera de alcance, mencionado por el propio agente:** `UnirsePage.jsx` (pantalla donde un alumno
+se une a un gimnasio por QR) sigue con el shell viejo -- no se tocó porque no estaba en el pedido
+(era específicamente sobre login/registro/recuperar), pero es candidata natural para el mismo
+`AuthBackdrop` si en algún momento se quiere la misma identidad ahí.
+
+Archivos: nuevo `src/components/AuthBackdrop.jsx`; modificados
+`LoginPage.jsx`/`OnboardingPage.jsx`/`ResetPasswordPage.jsx`/`PasswordRecoveryModal.jsx`. Nada
+subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Wordmark "Kairox": de rojo a gris azulado tornasolado
+
+Pedido, apenas vista la primera versión del rediseño premium: "a lo que esta en rojo cambialo por
+un gris que se note, puedes hacerlo tornasolado, o algo, tirando a un azulado". Lo único que había
+quedado en rojo en las 3 pantallas rediseñadas era el propio wordmark de Kairox (ícono +
+"Kairox" en `text-primary`, componente `Logo` en `AppLayout.jsx`) -- a propósito no se había
+tocado en la vuelta anterior porque es la firma de marca, no parte del fondo. Confirmado por grep
+que `<Logo>` (distinto de `<GimnasioMark>`, que sí es por-gimnasio) HOY solo se usa en esas mismas 3
+pantallas (Login/Onboarding/ResetPassword) -- el comentario viejo del archivo que decía "6 lugares"
+está desactualizado, quedó de antes de que existiera `GimnasioMark`. Cambiarlo ahí no afecta nada
+del resto de la app.
+
+**`AppLayout.jsx`**: el badge del ícono (borde + fondo) y el ícono de mancuerna pasaron de
+`border-primary`/`bg-primary`/`text-primary` (rojo) a un gris azulado fijo (`#8f9db2`/`#aebbcf`).
+El texto "Kairox" pasó de `text-primary` a una clase nueva, `.kx-shimmer`.
+
+**`index.css`**: nueva clase `.kx-shimmer` (en `@layer utilities`, junto a `.text-ok`/`.text-warn`
+que ya vivían ahí) -- gradiente lineal de grises azulados con un pico casi blanco en el medio,
+recortado al texto (`background-clip: text` + `color: transparent`) y animado vía
+`background-position` en un loop de 6s (`ease-in-out infinite`) para el efecto "tornasolado": el
+brillo recorre el texto lento, sin nada brusco. Respeta `prefers-reduced-motion`. Es un color FIJO,
+sin relación con `--primary`/`colorTema.js` (eso sigue siendo el theming por-gimnasio post-login,
+sin tocar).
+
+Verificado en vivo: el badge+ícono ya no son rojos, "Kairox" muestra el degradé azulado-gris
+correcto (confirmado por JS: `background-clip: text`, `color: transparent`, animación
+`kx-shimmer-move` de 6s activa), y se ve igual en Login y en ResetPasswordPage (mismo componente
+compartido, no hace falta tocar cada página). `eslint` limpio, `vite build` sin errores (2693
+módulos). Nada subido a git.
+
+---
+
+## 03/09/2026 (más tarde) — Biblioteca de ejercicios: importación gratuita (90 ejercicios)
+
+Pedido: "arma la importación de ejercicios primero" (tras la investigación de licencias). Nuevo
+`lib/biblioteca_ejercicios_base.js` -- 90 ejercicios curados a mano, en ESPAÑOL, con foto real de
+[free-exercise-db](https://github.com/yuhonas/free-exercise-db) (licencia Unlicense, dominio
+público, cero restricciones). El dataset completo tiene 876 en inglés con muchísima repetición sin
+traducir (23 variantes solo de "deadlift") -- Nalux preguntó por qué no los 800+, se le explicó y
+eligió "más en español, de a poco" en vez de importar todo en inglés de una. Se armaron 2 tandas
+(50 + 40) traducidas y clasificadas a mano contra `GRUPOS`/`CLASIFICACIONES` (`clasificacion` queda
+vacía a propósito en ejercicios de aislamiento -- ninguna de las 10 categorías describe bien un
+curl o una extensión, forzarlo mentiría más de lo que ayuda).
+
+**`EjerciciosPage.jsx`**: botón nuevo "Importar biblioteca base" (junto a "Nuevo ejercicio"). Se
+salta por nombre (case-insensitive) lo que ya esté cargado -- se puede tocar más de una vez sin
+duplicar. Es código, no datos: corre para CUALQUIER gimnasio que lo toque (el suyo o uno nuevo que
+se registre), pero **no es automático** -- Nalux lo pidió explícitamente así por ahora: "esta app
+va a ser con planes de suscripción y voy a limitar algunas cosas, pero eso lo vemos cuando ya esté
+terminada la app". No se tocó `create_gimnasio()` para sembrar esto solo -- decisión de ella,
+pendiente para más adelante.
+
+**Bug real encontrado y arreglado en el camino** (ella lo pidió apenas vio el primer resultado,
+"que halla una vuelta atras para volver a la app"): `tipoDePreview()` en `EjerciciosPage.jsx` solo
+ofrecía ver la demostración adentro de un modal si el archivo estaba en NUESTRO bucket de Storage
+-- cualquier URL externa (aunque fuera una imagen suelta, como las de este import) caía al viejo
+comportamiento de abrir en pestaña nueva, exactamente el problema que Nalux ya había reportado
+antes con videos externos. Se separó el criterio: si la URL termina en una extensión de imagen
+conocida (jpg/png/webp), se muestra en el modal sin importar el host -- solo el VIDEO externo
+sigue exigiendo ser archivo propio (ahí sí hace falta confiar en que es el archivo posta y no una
+página con reproductor tipo YouTube).
+
+**Aplicado directo en la base real** (mismo motivo que con Alimentos/Períodos: no tiene sentido
+dejarlo solo como botón sin probarlo, y ella no puede tocar el botón porque la sesión estaba
+cerrada) -- 90 filas nuevas para su gimnasio real, sin duplicar sus 4 ejercicios propios
+(Peso Muerto, Press Frances, Búlgara, Sentadilla Frontal se dejaron intactos). Nalux preguntó
+explícitamente si esto consumía su plan gratis de Supabase -- aclarado que NO: las imágenes viven
+en GitHub, no se subió nada a Storage, la tabla completa de ejercicios pesa 104 kB (el free tier da
+500 MB). También preguntó si esto aplicaba a todos los gimnasios automáticamente -- aclarado que
+los DATOS son solo de su gimnasio (aislados por RLS), lo único global es el botón/código.
+
+Verificado en vivo: "Ver demostración" en un ejercicio importado abrió la foto real adentro del
+modal (antes hubiera abierto pestaña nueva). `eslint` limpio, `vite build` sin errores (2694
+módulos). Nada subido a git.
