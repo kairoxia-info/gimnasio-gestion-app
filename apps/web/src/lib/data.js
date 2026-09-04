@@ -66,3 +66,21 @@ export const removeRec = async (collection, id) => {
     const { error } = await supabase.from(collection).delete().eq('id', id);
     if (error) throw error;
 };
+
+// Fila de rutinas_asignadas a partir de una rutina de la biblioteca: además
+// del vínculo (rutina_id), se COPIA el contenido dentro de la asignación
+// (migración 0026). Pedido de Nalux (04/09/2026): editar después esa rutina
+// en la biblioteca no tiene que cambiarle nada al alumno que ya la tiene
+// asignada -- para actualizársela hay que reasignársela a propósito.
+//
+// La copia es profunda (JSON.parse/stringify) para que ningún cambio
+// posterior en el objeto de la biblioteca que quedó en memoria se filtre a
+// lo que ya se guardó. Mismo criterio que ya usa planes_alimentacion.
+export const snapshotRutina = (rutina, extra = {}) => ({
+    rutina_id: rutina.id,
+    rutina_nombre: rutina.nombre,
+    rutina_descripcion: rutina.descripcion ?? null,
+    rutina_duracion_semanas: rutina.duracion_semanas ?? null,
+    items: JSON.parse(JSON.stringify(rutina.items || [])),
+    ...extra,
+});

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
+import { aplicarColorGimnasio } from '@/lib/colorTema';
 
 const AuthContext = createContext(null);
 
@@ -67,6 +68,14 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         setCurrentGimnasioId(profile?.gimnasio_id ?? null);
     }, [profile]);
+
+    // Pinta toda la app con el color que el profesor eligió en Configuración
+    // (bug real: el picker lo guardaba en la base pero nada lo leía de
+    // vuelta para pintar nada -- ver colorTema.js). Sin gimnasio_id (login,
+    // onboarding antes de crear el gimnasio) vuelve sola al rojo de fábrica.
+    useEffect(() => {
+        aplicarColorGimnasio(profile?.gimnasios?.color_principal);
+    }, [profile?.gimnasios?.color_principal]);
 
     const value = useMemo(
         () => ({

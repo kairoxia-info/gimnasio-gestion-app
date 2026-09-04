@@ -1,9 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams } from 'react-router-dom';
-import { AlertTriangle, Download, Dumbbell, Loader2, Megaphone, Pause, Play, RotateCcw, Timer, X } from 'lucide-react';
+import {
+    AlertTriangle,
+    Download,
+    Dumbbell,
+    Lock,
+    Loader2,
+    Megaphone,
+    Pause,
+    Play,
+    RotateCcw,
+    Timer,
+    Wallet,
+    X,
+} from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
+import { agruparCombos, agruparItemsRutina, agruparPorBloque, armarTextoAlimentos } from '@/lib/format';
+import { aplicarColorGimnasio } from '@/lib/colorTema';
+import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF, esperarImagenesCargadas } from '@/components/RutinaPDF';
+import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 
 // El campo "descanso" de cada ejercicio es texto libre que escribe el profe
 // ("90 s", "1:30", "2 min", "60"...), no un número — así que hay que
@@ -136,10 +153,7 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
     };
 
     const terminado = restante <= 0;
-    const porcentaje = Math.min(
-        100,
-        Math.round(((duracionInicial - restante) / duracionInicial) * 100),
-    );
+    const porcentaje = Math.min(100, Math.round(((duracionInicial - restante) / duracionInicial) * 100));
 
     return (
         <div
@@ -302,51 +316,66 @@ const DatoEjercicio = ({ label, valor }) => (
     </div>
 );
 
+// Botón/link de "Ver demostración" de un ejercicio. Se reusa tal cual para
+// un ejercicio suelto y, dentro de un combo (superserie), una vez por cada
+// ejercicio que la tenga -- mostrarNombre distingue el segundo caso, porque
+// ahí hace falta aclarar de cuál de los dos es la demostración.
+const BotonVerDemo = ({ item, mostrarNombre, onPreview }) => {
+    const clase =
+        'inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto';
+    const texto = mostrarNombre ? `Ver ${item.nombre}` : 'Ver cómo se hace';
+    return tipoDePreview(item.mediaUrl) ? (
+        <button type="button" onClick={() => onPreview(item)} className={clase}>
+            <Play className="h-5 w-5" aria-hidden="true" /> {texto}
+        </button>
+    ) : (
+        <a href={item.mediaUrl} target="_blank" rel="noreferrer" className={clase}>
+            <Play className="h-5 w-5" aria-hidden="true" /> {texto}
+        </a>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// PDF de rutina y de plan de alimentación: Nalux trajo dos ejemplos armados
+// aparte (tablas compactas por bloque, "Series x Reps" combinado; comidas
+// numeradas con opciones en viñetas) y pidió que el PDF se vea así. Antes
+// esta pantalla imprimía el mismo DOM que se ve en pantalla (tarjetas
+// grandes, cajas de colores) apagando el modo oscuro con variables CSS —
+// ahora una hoja de impresión DEDICADA, montada aparte, que nunca se ve en
+// pantalla (ver ESTILOS_IMPRESION_RUTINA/ESTILOS_IMPRESION_ALIMENTACION,
+// mismo truco de visibility en vez de display:none para no romper el layout
+// del resto de la página). Los dos PDF (EncabezadoPDF/RutinaImprimiblePDF y
+// PlanAlimentacionImprimiblePDF) se separaron a components/RutinaPDF.jsx y
+// components/PlanAlimentacionPDF.jsx (03 y 04/09/2026) para reusarlos
+// también desde RutinasPage.jsx/AlumnoPage.jsx -- acá ya no queda nada
+// propio del PDF, solo dónde se montan más abajo.
+// ---------------------------------------------------------------------------
+
 const EstadoVacio = ({ children }) => (
     <div className="rounded-2xl border border-dashed border-border p-8 text-center text-lg text-muted-foreground">
         {children}
     </div>
 );
 
-// Reglas de impresión, encapsuladas acá porque son exclusivas de esta
-// pantalla — meterlas en index.css ensuciaría el CSS global compartido por
-// el resto de la app con reglas de una sola página. En vez de forzar
-// "color: black" clase por clase (lo que también apagaría el rojo de marca
-// en los botones), se sobreescriben directamente las custom properties de
-// color en el propio contenedor de la página: como toda la paleta de la app
-// ya sale de esas variables (bg-background, text-foreground, etc. vía
-// index.css), alcanza con "apagar" el modo oscuro acá para que el árbol
-// entero quede legible en papel/PDF sin tocar ninguna clase Tailwind.
-const ESTILOS_IMPRESION = `
-@media print {
-  .mp-no-imprimir {
-    display: none !important;
-  }
-  .mp-pagina {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 8%;
-    --card: 0 0% 98%;
-    --card-foreground: 0 0% 8%;
-    --border: 0 0% 82%;
-    --muted-foreground: 0 0% 28%;
-  }
-  .mp-evitar-corte {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  /* El alumno puede descargar la rutina y el plan de comida por separado
-     (cada uno en su propio PDF, no uno solo con todo junto) — al imprimir
-     con data-imprimiendo="rutina" se oculta la sección de alimentación y
-     viceversa, dejando el saludo/header igual en los dos casos. Fuera de
-     @media print esto no hace nada: en pantalla siempre se ven las dos. */
-  .mp-pagina[data-imprimiendo='rutina'] .mp-seccion-alimentacion {
-    display: none !important;
-  }
-  .mp-pagina[data-imprimiendo='alimentacion'] .mp-seccion-rutina {
-    display: none !important;
-  }
-}
-`;
+// Cuota vencida + política "restringir" (Configuración, migración 0021).
+// Distinto de EstadoVacio a propósito: acá SÍ hay contenido cargado, solo
+// que no se manda mientras deba -- el mensaje tiene que dejar eso claro,
+// no sonar a "todavía no te cargaron nada". Cada sección (rutina, plan de
+// comidas) se restringe por separado -- pueden estar en estados distintos
+// según lo que el profesor haya tildado en Configuración.
+const EstadoRestringido = ({ gimnasioNombre }) => (
+    <div className="flex items-start gap-3 rounded-2xl border-2 border-warn bg-warn/10 p-5">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warn/20">
+            <Lock className="h-6 w-6 text-warn" strokeWidth={2.2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+            <p className="text-xl font-extrabold">En pausa por cuota vencida</p>
+            <p className="mt-2 text-lg text-foreground">
+                Pasá por {gimnasioNombre || 'el gimnasio'} para renovarla y volver a verlo.
+            </p>
+        </div>
+    </div>
+);
 
 const MiPlanPage = () => {
     const { codigo } = useParams();
@@ -366,9 +395,10 @@ const MiPlanPage = () => {
     // ("Ver cómo se hace"), o null si está cerrado.
     const [previewItem, setPreviewItem] = useState(null);
     // 'rutina' | 'alimentacion' | null. Controla qué sección queda visible
-    // a la hora de imprimir (ver ESTILOS_IMPRESION) — así "Descargar rutina"
-    // y "Descargar plan de comida" arman cada uno su propio PDF con solo lo
-    // que corresponde, en vez de un único PDF con todo mezclado.
+    // a la hora de imprimir (ver ESTILOS_IMPRESION_RUTINA/
+    // ESTILOS_IMPRESION_ALIMENTACION) — así "Descargar rutina" y "Descargar
+    // plan de comida" arman cada uno su propio PDF con solo lo que
+    // corresponde, en vez de un único PDF con todo mezclado.
     const [imprimiendoSeccion, setImprimiendoSeccion] = useState(null);
     // Cartel de aviso (Bloque G6): "Entendido" se resuelve 100% client-side
     // sin recargar la página. avisoOculto es un estado APARTE de `plan` (no
@@ -390,21 +420,28 @@ const MiPlanPage = () => {
         return () => window.removeEventListener('afterprint', soltar);
     }, []);
 
-    // Fija qué sección queda visible para imprimir y recién AHÍ llama a
-    // print() — nunca desde un useEffect enganchado al valor de
-    // imprimiendoSeccion. Motivo: si 'afterprint' no llegara a dispararse en
-    // algún navegador (pasa en algunas versiones de iOS), el estado
-    // quedaría trabado en, por ejemplo, 'rutina'; un useEffect por-valor no
-    // volvería a dispararse si el alumno aprieta "Descargar en PDF" de la
-    // rutina una segunda vez (mismo valor = sin cambio = sin efecto). Acá,
-    // en cambio, cada clic llama a print() de nuevo sin importar el valor
-    // anterior. requestAnimationFrame espera al frame siguiente para que el
-    // atributo data-imprimiendo ya esté aplicado en el DOM antes de abrir el
-    // diálogo — si se llamara print() en el mismo tick, se arriesga a
-    // capturar el DOM de ANTES de ocultar la otra sección.
+    // Fija qué hoja de impresión queda montada y recién AHÍ llama a print()
+    // — nunca desde un useEffect enganchado al valor de imprimiendoSeccion.
+    // Motivo: si 'afterprint' no llegara a dispararse en algún navegador
+    // (pasa en algunas versiones de iOS), el estado quedaría trabado en, por
+    // ejemplo, 'rutina'; un useEffect por-valor no volvería a dispararse si
+    // el alumno aprieta "Descargar en PDF" de la rutina una segunda vez
+    // (mismo valor = sin cambio = sin efecto). Acá, en cambio, cada clic
+    // llama a print() de nuevo sin importar el valor anterior.
+    // requestAnimationFrame espera al frame siguiente para que React ya haya
+    // montado la hoja (RutinaImprimiblePDF/PlanAlimentacionImprimiblePDF) en
+    // el DOM antes de abrir el diálogo — si se llamara print() en el mismo
+    // tick, se arriesga a capturar el DOM de antes de que aparezca.
+    // Además de esperar al frame siguiente, se espera a que el logo del
+    // gimnasio (EncabezadoPDF, en las dos hojas) termine de cargar antes de
+    // imprimir -- si no, la imagen recién montada puede no estar lista
+    // todavía y el logo sale en blanco (reportado por Nalux, 03/09/2026).
     const descargarSeccion = (seccion) => {
         setImprimiendoSeccion(seccion);
-        requestAnimationFrame(() => window.print());
+        requestAnimationFrame(async () => {
+            await esperarImagenesCargadas('.rutina-pdf-hoja img, .alimentacion-pdf-hoja img');
+            window.print();
+        });
     };
 
     // El alumno toca "Entendido" en el cartel de aviso (Bloque G6). Sin
@@ -427,11 +464,21 @@ const MiPlanPage = () => {
             if (err) throw err;
             setAvisoOculto(true);
         } catch (_) {
-            setAvisoError('No se pudo guardar. No es grave, podés seguir usando la pantalla igual.');
+            setAvisoError('No se pudo guardar. No es grave, se puede seguir usando la pantalla igual.');
         } finally {
             setMarcandoAviso(false);
         }
     };
+
+    // Pinta esta pantalla también con el color del gimnasio -- antes solo se
+    // usaba en el PDF, la pantalla en vivo se quedaba siempre en el rojo de
+    // fábrica. AuthContext hace lo mismo para el lado del profesor; acá no
+    // hay sesión (AuthProvider ve profile=null y ya resetea al default apenas
+    // monta), así que hace falta este efecto aparte con el color que trae la
+    // propia RPC.
+    useEffect(() => {
+        aplicarColorGimnasio(plan?.gimnasio_color_principal);
+    }, [plan?.gimnasio_color_principal]);
 
     // Se llama una sola vez al montar (o si cambia el código de la URL):
     // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
@@ -459,11 +506,13 @@ const MiPlanPage = () => {
                 if (cancelado) return;
                 const msg = err?.message || '';
                 if (esCodigoInvalido(msg)) {
-                    setError('Este código no es válido o ya no está activo. Pedile a tu profe un código nuevo.');
+                    setError(
+                        'Este código no es válido o ya no está activo. Pedir al profesor un código nuevo.',
+                    );
                 } else if (esRateLimit(msg)) {
-                    setError('Demasiadas consultas en poco tiempo. Probá de nuevo en unos minutos.');
+                    setError('Demasiadas consultas en poco tiempo. Intentar de nuevo en unos minutos.');
                 } else {
-                    setError('No pudimos cargar tu plan en este momento. Probá de nuevo más tarde.');
+                    setError('No se pudo cargar el plan en este momento. Intentar de nuevo más tarde.');
                 }
             })
             .finally(() => {
@@ -474,33 +523,56 @@ const MiPlanPage = () => {
         };
     }, [codigo]);
 
-    const porDia = useMemo(() => {
-        const map = {};
-        (plan?.rutina_items || []).forEach((it) => {
-            map[it.dia] = map[it.dia] || [];
-            map[it.dia].push(it);
-        });
-        return map;
-    }, [plan]);
+    // Agrupada por semana y día con el mismo helper que usa el profe, para
+    // que el alumno vea exactamente la estructura que se armó. Si la rutina
+    // usa una sola semana (el caso normal), no se muestra ningún encabezado
+    // de semana: la pantalla queda igual de simple que antes.
+    const grupos = useMemo(() => agruparItemsRutina(plan?.rutina_items || []), [plan]);
+    const variasSemanas = grupos.length > 1;
 
-    const porComida = useMemo(() => {
-        const map = {};
-        (plan?.plan_items || []).forEach((it) => {
-            map[it.comida] = map[it.comida] || [];
-            map[it.comida].push(it);
-        });
-        return map;
-    }, [plan]);
+    // Un renglón por observación (textarea multilínea en el armador) ->
+    // una lista de viñetas acá. Filtra líneas en blanco por si quedó algún
+    // Enter de más al cargarlo.
+    const observacionesPlan = useMemo(
+        () =>
+            (plan?.plan_notas || '')
+                .split('\n')
+                .map((l) => l.trim())
+                .filter(Boolean),
+        [plan],
+    );
 
     const tieneRutina = !!plan?.rutina_nombre;
     const tienePlan = !!plan?.plan_nombre;
 
     return (
-        <div
-            className="mp-pagina min-h-[100dvh] bg-background text-foreground"
-            data-imprimiendo={imprimiendoSeccion || undefined}
-        >
-            <style>{ESTILOS_IMPRESION}</style>
+        <div className="mp-pagina min-h-[100dvh] bg-background text-foreground">
+            <style>
+                {ESTILOS_IMPRESION_RUTINA}
+                {ESTILOS_IMPRESION_ALIMENTACION}
+            </style>
+            {imprimiendoSeccion === 'rutina' && (
+                <RutinaImprimiblePDF
+                    nombre={plan?.rutina_nombre}
+                    items={plan?.rutina_items}
+                    color={plan?.gimnasio_color_principal}
+                    logoUrl={plan?.gimnasio_logo_url}
+                    fechaInicio={plan?.rutina_fecha_inicio}
+                    duracionSemanas={plan?.rutina_duracion_semanas}
+                />
+            )}
+            {imprimiendoSeccion === 'alimentacion' && (
+                <PlanAlimentacionImprimiblePDF
+                    nombre={plan?.plan_nombre}
+                    items={plan?.plan_items}
+                    notas={plan?.plan_notas}
+                    color={plan?.gimnasio_color_principal}
+                    logoUrl={plan?.gimnasio_logo_url}
+                    alumnoNombre={plan?.alumno_nombre}
+                    fechaInicio={plan?.plan_fecha_inicio}
+                    fechaFin={plan?.plan_fecha_fin}
+                />
+            )}
             <Helmet>
                 <title>
                     {plan?.alumno_nombre ? `Tu plan | ${plan.alumno_nombre}` : 'Tu plan de entrenamiento'}
@@ -532,7 +604,10 @@ const MiPlanPage = () => {
                     <header className="border-b border-border bg-card px-4 py-5 sm:px-6">
                         <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
                             <div className="flex min-w-0 items-center gap-3">
-                                <LogoGimnasio nombre={plan.gimnasio_nombre} logoUrl={plan.gimnasio_logo_url} />
+                                <LogoGimnasio
+                                    nombre={plan.gimnasio_nombre}
+                                    logoUrl={plan.gimnasio_logo_url}
+                                />
                                 <p className="truncate text-lg font-extrabold uppercase tracking-tight sm:text-xl">
                                     {plan.gimnasio_nombre || 'Tu gimnasio'}
                                 </p>
@@ -544,6 +619,34 @@ const MiPlanPage = () => {
                     </header>
 
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6">
+                        {/* Recordatorio automático de cuota (migración 0015). A
+                            diferencia del aviso manual de arriba, este NO tiene botón
+                            "Entendido" ni se guarda en notificaciones_leidas: no existe
+                            como fila, se arma solo en la RPC mientras la condición se
+                            cumple, y desaparece solo cuando paga -- no hay nada que
+                            "marcar como leído". */}
+                        {plan.cuota_aviso_titulo && (
+                            <section className="mp-no-imprimir rounded-2xl border-2 border-warn bg-warn/10 p-5 sm:p-6">
+                                <div className="flex items-start gap-3">
+                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warn/20">
+                                        <Wallet
+                                            className="h-6 w-6 text-warn"
+                                            strokeWidth={2.2}
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xl font-extrabold sm:text-2xl">
+                                            {plan.cuota_aviso_titulo}
+                                        </p>
+                                        <p className="mt-2 text-lg text-foreground">
+                                            {plan.cuota_aviso_mensaje}
+                                        </p>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
                         {plan.aviso_id && !avisoOculto && (
                             <section
                                 aria-live="polite"
@@ -551,10 +654,16 @@ const MiPlanPage = () => {
                             >
                                 <div className="flex items-start gap-3">
                                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/20">
-                                        <Megaphone className="h-6 w-6 text-primary" strokeWidth={2.2} aria-hidden="true" />
+                                        <Megaphone
+                                            className="h-6 w-6 text-primary"
+                                            strokeWidth={2.2}
+                                            aria-hidden="true"
+                                        />
                                     </span>
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-xl font-extrabold sm:text-2xl">{plan.aviso_titulo}</p>
+                                        <p className="text-xl font-extrabold sm:text-2xl">
+                                            {plan.aviso_titulo}
+                                        </p>
                                         <p className="mt-2 text-lg text-foreground">{plan.aviso_mensaje}</p>
                                     </div>
                                 </div>
@@ -577,13 +686,16 @@ const MiPlanPage = () => {
                                 Hola, {plan.alumno_nombre}
                             </h1>
                             <p className="text-lg text-muted-foreground">
-                                Acá tenés tu rutina y tu plan de alimentación.
+                                Acá está la rutina y el plan de alimentación.
                             </p>
                         </section>
 
                         <section aria-labelledby="mp-rutina-titulo" className="mp-seccion-rutina space-y-5">
                             <div className="flex flex-wrap items-center justify-between gap-3">
-                                <h2 id="mp-rutina-titulo" className="font-display text-2xl font-extrabold uppercase">
+                                <h2
+                                    id="mp-rutina-titulo"
+                                    className="font-display text-2xl font-extrabold uppercase"
+                                >
                                     Tu rutina
                                 </h2>
                                 {tieneRutina && (
@@ -597,16 +709,20 @@ const MiPlanPage = () => {
                                 )}
                             </div>
 
-                            {!tieneRutina ? (
+                            {plan.rutina_restringida ? (
+                                <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
+                            ) : !tieneRutina ? (
                                 <EstadoVacio>
-                                    Todavía no tenés una rutina cargada, pedísela a tu profe.
+                                    Todavía no hay una rutina cargada, pedirla al profesor.
                                 </EstadoVacio>
                             ) : (
                                 <>
                                     <div className="rounded-2xl border border-border bg-card p-5">
                                         <p className="text-2xl font-bold">{plan.rutina_nombre}</p>
                                         {plan.rutina_descripcion && (
-                                            <p className="mt-2 text-lg text-muted-foreground">{plan.rutina_descripcion}</p>
+                                            <p className="mt-2 text-lg text-muted-foreground">
+                                                {plan.rutina_descripcion}
+                                            </p>
                                         )}
                                         {plan.rutina_duracion_semanas ? (
                                             <p className="mt-2 text-base text-muted-foreground">
@@ -617,80 +733,248 @@ const MiPlanPage = () => {
                                     </div>
 
                                     {(plan.rutina_items || []).length === 0 ? (
-                                        <EstadoVacio>Esta rutina todavía no tiene ejercicios cargados.</EstadoVacio>
+                                        <EstadoVacio>
+                                            Esta rutina todavía no tiene ejercicios cargados.
+                                        </EstadoVacio>
                                     ) : (
-                                        Object.entries(porDia).map(([dia, items]) => (
-                                            <div key={dia} className="space-y-3">
-                                                <h3 className="font-display text-xl font-bold uppercase text-primary">
-                                                    {dia}
-                                                </h3>
-                                                <div className="space-y-3">
-                                                    {items.map((it) => {
-                                                        const descansoSeg = parsearDescanso(it.descanso);
-                                                        return (
-                                                            <article
-                                                                key={it.key}
-                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-5"
-                                                            >
-                                                                <p className="text-xl font-bold sm:text-2xl">{it.nombre}</p>
-                                                                {it.grupo && (
-                                                                    <p className="mt-0.5 text-base text-muted-foreground">
-                                                                        {it.grupo}
-                                                                    </p>
-                                                                )}
-                                                                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                                                    <DatoEjercicio label="Series" valor={it.series} />
-                                                                    <DatoEjercicio label="Reps" valor={it.reps} />
-                                                                    <DatoEjercicio label="Peso" valor={it.peso || '—'} />
-                                                                    <DatoEjercicio
-                                                                        label="Descanso"
-                                                                        valor={it.descanso || '—'}
-                                                                    />
-                                                                </div>
-                                                                <div className="mp-no-imprimir mt-4 flex flex-col gap-3 sm:flex-row">
-                                                                    {it.mediaUrl && (
-                                                                        tipoDePreview(it.mediaUrl) ? (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setPreviewItem(it)}
-                                                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
-                                                                            >
-                                                                                <Play className="h-5 w-5" aria-hidden="true" />{' '}
-                                                                                Ver cómo se hace
-                                                                            </button>
-                                                                        ) : (
-                                                                            <a
-                                                                                href={it.mediaUrl}
-                                                                                target="_blank"
-                                                                                rel="noreferrer"
-                                                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto"
-                                                                            >
-                                                                                <Play className="h-5 w-5" aria-hidden="true" />{' '}
-                                                                                Ver cómo se hace
-                                                                            </a>
-                                                                        )
+                                        grupos.map(([nroSemana, dias]) => (
+                                            <div key={nroSemana} className="space-y-4">
+                                                {variasSemanas && (
+                                                    <h3 className="rounded-2xl bg-secondary px-4 py-2 font-display text-lg font-bold uppercase">
+                                                        Semana {nroSemana}
+                                                    </h3>
+                                                )}
+                                                {dias.map(([dia, items]) => (
+                                                    <div key={`${nroSemana}-${dia}`} className="space-y-3">
+                                                        <h3 className="font-display text-xl font-bold uppercase text-primary">
+                                                            {dia}
+                                                        </h3>
+                                                        {agruparPorBloque(agruparCombos(items)).map(
+                                                            ([nombreBloque, delBloque], iBloque) => (
+                                                                <div
+                                                                    key={`${nombreBloque}-${iBloque}`}
+                                                                    className="space-y-3"
+                                                                >
+                                                                    {nombreBloque && (
+                                                                        <p className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
+                                                                            {nombreBloque}
+                                                                        </p>
                                                                     )}
-                                                                    {descansoSeg && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                cronometroIdRef.current += 1;
-                                                                                setCronometro({
-                                                                                    duracion: descansoSeg,
-                                                                                    id: cronometroIdRef.current,
-                                                                                });
-                                                                            }}
-                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3 text-lg font-bold transition active:scale-[0.98] sm:w-auto"
-                                                                        >
-                                                                            <Timer className="h-5 w-5" aria-hidden="true" />{' '}
-                                                                            Iniciar descanso
-                                                                        </button>
-                                                                    )}
+                                                                    {delBloque.map((it) => {
+                                                                        // Si el descanso quedó combinado ("60 s + 90 s"
+                                                                        // porque los ejercicios del combo tienen
+                                                                        // descansos distintos) no se ofrece el
+                                                                        // cronómetro: sería ambiguo cuál de los dos usar.
+                                                                        const descansoSeg =
+                                                                            it.descanso?.includes(' + ')
+                                                                                ? null
+                                                                                : parsearDescanso(
+                                                                                      it.descanso,
+                                                                                  );
+                                                                        return (
+                                                                            <article
+                                                                                key={it.key}
+                                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-5"
+                                                                            >
+                                                                                {it.esCombo ? (
+                                                                                    <>
+                                                                                        <p className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
+                                                                                            Superserie
+                                                                                        </p>
+                                                                                        <div className="flex items-stretch gap-1.5">
+                                                                                            {it.comboItems.map(
+                                                                                                (sub, i) => (
+                                                                                                    <React.Fragment
+                                                                                                        key={
+                                                                                                            sub.key
+                                                                                                        }
+                                                                                                    >
+                                                                                                        {i >
+                                                                                                            0 && (
+                                                                                                            <span
+                                                                                                                className="flex shrink-0 items-center text-lg font-bold text-primary"
+                                                                                                                aria-hidden="true"
+                                                                                                            >
+                                                                                                                +
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2">
+                                                                                                            <p className="truncate text-sm font-bold leading-tight sm:text-base">
+                                                                                                                {
+                                                                                                                    sub.nombre
+                                                                                                                }
+                                                                                                            </p>
+                                                                                                            {sub.grupo && (
+                                                                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                                                                    {
+                                                                                                                        sub.grupo
+                                                                                                                    }
+                                                                                                                </p>
+                                                                                                            )}
+                                                                                                            <div className="mt-2 space-y-0.5 text-sm">
+                                                                                                                <p>
+                                                                                                                    <span className="text-muted-foreground">
+                                                                                                                        Series{' '}
+                                                                                                                    </span>
+                                                                                                                    <span className="font-bold">
+                                                                                                                        {
+                                                                                                                            sub.series
+                                                                                                                        }
+                                                                                                                    </span>
+                                                                                                                </p>
+                                                                                                                <p>
+                                                                                                                    <span className="text-muted-foreground">
+                                                                                                                        Reps{' '}
+                                                                                                                    </span>
+                                                                                                                    <span className="font-bold">
+                                                                                                                        {
+                                                                                                                            sub.reps
+                                                                                                                        }
+                                                                                                                    </span>
+                                                                                                                </p>
+                                                                                                                {sub.peso && (
+                                                                                                                    <p>
+                                                                                                                        <span className="text-muted-foreground">
+                                                                                                                            Peso{' '}
+                                                                                                                        </span>
+                                                                                                                        <span className="font-bold">
+                                                                                                                            {
+                                                                                                                                sub.peso
+                                                                                                                            }
+                                                                                                                        </span>
+                                                                                                                    </p>
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </React.Fragment>
+                                                                                                ),
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <p className="mt-3 text-base">
+                                                                                            <span className="text-muted-foreground">
+                                                                                                Descanso:{' '}
+                                                                                            </span>
+                                                                                            <span className="font-semibold">
+                                                                                                {it.descanso ||
+                                                                                                    '—'}
+                                                                                            </span>
+                                                                                        </p>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <p className="text-xl font-bold sm:text-2xl">
+                                                                                            {it.nombre}
+                                                                                        </p>
+                                                                                        {it.grupo && (
+                                                                                            <p className="mt-0.5 text-base text-muted-foreground">
+                                                                                                {it.grupo}
+                                                                                            </p>
+                                                                                        )}
+                                                                                        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                                                                            <DatoEjercicio
+                                                                                                label="Series"
+                                                                                                valor={
+                                                                                                    it.series
+                                                                                                }
+                                                                                            />
+                                                                                            <DatoEjercicio
+                                                                                                label="Reps"
+                                                                                                valor={
+                                                                                                    it.reps
+                                                                                                }
+                                                                                            />
+                                                                                            <DatoEjercicio
+                                                                                                label="Peso"
+                                                                                                valor={
+                                                                                                    it.peso ||
+                                                                                                    '—'
+                                                                                                }
+                                                                                            />
+                                                                                            <DatoEjercicio
+                                                                                                label="Descanso"
+                                                                                                valor={
+                                                                                                    it.descanso ||
+                                                                                                    '—'
+                                                                                                }
+                                                                                            />
+                                                                                        </div>
+                                                                                    </>
+                                                                                )}
+                                                                                {it.intensidad && (
+                                                                                    <p className="mt-3 text-base">
+                                                                                        <span className="text-muted-foreground">
+                                                                                            Intensidad:{' '}
+                                                                                        </span>
+                                                                                        <span className="font-semibold">
+                                                                                            {it.intensidad}
+                                                                                        </span>
+                                                                                    </p>
+                                                                                )}
+                                                                                {it.comentario && (
+                                                                                    <p className="mt-3 rounded-xl border-2 border-primary/40 bg-primary/10 p-4 text-base">
+                                                                                        {it.comentario}
+                                                                                    </p>
+                                                                                )}
+                                                                                <div className="mp-no-imprimir mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                                                                                    {it.esCombo
+                                                                                        ? it.comboItems
+                                                                                              .filter(
+                                                                                                  (sub) =>
+                                                                                                      sub.mediaUrl,
+                                                                                              )
+                                                                                              .map((sub) => (
+                                                                                                  <BotonVerDemo
+                                                                                                      key={
+                                                                                                          sub.key
+                                                                                                      }
+                                                                                                      item={
+                                                                                                          sub
+                                                                                                      }
+                                                                                                      mostrarNombre
+                                                                                                      onPreview={
+                                                                                                          setPreviewItem
+                                                                                                      }
+                                                                                                  />
+                                                                                              ))
+                                                                                        : it.mediaUrl && (
+                                                                                              <BotonVerDemo
+                                                                                                  item={it}
+                                                                                                  onPreview={
+                                                                                                      setPreviewItem
+                                                                                                  }
+                                                                                              />
+                                                                                          )}
+                                                                                    {descansoSeg && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                cronometroIdRef.current += 1;
+                                                                                                setCronometro(
+                                                                                                    {
+                                                                                                        duracion:
+                                                                                                            descansoSeg,
+                                                                                                        id: cronometroIdRef.current,
+                                                                                                    },
+                                                                                                );
+                                                                                            }}
+                                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3 text-lg font-bold transition active:scale-[0.98] sm:w-auto"
+                                                                                        >
+                                                                                            <Timer
+                                                                                                className="h-5 w-5"
+                                                                                                aria-hidden="true"
+                                                                                            />{' '}
+                                                                                            Iniciar descanso
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </article>
+                                                                        );
+                                                                    })}
                                                                 </div>
-                                                            </article>
-                                                        );
-                                                    })}
-                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
                                         ))
                                     )}
@@ -720,42 +1004,54 @@ const MiPlanPage = () => {
                                 )}
                             </div>
 
-                            {!tienePlan ? (
+                            {plan.alimentacion_restringida ? (
+                                <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
+                            ) : !tienePlan ? (
                                 <EstadoVacio>
-                                    Todavía no tenés un plan de alimentación cargado, pedíselo a tu profe.
+                                    Todavía no hay un plan de alimentación cargado, pedirlo al profesor.
                                 </EstadoVacio>
                             ) : (
                                 <>
                                     <div className="rounded-2xl border border-border bg-card p-5">
                                         <p className="text-2xl font-bold">{plan.plan_nombre}</p>
-                                        {plan.plan_notas && (
-                                            <p className="mt-2 text-lg text-muted-foreground">{plan.plan_notas}</p>
-                                        )}
                                     </div>
 
                                     {(plan.plan_items || []).length === 0 ? (
-                                        <EstadoVacio>Este plan todavía no tiene alimentos cargados.</EstadoVacio>
+                                        <EstadoVacio>
+                                            Este plan todavía no tiene comidas cargadas.
+                                        </EstadoVacio>
                                     ) : (
-                                        Object.entries(porComida).map(([comida, items]) => (
-                                            <div key={comida} className="mp-evitar-corte space-y-3">
+                                        (plan.plan_items || []).map((comidaPlan, i) => (
+                                            <div
+                                                key={comidaPlan.key || i}
+                                                className="mp-evitar-corte space-y-3"
+                                            >
                                                 <h3 className="font-display text-xl font-bold uppercase text-primary">
-                                                    {comida}
+                                                    {comidaPlan.nombre || `Comida N.º ${i + 1}`}
                                                 </h3>
-                                                <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
-                                                    {items.map((it) => (
-                                                        <li
-                                                            key={it.key}
-                                                            className="flex items-center justify-between gap-3 p-5"
-                                                        >
-                                                            <span className="text-xl font-semibold">{it.nombre}</span>
-                                                            <span className="shrink-0 text-lg font-bold text-muted-foreground">
-                                                                {it.cantidad} {it.unidad || ''}
-                                                            </span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                                <p className="rounded-2xl border border-border bg-card p-5 text-lg">
+                                                    {armarTextoAlimentos(comidaPlan.alimentos)}
+                                                </p>
                                             </div>
                                         ))
+                                    )}
+
+                                    {observacionesPlan.length > 0 && (
+                                        <div className="mp-evitar-corte space-y-3">
+                                            <h3 className="font-display text-xl font-bold uppercase text-primary">
+                                                Observaciones generales
+                                            </h3>
+                                            <ul className="space-y-2 rounded-2xl border border-border bg-card p-5">
+                                                {observacionesPlan.map((linea, i) => (
+                                                    <li key={i} className="flex gap-3 text-lg">
+                                                        <span className="text-primary" aria-hidden="true">
+                                                            •
+                                                        </span>
+                                                        <span>{linea}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
                                     )}
                                 </>
                             )}

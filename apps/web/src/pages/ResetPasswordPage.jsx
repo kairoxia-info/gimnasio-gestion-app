@@ -4,8 +4,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Logo, ThemeToggle } from '@/components/AppLayout';
+import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import AuthBackdrop from '@/components/AuthBackdrop';
 
 const ResetPasswordPage = () => {
     const { user, loading: authLoading, updatePassword, signOut } = useAuth();
@@ -47,34 +48,21 @@ const ResetPasswordPage = () => {
     };
 
     return (
-        <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
+        <AuthBackdrop>
             <Helmet>
                 <title>Restablecer contraseña | Gestión GYM Kairox IA</title>
                 <meta name="description" content="Definí una nueva contraseña para tu cuenta de Gestión GYM Kairox IA." />
             </Helmet>
 
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-32 top-1/4 h-[36rem] w-[36rem] rounded-full bg-primary/20 blur-3xl"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-primary"
-            />
-
-            <div className="absolute right-4 top-4">
-                <ThemeToggle />
-            </div>
-
             <motion.div
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-md rounded-3xl border border-border bg-card p-8"
+                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-24" />
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         Restablecer contraseña
                     </p>
                 </div>
@@ -87,7 +75,7 @@ const ResetPasswordPage = () => {
                     <div className="flex flex-col items-center gap-3 py-4 text-center">
                         <CheckCircle2 className="h-12 w-12 text-ok" strokeWidth={1.6} />
                         <p className="text-sm text-foreground">
-                            Contraseña actualizada. Ya podés iniciar sesión con tu nueva contraseña.
+                            Contraseña actualizada. Ya se puede iniciar sesión con la nueva contraseña.
                         </p>
                         <p className="text-xs text-muted-foreground">Redirigiendo al ingreso...</p>
                     </div>
@@ -97,7 +85,12 @@ const ResetPasswordPage = () => {
                             Este enlace no es válido o ya expiró. Pedí uno nuevo desde la pantalla de ingreso.
                         </p>
                         <Link to="/login" className="inline-block">
-                            <Btn type="button">Volver a ingresar</Btn>
+                            <Btn
+                                type="button"
+                                className="!border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] !text-[#1c1509] hover:!brightness-105"
+                            >
+                                Volver a ingresar
+                            </Btn>
                         </Link>
                     </div>
                 ) : (
@@ -141,13 +134,17 @@ const ResetPasswordPage = () => {
 
                         {error && <ErrorBox>{error}</ErrorBox>}
 
-                        <Btn type="submit" disabled={loading} className="w-full py-3">
+                        <Btn
+                            type="submit"
+                            disabled={loading}
+                            className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                        >
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar nueva contraseña'}
                         </Btn>
                     </form>
                 )}
             </motion.div>
-        </div>
+        </AuthBackdrop>
     );
 };
 

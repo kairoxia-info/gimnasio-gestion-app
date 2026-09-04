@@ -31,7 +31,11 @@ const AvisosPage = () => {
 
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(vacio);
+    const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
+    // Aviso cuyo detalle de lectura se está mirando (quiénes leyeron y
+    // quiénes no), o null si el panel está cerrado.
+    const [detalle, setDetalle] = useState(null);
 
     const cargar = () => {
         setLoading(true);
@@ -75,6 +79,13 @@ const AvisosPage = () => {
 
     const abrirNuevo = () => {
         setForm(vacio);
+        setEditId(null);
+        setOpen(true);
+    };
+
+    const abrirEditar = (aviso) => {
+        setForm({ titulo: aviso.titulo || '', mensaje: aviso.mensaje || '', segmento: aviso.segmento || 'todos' });
+        setEditId(aviso.id);
         setOpen(true);
     };
 
@@ -82,18 +93,33 @@ const AvisosPage = () => {
         e.preventDefault();
         setSaving(true);
         try {
-            await createRec('notificaciones', {
-                titulo: form.titulo,
-                mensaje: form.mensaje,
-                segmento: form.segmento,
-            });
+            const payload = { titulo: form.titulo, mensaje: form.mensaje, segmento: form.segmento };
+            if (editId) await updateRec('notificaciones', editId, payload);
+            else await createRec('notificaciones', payload);
             setOpen(false);
             cargar();
         } catch (_) {
-            setError('No se pudo crear el aviso.');
+            setError(editId ? 'No se pudo guardar el aviso.' : 'No se pudo crear el aviso.');
         } finally {
             setSaving(false);
         }
+    };
+
+    // Quiénes leyeron y quiénes no. Los que faltan salen de restarle los que
+    // leyeron a la audiencia REAL de hoy (el segmento se recalcula, no se
+    // guarda) -- por eso un alumno que cambió de segmento desde que se creó
+    // el aviso ya no aparece como pendiente: hoy ese aviso no le toca.
+    const detalleLectura = (aviso) => {
+        const idsLeyeron = new Set(
+            leidas.filter((l) => l.notificacion_id === aviso.id).map((l) => l.alumno_id),
+        );
+        const audiencia = alumnos.filter(
+            (a) => aviso.segmento === 'todos' || segmentoNotificacion(a, pagos) === aviso.segmento,
+        );
+        return {
+            leyeron: audiencia.filter((a) => idsLeyeron.has(a.id)),
+            faltan: audiencia.filter((a) => !idsLeyeron.has(a.id)),
+        };
     };
 
     // Archivar/reactivar es reversible -- a propósito sin window.confirm
@@ -135,10 +161,17 @@ const AvisosPage = () => {
                     </div>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">{n.mensaje}</p>
-                <p className="mt-3 text-xs font-semibold text-muted-foreground">
-                    {x} / {y} leyeron
-                </p>
+                <button
+                    type="button"
+                    onClick={() => setDetalle(n)}
+                    className="mt-3 text-xs font-semibold text-primary hover:underline"
+                >
+                    {x} / {y} leyeron — ver quiénes
+                </button>
                 <div className="mt-4 flex flex-wrap gap-2">
+                    <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirEditar(n)}>
+                        Editar
+                    </Btn>
                     {n.activa ? (
                         <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => toggleActiva(n)}>
                             <Archive className="h-3.5 w-3.5" /> Archivar
@@ -156,7 +189,7 @@ const AvisosPage = () => {
     return (
         <AppLayout
             title="Avisos"
-            subtitle="Mandá un aviso segmentado por estado de cuota. Le llega solo, sin necesidad de que el alumno tenga sesión."
+            subtitle="Enviar un aviso segmentado por estado de cuota. Le llega solo, sin necesidad de que el alumno tenga sesión."
             actions={
                 <Btn onClick={abrirNuevo}>
                     <Plus className="h-4 w-4" /> Nuevo aviso
@@ -180,7 +213,7 @@ const AvisosPage = () => {
             {loading ? (
                 <Loading rows={4} />
             ) : notificaciones.length === 0 ? (
-                <Empty>Todavía no creaste ningún aviso. Empezá con el botón &ldquo;Nuevo aviso&rdquo;.</Empty>
+                <Empty>Todavía no hay ningún aviso creado. Empezar con el botón &ldquo;Nuevo aviso&rdquo;.</Empty>
             ) : (
                 <div className="space-y-8">
                     <div>
@@ -203,7 +236,7 @@ const AvisosPage = () => {
                 </div>
             )}
 
-            <Modal open={open} onClose={() => setOpen(false)} title="Nuevo aviso">
+            <Modal open={open} onClose={() => setOpen(false)} title={editId ? 'Editar aviso' : 'Nuevo aviso'}>
                 <form onSubmit={guardar} className="space-y-4">
                     <Field label="Título">
                         <Input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required />
@@ -230,10 +263,49 @@ const AvisosPage = () => {
                             Cancelar
                         </Btn>
                         <Btn type="submit" disabled={saving}>
-                            {saving ? 'Guardando...' : 'Crear aviso'}
+                            {saving ? 'Guardando...' : editId ? 'Guardar cambios' : 'Crear aviso'}
                         </Btn>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal open={!!detalle} onClose={() => setDetalle(null)} title={detalle?.titulo || 'Lectura del aviso'}>
+                {detalle &&
+                    (() => {
+                        const { leyeron, faltan } = detalleLectura(detalle);
+                        return (
+                            <div className="space-y-5">
+                                <div>
+                                    <h3 className="text-sm font-bold text-ok">Leyeron ({leyeron.length})</h3>
+                                    {leyeron.length === 0 ? (
+                                        <p className="mt-1 text-sm text-muted-foreground">Todavía nadie.</p>
+                                    ) : (
+                                        <ul className="mt-2 space-y-1 text-sm">
+                                            {leyeron.map((a) => (
+                                                <li key={a.id}>{a.nombre}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-warn">Todavía no lo vieron ({faltan.length})</h3>
+                                    {faltan.length === 0 ? (
+                                        <p className="mt-1 text-sm text-muted-foreground">Lo vieron todos.</p>
+                                    ) : (
+                                        <ul className="mt-2 space-y-1 text-sm">
+                                            {faltan.map((a) => (
+                                                <li key={a.id}>{a.nombre}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    El alumno queda como &quot;leído&quot; cuando abre su link del QR y toca
+                                    &quot;Entendido&quot;.
+                                </p>
+                            </div>
+                        );
+                    })()}
             </Modal>
         </AppLayout>
     );

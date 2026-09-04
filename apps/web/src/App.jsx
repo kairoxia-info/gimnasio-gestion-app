@@ -15,6 +15,8 @@ import AlumnoPage from '@/pages/AlumnoPage';
 import EjerciciosPage from '@/pages/EjerciciosPage';
 import RutinasPage from '@/pages/RutinasPage';
 import AlimentosPage from '@/pages/AlimentosPage';
+import PlanesAlimentacionPage from '@/pages/PlanesAlimentacionPage';
+import PreciosPage from '@/pages/PreciosPage';
 import AsistenciaPage from '@/pages/AsistenciaPage';
 import PagosPage from '@/pages/PagosPage';
 import AvisosPage from '@/pages/AvisosPage';
@@ -62,6 +64,8 @@ function App() {
                         <Route path="/ejercicios" element={guard(<EjerciciosPage />)} />
                         <Route path="/rutinas" element={guard(<RutinasPage />)} />
                         <Route path="/alimentos" element={guard(<AlimentosPage />)} />
+                        <Route path="/planes-alimentacion" element={guard(<PlanesAlimentacionPage />)} />
+                        <Route path="/precios" element={guard(<PreciosPage />)} />
                         <Route path="/asistencia" element={guard(<AsistenciaPage />)} />
                         <Route path="/pagos" element={guard(<PagosPage />)} />
                         <Route path="/avisos" element={guard(<AvisosPage />)} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
@@ -24,6 +24,8 @@ const AlimentosPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [filtro, setFiltro] = useState('todos');
+    const [busqueda, setBusqueda] = useState('');
+    const [filtroNutricion, setFiltroNutricion] = useState('todos'); // 'todos' | 'con' | 'sin'
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
@@ -47,7 +49,16 @@ const AlimentosPage = () => {
         [items],
     );
 
-    const visibles = filtro === 'todos' ? items : items.filter((i) => i.categoria === filtro);
+    // Los 3 filtros se combinan con AND, mismo criterio que en Ejercicios:
+    // categoría sigue siendo chips (la más usada), información nutricional es
+    // un select chico, y el buscador reduce por nombre.
+    const visibles = items.filter((a) => {
+        if (filtro !== 'todos' && a.categoria !== filtro) return false;
+        if (filtroNutricion === 'con' && !a.calorias) return false;
+        if (filtroNutricion === 'sin' && a.calorias) return false;
+        if (busqueda.trim() && !a.nombre?.toLowerCase().includes(busqueda.trim().toLowerCase())) return false;
+        return true;
+    });
 
     const guardar = async (e) => {
         e.preventDefault();
@@ -74,7 +85,7 @@ const AlimentosPage = () => {
     return (
         <AppLayout
             title="Biblioteca de alimentos"
-            subtitle="Cargá cada alimento una vez con su información nutricional y reutilizalo en los planes."
+            subtitle="Cargar cada alimento una vez con su información nutricional y reutilizarlo en los planes."
             actions={
                 <Btn
                     onClick={() => {
@@ -94,6 +105,31 @@ const AlimentosPage = () => {
                     content="Alimentos con calorías y macros por porción para armar planes de alimentación personalizados."
                 />
             </Helmet>
+
+            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
+                <div className="relative">
+                    <Search
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                    <Input
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        placeholder="Buscar por nombre..."
+                        className="pl-9"
+                        aria-label="Buscar alimento por nombre"
+                    />
+                </div>
+                <Select
+                    value={filtroNutricion}
+                    onChange={(e) => setFiltroNutricion(e.target.value)}
+                    aria-label="Filtrar por información nutricional cargada"
+                >
+                    <option value="todos">Con o sin información nutricional</option>
+                    <option value="con">Con información nutricional</option>
+                    <option value="sin">Sin información nutricional</option>
+                </Select>
+            </div>
 
             <div className="mb-6 flex flex-wrap gap-2">
                 {['todos', ...categorias].map((c) => (
@@ -117,7 +153,7 @@ const AlimentosPage = () => {
             {loading ? (
                 <Loading rows={4} />
             ) : visibles.length === 0 ? (
-                <Empty>No hay alimentos en esta categoría.</Empty>
+                <Empty>No hay alimentos que coincidan con estos filtros.</Empty>
             ) : (
                 <div className="overflow-hidden rounded-2xl border border-border">
                     <table className="w-full text-left text-sm">

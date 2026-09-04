@@ -27,7 +27,7 @@ const PasswordRecoveryModal = ({ open, onClose }) => {
             // Nunca confirmar ni desmentir si el email existe: evita enumeración de cuentas.
             setSent(true);
         } catch {
-            setError('No se pudo procesar la solicitud. Probá de nuevo en un momento.');
+            setError('No se pudo procesar la solicitud. Intentar de nuevo en un momento.');
         } finally {
             setLoading(false);
         }
@@ -41,7 +41,11 @@ const PasswordRecoveryModal = ({ open, onClose }) => {
                         Si <span className="font-semibold">{email}</span> está registrado, vas a recibir un enlace
                         para restablecer tu contraseña en los próximos minutos.
                     </p>
-                    <Btn type="button" onClick={handleClose} className="w-full py-3">
+                    <Btn
+                        type="button"
+                        onClick={handleClose}
+                        className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                    >
                         Volver
                     </Btn>
                 </div>
@@ -71,7 +75,11 @@ const PasswordRecoveryModal = ({ open, onClose }) => {
                         <Btn type="button" variant="ghost" onClick={handleClose} className="flex-1 py-3">
                             Volver
                         </Btn>
-                        <Btn type="submit" disabled={loading} className="flex-1 py-3">
+                        <Btn
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                        >
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar enlace'}
                         </Btn>
                     </div>

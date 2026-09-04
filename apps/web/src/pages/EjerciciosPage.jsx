@@ -1,50 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { AlertTriangle, Dumbbell, ExternalLink, Play, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Dumbbell, ExternalLink, Lock, Play, Plus, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { CLASIFICACIONES, GRUPOS } from '@/lib/format';
+import { pathEnBucket, tipoDePreview } from '@/lib/mediaEjercicio';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
 const vacio = { nombre: '', grupo_muscular: [], clasificacion: '', media_url: '', descripcion: '' };
-
-// Un ejercicio puede tener media_url apuntando a un archivo propio (bucket
-// ejercicios-media) o a un link externo (YouTube, Vimeo, etc.). Solo tiene
-// sentido borrar de Storage en el primer caso — para el segundo no hay nada
-// nuestro que limpiar. El path dentro del bucket es siempre lo que viene
-// después de ".../object/public/ejercicios-media/".
-const pathEnBucket = (mediaUrl) => {
-    const marca = '/object/public/ejercicios-media/';
-    const i = mediaUrl?.indexOf(marca) ?? -1;
-    return i === -1 ? null : mediaUrl.slice(i + marca.length);
-};
-
-// Reportado por Nalux: "Ver demostración" abría el archivo en otra pestaña y
-// en el celular no se entendía cómo volver a la app. Para un archivo propio
-// (subido a nuestro bucket, mismas extensiones que ya valida onMediaChange)
-// alcanza con mostrarlo adentro, en un modal — nunca hay "pestaña" de la que
-// volver porque nunca se sale de la app. Para un link externo (YouTube,
-// Vimeo, etc.) no hay nada que embeber de forma simple y confiable, así que
-// ese caso sigue abriendo en pestaña nueva como antes.
-const EXTENSIONES_VIDEO = ['mp4', 'webm', 'mov'];
-const EXTENSIONES_IMAGEN = ['png', 'jpg', 'jpeg', 'webp'];
-
-const extensionDe = (url) => {
-    const limpio = (url || '').split('?')[0].split('#')[0];
-    const m = limpio.match(/\.([a-z0-9]+)$/i);
-    return m ? m[1].toLowerCase() : null;
-};
-
-// null = no hay preview posible acá (usar el link externo tal cual).
-const tipoDePreview = (mediaUrl) => {
-    if (!pathEnBucket(mediaUrl)) return null; // no es un archivo propio nuestro
-    const ext = extensionDe(mediaUrl);
-    if (EXTENSIONES_VIDEO.includes(ext)) return 'video';
-    if (EXTENSIONES_IMAGEN.includes(ext)) return 'imagen';
-    return null;
-};
 
 // Mismo criterio que 0005_ejercicios_media_storage.sql (bucket 'ejercicios-media'):
 // tope de 50 MB y solo estos 6 MIME types, ya validados también a nivel de bucket,
@@ -68,7 +33,6 @@ const EjerciciosPage = () => {
     const [error, setError] = useState('');
     const [filtro, setFiltro] = useState('todos');
     const [busqueda, setBusqueda] = useState('');
-    const [filtroClasificacion, setFiltroClasificacion] = useState('todos');
     const [filtroDemo, setFiltroDemo] = useState('todos'); // 'todos' | 'con' | 'sin'
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(vacio);
@@ -131,18 +95,15 @@ const EjerciciosPage = () => {
         [items],
     );
 
-    const clasificaciones = useMemo(
-        () => Array.from(new Set([...CLASIFICACIONES, ...items.map((i) => i.clasificacion).filter(Boolean)])),
-        [items],
-    );
-
-    // Los 4 filtros se combinan con AND: cada uno reduce la lista, no la
+    // Los 3 filtros se combinan con AND: cada uno reduce la lista, no la
     // reemplaza. El de grupo sigue siendo chips (es el que más se usa, tapa
-    // grande); patrón y demostración son selects más chicos (se usan menos
-    // seguido) para no saturar la pantalla en el celular.
+    // grande); demostración es un select más chico (se usa menos seguido)
+    // para no saturar la pantalla en el celular. El patrón de movimiento
+    // (clasificacion) no tiene filtro propio a pedido de Nalux — el campo
+    // sigue existiendo en el formulario y en la card, solo no hay forma de
+    // filtrar la lista por él.
     const visibles = items.filter((ej) => {
         if (filtro !== 'todos' && !(ej.grupo_muscular || []).includes(filtro)) return false;
-        if (filtroClasificacion !== 'todos' && ej.clasificacion !== filtroClasificacion) return false;
         if (filtroDemo === 'con' && !ej.media_url) return false;
         if (filtroDemo === 'sin' && ej.media_url) return false;
         if (busqueda.trim() && !ej.nombre?.toLowerCase().includes(busqueda.trim().toLowerCase())) return false;
@@ -193,7 +154,7 @@ const EjerciciosPage = () => {
     const guardar = async (e) => {
         e.preventDefault();
         if (form.grupo_muscular.length === 0) {
-            setGrupoError('Elegí al menos un grupo muscular.');
+            setGrupoError('Elegir al menos un grupo muscular.');
             return;
         }
         setGrupoError('');
@@ -231,7 +192,7 @@ const EjerciciosPage = () => {
                     await updateRec('ejercicios', id, { media_url: publicUrl });
                 } catch (_) {
                     setWarning(
-                        'El ejercicio se guardó, pero el archivo no se pudo subir. Podés volver a intentarlo editando el ejercicio.',
+                        'El ejercicio se guardó, pero el archivo no se pudo subir. Se puede volver a intentar editando el ejercicio.',
                     );
                 }
             }
@@ -248,8 +209,15 @@ const EjerciciosPage = () => {
 
     return (
         <AppLayout
-            title="Biblioteca de ejercicios"
-            subtitle="Cargá cada ejercicio una sola vez: después se elige desde el armador de planes."
+            title={
+                <span className="inline-flex flex-wrap items-center gap-3">
+                    Biblioteca de ejercicios
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-bold normal-case text-primary">
+                        {items.length} {items.length === 1 ? 'ejercicio' : 'ejercicios'}
+                    </span>
+                </span>
+            }
+            subtitle="Ya vienen 500 ejercicios de la biblioteca base, compartida por todos los gimnasios. Se pueden sumar más propios para completarla."
             actions={
                 <Btn
                     onClick={() => {
@@ -273,7 +241,7 @@ const EjerciciosPage = () => {
                 />
             </Helmet>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr,1fr]">
+            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
                 <div className="relative">
                     <Search
                         className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -288,18 +256,6 @@ const EjerciciosPage = () => {
                     />
                 </div>
                 <Select
-                    value={filtroClasificacion}
-                    onChange={(e) => setFiltroClasificacion(e.target.value)}
-                    aria-label="Filtrar por patrón de movimiento"
-                >
-                    <option value="todos">Todos los patrones</option>
-                    {clasificaciones.map((c) => (
-                        <option key={c} value={c}>
-                            {c}
-                        </option>
-                    ))}
-                </Select>
-                <Select
                     value={filtroDemo}
                     onChange={(e) => setFiltroDemo(e.target.value)}
                     aria-label="Filtrar por demostración cargada"
@@ -309,6 +265,12 @@ const EjerciciosPage = () => {
                     <option value="sin">Sin demostración</option>
                 </Select>
             </div>
+
+            {(filtro !== 'todos' || filtroDemo !== 'todos' || busqueda.trim()) && (
+                <p className="mb-3 text-xs font-semibold text-muted-foreground">
+                    Mostrando {visibles.length} de {items.length} ejercicios
+                </p>
+            )}
 
             <div className="mb-6 flex flex-wrap gap-2">
                 {['todos', ...grupos].map((g) => (
@@ -348,7 +310,14 @@ const EjerciciosPage = () => {
                                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
                                         <Dumbbell className="h-5 w-5 text-primary" strokeWidth={2} />
                                     </span>
-                                    <p className="font-display text-base font-bold">{ej.nombre}</p>
+                                    <div>
+                                        <p className="font-display text-base font-bold">{ej.nombre}</p>
+                                        {!ej.gimnasio_id && (
+                                            <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                <Lock className="h-3 w-3" /> Biblioteca base
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex flex-wrap justify-end gap-1.5">
                                     {ej.grupo_muscular?.length ? (
@@ -390,36 +359,43 @@ const EjerciciosPage = () => {
                                     </a>
                                 )
                             )}
-                            <div className="mt-4 flex gap-2">
-                                <Btn
-                                    variant="ghost"
-                                    className="px-3 py-2 text-xs"
-                                    onClick={() => {
-                                        setForm({
-                                            nombre: ej.nombre || '',
-                                            grupo_muscular: ej.grupo_muscular || [],
-                                            clasificacion: ej.clasificacion || '',
-                                            media_url: ej.media_url || '',
-                                            descripcion: ej.descripcion || '',
-                                        });
-                                        setEditId(ej.id);
-                                        limpiarMedia();
-                                        setMediaUrlActual(ej.media_url || '');
-                                        setWarning('');
-                                        setGrupoError('');
-                                        setOpen(true);
-                                    }}
-                                >
-                                    Editar
-                                </Btn>
-                                <Btn
-                                    variant="danger"
-                                    className="px-3 py-2 text-xs"
-                                    onClick={() => borrar(ej)}
-                                >
-                                    Eliminar
-                                </Btn>
-                            </div>
+                            {ej.gimnasio_id ? (
+                                <div className="mt-4 flex gap-2">
+                                    <Btn
+                                        variant="ghost"
+                                        className="px-3 py-2 text-xs"
+                                        onClick={() => {
+                                            setForm({
+                                                nombre: ej.nombre || '',
+                                                grupo_muscular: ej.grupo_muscular || [],
+                                                clasificacion: ej.clasificacion || '',
+                                                media_url: ej.media_url || '',
+                                                descripcion: ej.descripcion || '',
+                                            });
+                                            setEditId(ej.id);
+                                            limpiarMedia();
+                                            setMediaUrlActual(ej.media_url || '');
+                                            setWarning('');
+                                            setGrupoError('');
+                                            setOpen(true);
+                                        }}
+                                    >
+                                        Editar
+                                    </Btn>
+                                    <Btn
+                                        variant="danger"
+                                        className="px-3 py-2 text-xs"
+                                        onClick={() => borrar(ej)}
+                                    >
+                                        Eliminar
+                                    </Btn>
+                                </div>
+                            ) : (
+                                <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Lock className="h-3.5 w-3.5" /> Es de la biblioteca compartida, no se puede
+                                    editar ni borrar (afectaría a todos los gimnasios).
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -452,7 +428,7 @@ const EjerciciosPage = () => {
                             })}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                            Tocá los que correspondan — podés elegir más de uno.
+                            Marcar los que correspondan — se puede elegir más de uno.
                         </span>
                         {grupoError && <ErrorBox>{grupoError}</ErrorBox>}
                     </Field>
@@ -477,7 +453,7 @@ const EjerciciosPage = () => {
                             disabled={!!mediaFile}
                         />
                         <span className="text-xs text-muted-foreground">
-                            Pegá un link de YouTube, Vimeo, etc. — o subí tu propio archivo abajo.
+                            Pegar un link de YouTube, Vimeo, etc. — o subir un archivo propio abajo.
                         </span>
                     </Field>
                     <Field label="Subir archivo propio (opcional)">
@@ -489,15 +465,15 @@ const EjerciciosPage = () => {
                             className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground file:transition hover:file:brightness-110"
                         />
                         <span className="text-xs text-muted-foreground">
-                            MP4, WEBM, MOV, PNG, JPG o WEBP. Máximo 50 MB. Si subís un archivo, reemplaza la URL de
-                            arriba.
+                            MP4, WEBM, MOV, PNG, JPG o WEBP. Máximo 50 MB. Si se sube un archivo, reemplaza la URL
+                            de arriba.
                         </span>
                         {mediaFile && (
                             <span className="text-xs font-semibold text-primary">Archivo elegido: {mediaFile.name}</span>
                         )}
                         {!mediaFile && mediaUrlActual && (
                             <span className="text-xs text-muted-foreground">
-                                Ya tenés un archivo cargado para este ejercicio.
+                                Ya hay un archivo cargado para este ejercicio.
                             </span>
                         )}
                         {mediaError && <ErrorBox>{mediaError}</ErrorBox>}

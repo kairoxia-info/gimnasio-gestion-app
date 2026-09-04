@@ -82,4 +82,42 @@ body {
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius);
   }
+
+  /* "Kairox" del wordmark (components/AppLayout.jsx, componente Logo) --
+     pedido de Nalux (03/09/2026): "cambialo por un gris que se note (...)
+     tornasolado (...) tirando a un azulado". Antes era texto plano
+     text-primary (rojo). Es un color fijo, sin relación con --primary/
+     colorTema.js (eso es el theming por-gimnasio de post-login; este
+     wordmark es la marca de Kairox en sí, hoy solo aparece en las 3
+     pantallas de login/registro/recuperar). El "tornasolado" es un
+     recorrido lento del gradiente (background-position, no manda nada
+     nuevo al layout) -- gris azulado con un brillo casi blanco pasando
+     cada tanto, no una animación llamativa. */
+  .kx-shimmer {
+    background-image: linear-gradient(
+      110deg,
+      #6b7890 0%,
+      #9aa8bc 20%,
+      #eef3fa 40%,
+      #b8c4d6 60%,
+      #7c8aa0 80%,
+      #9aa8bc 100%
+    );
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: kx-shimmer-move 6s ease-in-out infinite;
+  }
+  @keyframes kx-shimmer-move {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .kx-shimmer {
+      animation: none;
+      background-position: 30% 50%;
+    }
+  }
 }

@@ -49,7 +49,7 @@ const UnirsePage = () => {
             if (err) throw err;
             setEnviado(true);
         } catch (err) {
-            setError(err?.message || 'No se pudo enviar tu solicitud. Probá de nuevo en un momento.');
+            setError(err?.message || 'No se pudo enviar la solicitud. Intentar de nuevo en un momento.');
         } finally {
             setLoading(false);
         }
@@ -58,10 +58,10 @@ const UnirsePage = () => {
     return (
         <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
             <Helmet>
-                <title>Unite a tu gimnasio | Gestión GYM Kairox IA</title>
+                <title>Unirse al gimnasio | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
-                    content="Autorregistro rápido de alumnos: dejá tus datos y tu profe te contacta para activar tu cuenta."
+                    content="Autorregistro rápido de alumnos: dejar los datos para que el profesor active la cuenta."
                 />
             </Helmet>
 
@@ -96,11 +96,11 @@ const UnirsePage = () => {
                         Autorregistro de alumnos
                     </p>
                     <h1 className="font-display mt-2 text-xl font-bold">
-                        {nombreGimnasio ? `Unite a ${nombreGimnasio}` : 'Autorregistro'}
+                        {nombreGimnasio ? `Unirse a ${nombreGimnasio}` : 'Autorregistro'}
                     </h1>
                     {!enviado && (
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Dejanos tus datos y tu profe te contacta para activar tu cuenta.
+                            Dejar los datos para que el profesor se ponga en contacto y active la cuenta.
                         </p>
                     )}
                 </div>
@@ -110,7 +110,7 @@ const UnirsePage = () => {
                         <CheckCircle2 className="h-10 w-10 text-ok" strokeWidth={1.8} />
                         <p className="font-display text-lg font-bold">¡Listo!</p>
                         <p className="text-sm text-muted-foreground">
-                            Ya avisamos a tu profe. En breve te va a contactar para activar tu cuenta.
+                            Ya se avisó al profesor. En breve se va a poner en contacto para activar la cuenta.
                         </p>
                     </div>
                 ) : (
@@ -139,7 +139,7 @@ const UnirsePage = () => {
                                 type="email"
                                 value={form.email}
                                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                placeholder="vos@correo.com"
+                                placeholder="nombre@correo.com"
                                 autoComplete="email"
                             />
                         </Field>

@@ -5,8 +5,9 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Building2, ImagePlus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
-import { Logo, ThemeToggle } from '@/components/AppLayout';
+import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import AuthBackdrop from '@/components/AuthBackdrop';
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const MIME_TO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
@@ -75,53 +76,40 @@ const OnboardingPage = () => {
                 } catch {
                     // No bloqueamos el alta del gimnasio por un logo que falló al subir.
                     // Se puede volver a subir después desde Configuración.
-                    setWarning('El gimnasio se creó, pero el logo no se pudo subir. Podés cargarlo después desde Configuración.');
+                    setWarning('El gimnasio se creó, pero el logo no se pudo subir. Se puede cargar después desde Configuración.');
                 }
             }
 
             await refreshProfile();
             navigate('/panel', { replace: true });
         } catch {
-            setError('No se pudo crear el gimnasio. Probá de nuevo en un momento.');
+            setError('No se pudo crear el gimnasio. Intentar de nuevo en un momento.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
+        <AuthBackdrop>
             <Helmet>
-                <title>Creá tu gimnasio | Gestión GYM Kairox IA</title>
-                <meta name="description" content="Configurá el gimnasio para empezar a usar Gestión GYM Kairox IA." />
+                <title>Crear el gimnasio | Gestión GYM Kairox IA</title>
+                <meta name="description" content="Configurar el gimnasio para empezar a usar Gestión GYM Kairox IA." />
             </Helmet>
-
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-32 top-1/4 h-[36rem] w-[36rem] rounded-full bg-primary/20 blur-3xl"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-primary"
-            />
-
-            <div className="absolute right-4 top-4">
-                <ThemeToggle />
-            </div>
 
             <motion.div
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-md rounded-3xl border border-border bg-card p-8"
+                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-20" />
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         Un último paso
                     </p>
-                    <h1 className="font-display mt-2 text-xl font-bold">Creá tu gimnasio</h1>
+                    <h1 className="font-display mt-2 text-xl font-bold text-foreground">Crear el gimnasio</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Con esto armamos el espacio donde vas a gestionar alumnos, planes y pagos.
+                        Con esto se arma el espacio para gestionar alumnos, planes y pagos.
                     </p>
                 </div>
 
@@ -160,7 +148,7 @@ const OnboardingPage = () => {
                                 type="file"
                                 accept="image/png,image/jpeg,image/webp"
                                 onChange={onFileChange}
-                                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground file:transition hover:file:brightness-110"
+                                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#1c1509] file:transition hover:file:brightness-105"
                             />
                         </div>
                         <span className="text-xs text-muted-foreground">PNG, JPG o WEBP. Máximo 2 MB.</span>
@@ -174,12 +162,16 @@ const OnboardingPage = () => {
                         </div>
                     )}
 
-                    <Btn type="submit" disabled={loading} className="w-full py-3">
+                    <Btn
+                        type="submit"
+                        disabled={loading}
+                        className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                    >
                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear gimnasio y continuar'}
                     </Btn>
                 </form>
             </motion.div>
-        </div>
+        </AuthBackdrop>
     );
 };
 

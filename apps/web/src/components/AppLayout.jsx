@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
     Apple,
     Building2,
     CalendarCheck,
+    ChefHat,
     ClipboardList,
     Dumbbell,
     LayoutDashboard,
@@ -14,11 +15,15 @@ import {
     Moon,
     Settings,
     Sun,
+    Tag,
     Users,
     Wallet,
     X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import NotificacionesCampana from '@/components/NotificacionesCampana';
+import { listAll, updateRec } from '@/lib/data';
+import { estadoCuota, ultimoPagoDeAlumno } from '@/lib/format';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -26,10 +31,12 @@ const NAV = [
     { to: '/ejercicios', label: 'Ejercicios', icon: Dumbbell },
     { to: '/rutinas', label: 'Rutinas', icon: ClipboardList },
     { to: '/alimentos', label: 'Alimentos', icon: Apple },
+    { to: '/planes-alimentacion', label: 'Planes de alimentación', icon: ChefHat },
     { to: '/asistencia', label: 'Asistencia', icon: CalendarCheck },
     { to: '/pagos', label: 'Pagos', icon: Wallet },
     { to: '/avisos', label: 'Avisos', icon: Megaphone },
-    { to: '/configuracion', label: 'Precios', icon: Settings },
+    { to: '/precios', label: 'Precios', icon: Tag },
+    { to: '/configuracion', label: 'Configuración', icon: Settings },
 ];
 
 // Wordmark propio (ícono + texto), a propósito sin ninguna imagen externa:
@@ -53,9 +60,9 @@ export const Logo = ({ className = 'h-10' }) => {
     return (
         <div className={`${className} inline-flex w-auto items-center gap-2.5 text-foreground`}>
             <span
-                className={`${size.badge} inline-flex shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10`}
+                className={`${size.badge} inline-flex shrink-0 items-center justify-center rounded-xl border border-[#8f9db2]/30 bg-[#8f9db2]/10`}
             >
-                <Dumbbell aria-hidden="true" className={`${size.icon} text-primary`} strokeWidth={2.2} />
+                <Dumbbell aria-hidden="true" className={`${size.icon} text-[#aebbcf]`} strokeWidth={2.2} />
             </span>
             {/* Dos líneas a propósito: "Gestión GYM Kairox IA" entero no
                 entra en una sola línea sin desbordar ni la tarjeta de login
@@ -67,22 +74,38 @@ export const Logo = ({ className = 'h-10' }) => {
             >
                 <span className="block">Gestión GYM</span>
                 <span className="block">
-                    <span className="text-primary">Kairox</span> IA
+                    <span className="kx-shimmer">Kairox</span> IA
                 </span>
             </span>
         </div>
     );
 };
 
-// Marca del GIMNASIO del profe logueado (nombre + logo propio, cargados en el
-// onboarding) — esto es lo que tiene que resaltar *adentro* de la app, no la
-// marca de Kairox. Si todavía no subió logo, cae a un ícono genérico + el
-// nombre en texto (con truncate: el nombre del gimnasio es arbitrario, puede
-// ser mucho más largo que "Gestión GYM Kairox IA").
+// Marca del GIMNASIO del profe logueado (logo + nombre, cargados en el
+// onboarding/Configuración) — esto es lo que tiene que resaltar *adentro* de
+// la app, no la marca de Kairox (esa vive aparte, en KairoxFooterMark).
+//
+// Reportado por Nalux (03/09/2026): "la imagen logo está bien, después el
+// nombre del gym, que se vea al lado del logo arriba en el banner, no tan
+// grande que sea chico y sutil". Antes, en cuanto el gimnasio tenía logo
+// cargado, el nombre desaparecía por completo (el <img> se devolvía solo, sin
+// texto al lado) — solo se veía el nombre en el caso sin-logo, ahí sí bien
+// grande porque tenía que cargar solo con todo el peso visual de la marca.
+// Ahora el logo (o el ícono genérico de respaldo si todavía no subió uno) y
+// el nombre van siempre juntos; el tratamiento del texto cambia según el
+// caso: chico/gris/sin mayúsculas al lado de un logo real (el logo ya es la
+// marca, el nombre es apoyo), grande/en mayúsculas cuando el nombre ES la
+// única marca disponible (sin logo, tiene que sostener el peso solo).
 const GIMNASIO_TEXT_SIZES = {
     'h-9': { icon: 'h-4 w-4', text: 'text-sm' },
     'h-10': { icon: 'h-[18px] w-[18px]', text: 'text-base' },
     'h-12': { icon: 'h-5 w-5', text: 'text-lg' },
+};
+
+const GIMNASIO_NOMBRE_JUNTO_A_LOGO_SIZES = {
+    'h-9': 'text-[11px]',
+    'h-10': 'text-xs',
+    'h-12': 'text-sm',
 };
 
 const GimnasioMark = ({ className = 'h-10' }) => {
@@ -91,14 +114,20 @@ const GimnasioMark = ({ className = 'h-10' }) => {
     const nombre = gimnasio?.nombre || 'Tu gimnasio';
 
     if (gimnasio?.logo_url && !imgFailed) {
+        const textoSize = GIMNASIO_NOMBRE_JUNTO_A_LOGO_SIZES[className] || GIMNASIO_NOMBRE_JUNTO_A_LOGO_SIZES['h-10'];
         return (
-            <img
-                src={gimnasio.logo_url}
-                alt={nombre}
-                title={nombre}
-                onError={() => setImgFailed(true)}
-                className={`${className} w-auto max-w-full shrink-0 rounded-lg object-contain`}
-            />
+            <div className={`${className} inline-flex w-auto min-w-0 items-center gap-2`}>
+                <img
+                    src={gimnasio.logo_url}
+                    alt={nombre}
+                    title={nombre}
+                    onError={() => setImgFailed(true)}
+                    className="h-full w-auto max-w-full shrink-0 rounded-lg object-contain"
+                />
+                <span className={`min-w-0 truncate font-semibold leading-none tracking-tight text-muted-foreground ${textoSize}`}>
+                    {nombre}
+                </span>
+            </div>
         );
     }
 
@@ -143,13 +172,86 @@ export { ThemeToggle };
 
 const AppLayout = ({ title, subtitle, actions, children }) => {
     const [open, setOpen] = useState(false);
-    const { signOut, user } = useAuth();
+    const { signOut, user, profile } = useAuth();
     const navigate = useNavigate();
 
     const salir = async () => {
         await signOut();
         navigate('/login', { replace: true });
     };
+
+    // Política "dar de baja" (Configuración, migraciones 0020/0021): cuando
+    // un alumno vence la cuota (pasado el plazo de gracia), pasa a
+    // activo=false solo. No hay pg_cron acá -- alcanza con chequear esto una
+    // vez por día, la primera vez que un profesor autenticado abre cualquier
+    // pantalla (AppLayout envuelve TODAS), en vez de instalar infraestructura
+    // de scheduling nueva para algo que no necesita correr a un minuto
+    // exacto. localStorage guarda la última fecha en que corrió, por
+    // gimnasio, para no repetir la consulta en cada click de navegación.
+    useEffect(() => {
+        const gimnasioId = profile?.gimnasio_id;
+        if (!gimnasioId) return undefined;
+
+        const clave = `chequeoVencimiento:${gimnasioId}`;
+        const hoyStr = new Date().toISOString().slice(0, 10);
+        let cancelado = false;
+        try {
+            if (localStorage.getItem(clave) === hoyStr) return undefined;
+        } catch (_) {
+            // Sin localStorage (modo privado estricto, etc.): sigue igual,
+            // simplemente va a volver a chequear en la próxima carga.
+        }
+
+        (async () => {
+            try {
+                const [gim] = await listAll('gimnasios', { filters: { id: gimnasioId } });
+                if (cancelado || gim?.politica_vencimiento_cuota !== 'dar_de_baja') {
+                    if (!cancelado) {
+                        try {
+                            localStorage.setItem(clave, hoyStr);
+                        } catch (_) {
+                            // nada que hacer sin localStorage
+                        }
+                    }
+                    return;
+                }
+
+                const [alumnos, pagos] = await Promise.all([
+                    listAll('alumnos', { filters: { activo: true } }),
+                    listAll('pagos'),
+                ]);
+                if (cancelado) return;
+
+                const config = { dias_gracia_cuota: gim.dias_gracia_cuota };
+                const idsABajar = alumnos
+                    .filter((a) => {
+                        const estado = estadoCuota(ultimoPagoDeAlumno(a.id, pagos), config);
+                        return estado === 'vencido' || estado === 'con_deuda';
+                    })
+                    .map((a) => a.id);
+
+                if (idsABajar.length > 0 && !cancelado) {
+                    await Promise.all(idsABajar.map((id) => updateRec('alumnos', id, { activo: false })));
+                }
+                if (!cancelado) {
+                    try {
+                        localStorage.setItem(clave, hoyStr);
+                    } catch (_) {
+                        // nada que hacer sin localStorage
+                    }
+                }
+            } catch (_) {
+                // Silencioso a propósito: si falla (red, permisos), no se
+                // guarda la fecha -- se vuelve a intentar en la próxima
+                // pantalla que abra, en vez de quedar un día entero sin
+                // aplicar la baja por un error transitorio.
+            }
+        })();
+
+        return () => {
+            cancelado = true;
+        };
+    }, [profile?.gimnasio_id]);
 
     const links = (
         <nav className="flex flex-col gap-1">
@@ -211,6 +313,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                 <GimnasioMark className="h-9" />
                             </div>
                             <div className="ml-auto flex items-center gap-2">
+                                <NotificacionesCampana />
                                 {actions}
                                 <ThemeToggle />
                             </div>

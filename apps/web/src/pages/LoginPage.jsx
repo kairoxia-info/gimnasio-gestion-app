@@ -4,8 +4,9 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Loader2, Lock, Mail, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Logo, ThemeToggle } from '@/components/AppLayout';
+import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import AuthBackdrop from '@/components/AuthBackdrop';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 
 const traducirError = (err, modo) => {
@@ -52,7 +53,7 @@ const LoginPage = () => {
                 if (data?.session) {
                     navigate('/panel', { replace: true });
                 } else {
-                    setInfo('Cuenta creada. Revisá tu correo para confirmar antes de ingresar.');
+                    setInfo('Cuenta creada. Revisar el correo para confirmar antes de ingresar.');
                 }
             }
         } catch (err) {
@@ -69,7 +70,7 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
+        <AuthBackdrop>
             <Helmet>
                 <title>Ingresar | Gestión GYM Kairox IA</title>
                 <meta
@@ -78,32 +79,15 @@ const LoginPage = () => {
                 />
             </Helmet>
 
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-32 top-1/4 h-[36rem] w-[36rem] rounded-full bg-primary/20 blur-3xl"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -left-32 bottom-0 h-[28rem] w-[28rem] rounded-full bg-primary/10 blur-3xl"
-            />
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-primary"
-            />
-
-            <div className="absolute right-4 top-4">
-                <ThemeToggle />
-            </div>
-
             <motion.div
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-md rounded-3xl border border-border bg-card p-8"
+                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-24" />
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         Panel del entrenador
                     </p>
                 </div>
@@ -188,7 +172,7 @@ const LoginPage = () => {
                             <button
                                 type="button"
                                 onClick={() => setRecoveryOpen(true)}
-                                className="text-xs font-semibold text-primary hover:underline"
+                                className="text-xs font-semibold text-[#d8b876] hover:underline"
                             >
                                 Olvidé mi contraseña
                             </button>
@@ -202,7 +186,11 @@ const LoginPage = () => {
                         </div>
                     )}
 
-                    <Btn type="submit" disabled={loading} className="w-full py-3">
+                    <Btn
+                        type="submit"
+                        disabled={loading}
+                        className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                    >
                         {loading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
@@ -215,15 +203,17 @@ const LoginPage = () => {
                 </form>
 
                 <p className="mt-6 text-center text-sm text-muted-foreground">
-                    {isLogin ? '¿No tenés cuenta?' : '¿Ya tenés cuenta?'}{' '}
-                    <button type="button" onClick={toggleMode} className="font-semibold text-primary hover:underline">
-                        {isLogin ? 'Registrate' : 'Iniciá sesión'}
+                    {isLogin ? '¿No tiene una cuenta?' : '¿Ya tiene una cuenta?'}{' '}
+                    <button type="button" onClick={toggleMode} className="font-semibold text-[#d8b876] hover:underline">
+                        {isLogin ? 'Registrarse' : 'Iniciar sesión'}
                     </button>
                 </p>
             </motion.div>
 
-            <PasswordRecoveryModal open={recoveryOpen} onClose={() => setRecoveryOpen(false)} />
-        </div>
+            <div className="dark">
+                <PasswordRecoveryModal open={recoveryOpen} onClose={() => setRecoveryOpen(false)} />
+            </div>
+        </AuthBackdrop>
     );
 };
 
