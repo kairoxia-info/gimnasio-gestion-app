@@ -31,7 +31,7 @@ const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
     { to: '/alumnos', label: 'Alumnos', icon: Users },
     { to: '/ejercicios', label: 'Ejercicios', icon: Dumbbell },
-    { to: '/rutinas', label: 'Rutinas', icon: ClipboardList },
+    { to: '/rutinas', label: 'Rutinas de ejercicios', icon: ClipboardList },
     { to: '/alimentos', label: 'Alimentos', icon: Apple },
     { to: '/planes-alimentacion', label: 'Planes de alimentación', icon: ChefHat },
     { to: '/asistencia', label: 'Asistencia', icon: CalendarCheck },

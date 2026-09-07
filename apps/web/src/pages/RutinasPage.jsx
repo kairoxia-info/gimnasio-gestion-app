@@ -783,7 +783,7 @@ const RutinasPage = () => {
         <AppLayout
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
-                    Biblioteca de rutinas
+                    Biblioteca de rutinas de ejercicios
                     <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-bold normal-case text-primary">
                         {rutinas.length} {rutinas.length === 1 ? 'rutina' : 'rutinas'}
                     </span>
@@ -797,7 +797,7 @@ const RutinasPage = () => {
             }
         >
             <Helmet>
-                <title>Biblioteca de rutinas | Gestión GYM Kairox IA</title>
+                <title>Biblioteca de rutinas de ejercicios | Gestión GYM Kairox IA</title>
                 <meta
                     name="description"
                     content="Rutinas de entrenamiento reutilizables por gimnasio, con asignación masiva a alumnos."
