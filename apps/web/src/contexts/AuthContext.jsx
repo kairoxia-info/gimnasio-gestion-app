@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
+import { limpiarTodoOffline } from '@/lib/offline';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 
 const AuthContext = createContext(null);
@@ -91,7 +92,14 @@ export const AuthProvider = ({ children }) => {
                     password,
                     options: { data: { first_name, last_name } },
                 }),
-            signOut: () => supabase.auth.signOut(),
+            // Limpia el cache y la cola de sincronización de este celular
+            // (lib/offline.js) -- si no, un profesor distinto que se loguee
+            // después en el mismo dispositivo vería datos (o pagos/asistencia
+            // pendientes) de este gimnasio.
+            signOut: async () => {
+                limpiarTodoOffline();
+                return supabase.auth.signOut();
+            },
             resetPasswordForEmail: (email) =>
                 supabase.auth.resetPasswordForEmail(email, {
                     redirectTo: `${window.location.origin}/restablecer-password`,

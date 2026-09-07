@@ -5,6 +5,7 @@ import { CheckCheck, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Btn, Card, Empty, ErrorBox, Input, Loading, Modal } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
+import { agregarACola, esErrorDeRed, onCambioCola } from '@/lib/offline';
 import { fmtFecha } from '@/lib/format';
 
 // El lunes de la semana en la que cae `fecha`. getDay() devuelve 0 para
@@ -131,6 +132,23 @@ const AsistenciaPage = () => {
         cargar();
     }, []);
 
+    // Cuando algo pendiente de esta pantalla (una marca de asistencia
+    // cargada sin conexión) se termina de mandar, hay que volver a pedir los
+    // datos reales -- si no, "PENDIENTE DE MANDAR" se queda pegado en
+    // pantalla para siempre, aunque ya se haya sincronizado (bug encontrado
+    // en revisión, 04/09/2026: onCambioCola avisa a AppLayout, pero nadie
+    // más estaba escuchando).
+    const cantidadPendientesRef = useRef(0);
+    useEffect(
+        () =>
+            onCambioCola((cola) => {
+                const propios = cola.filter((x) => x.tipo === 'asistencia').length;
+                if (propios < cantidadPendientesRef.current) cargar();
+                cantidadPendientesRef.current = propios;
+            }),
+        [],
+    );
+
     const mapa = useMemo(() => {
         const m = {};
         asistencias.forEach((a) => {
@@ -165,14 +183,41 @@ const AsistenciaPage = () => {
     // "ausente" se piden siempre expresamente, nunca por ciclo. Volver a
     // elegir el estado que ya está activo borra la marca, que es la forma de
     // corregir a alguien que se marcó por error.
-    const marcarComo = (alumnoId, fecha, presente) => {
+    //
+    // Sin conexión (pedido de Nalux, 04/09/2026): se encola como upsert y se
+    // aplica en pantalla de forma optimista, SIN pasar por cargar() (que
+    // volvería a traer -del cache- el estado de ANTES de esta marca,
+    // pisándola). A propósito no se soporta offline el caso "tocar de nuevo
+    // para borrar la marca" -- sin conexión no hay forma confiable de saber
+    // si en el servidor ya había algo puesto desde otro lado; ese caso queda
+    // con el mensaje de error de siempre, para reintentar con señal.
+    const marcarComo = async (alumnoId, fecha, presente) => {
         const clave = `${alumnoId}|${fecha}`;
+        if (enVuelo.current.has(clave)) return;
         const actual = mapa[clave];
-        return escribirMarca(clave, () => {
-            if (!actual) return createRec('asistencias', { alumno_id: alumnoId, fecha, presente });
-            if (actual.presente === presente) return removeRec('asistencias', actual.id);
-            return updateRec('asistencias', actual.id, { presente });
-        });
+        const esBorrado = actual && actual.presente === presente;
+        if (esBorrado) {
+            return escribirMarca(clave, () => removeRec('asistencias', actual.id));
+        }
+
+        enVuelo.current.add(clave);
+        try {
+            if (!actual) await createRec('asistencias', { alumno_id: alumnoId, fecha, presente });
+            else await updateRec('asistencias', actual.id, { presente });
+            await cargar();
+        } catch (err) {
+            if (esErrorDeRed(err)) {
+                agregarACola({ tipo: 'asistencia', payload: { alumno_id: alumnoId, fecha, presente } });
+                setAsistencias((prev) => [
+                    ...prev.filter((a) => `${a.alumno_id}|${a.fecha}` !== clave),
+                    { id: `offline-${clave}`, alumno_id: alumnoId, fecha, presente, pendiente: true },
+                ]);
+            } else {
+                setError('No se pudo guardar la asistencia. Intentar de nuevo.');
+            }
+        } finally {
+            enVuelo.current.delete(clave);
+        }
     };
 
     const quitarMarca = (alumnoId, fecha) => {
@@ -399,12 +444,19 @@ const AsistenciaPage = () => {
                                     key={a.id}
                                     className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
                                 >
-                                    <Link
-                                        to={`/alumnos/${a.id}`}
-                                        className="font-semibold hover:text-primary"
-                                    >
-                                        {a.nombre}
-                                    </Link>
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <Link
+                                            to={`/alumnos/${a.id}`}
+                                            className="font-semibold hover:text-primary"
+                                        >
+                                            {a.nombre}
+                                        </Link>
+                                        {reg?.pendiente && (
+                                            <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warn">
+                                                Pendiente de mandar
+                                            </span>
+                                        )}
+                                    </span>
                                     <div className="flex gap-2">
                                         <button
                                             type="button"

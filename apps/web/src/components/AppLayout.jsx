@@ -18,12 +18,14 @@ import {
     Tag,
     Users,
     Wallet,
+    WifiOff,
     X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
 import { listAll, updateRec } from '@/lib/data';
 import { estadoCuota, ultimoPagoDeAlumno } from '@/lib/format';
+import { onCambioCola, verCola } from '@/lib/offline';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -170,12 +172,50 @@ const ThemeToggle = () => {
 
 export { ThemeToggle };
 
+// Pedido de Nalux (04/09/2026): que el panel se pueda seguir usando si se
+// corta el wifi del gimnasio, y que avise cuándo hay algo (asistencia,
+// pagos) guardado en el celular todavía sin mandar. navigator.onLine puede
+// arrancar en true por unos segundos aunque no haya señal real -- por eso
+// esto es un aviso, no la fuente de verdad de si un dato en pantalla está
+// actualizado.
+const useEstadoOffline = () => {
+    const [sinConexion, setSinConexion] = useState(!navigator.onLine);
+    const [pendientes, setPendientes] = useState(() => verCola().length);
+
+    useEffect(() => {
+        const marcarOnline = () => setSinConexion(false);
+        const marcarOffline = () => setSinConexion(true);
+        window.addEventListener('online', marcarOnline);
+        window.addEventListener('offline', marcarOffline);
+        const desuscribir = onCambioCola((cola) => setPendientes(cola.length));
+        return () => {
+            window.removeEventListener('online', marcarOnline);
+            window.removeEventListener('offline', marcarOffline);
+            desuscribir();
+        };
+    }, []);
+
+    return { sinConexion, pendientes };
+};
+
 const AppLayout = ({ title, subtitle, actions, children }) => {
     const [open, setOpen] = useState(false);
     const { signOut, user, profile } = useAuth();
     const navigate = useNavigate();
+    const { sinConexion, pendientes } = useEstadoOffline();
 
     const salir = async () => {
+        // Cerrar sesión limpia la cola de sincronización de este celular
+        // (AuthContext.jsx) -- si todavía hay algo sin mandar, se perdería.
+        // Nunca debería pasar en el uso normal (se manda solo apenas vuelve
+        // la señal), pero si justo se corta de nuevo a mitad de camino, hay
+        // que avisar antes de perderlo.
+        if (pendientes > 0) {
+            const seguir = window.confirm(
+                `Todavía hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin mandar (asistencia o pagos cargados sin conexión). Si cerrás sesión ahora se pierden. ¿Cerrar igual?`,
+            );
+            if (!seguir) return;
+        }
         await signOut();
         navigate('/login', { replace: true });
     };
@@ -319,6 +359,15 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             </div>
                         </div>
                     </header>
+
+                    {(sinConexion || pendientes > 0) && (
+                        <div className="flex items-center justify-center gap-2 bg-warn/15 px-4 py-2 text-center text-xs font-semibold text-warn">
+                            <WifiOff className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+                            {sinConexion
+                                ? 'Sin conexión -- mostrando lo último cargado. Lo que hagas ahora se manda solo apenas vuelva la señal.'
+                                : `Sincronizando ${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'}...`}
+                        </div>
+                    )}
 
                     <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
                         {(title || subtitle) && (

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Printer, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll } from '@/lib/data';
+import { agregarACola, esErrorDeRed, onCambioCola, verCola } from '@/lib/offline';
 import { ESTADOS_PAGO, deudaEstimada, estadoCuota, fmtFecha, hoy, money } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
@@ -191,6 +192,28 @@ const PagosPage = () => {
     // si hace falta — la misma hoja sirve para las dos cosas.
     const [comprobante, setComprobante] = useState(null);
 
+    // Pagos cargados sin conexión (lib/offline.js), esperando a mandarse de
+    // verdad -- pedido de Nalux (04/09/2026). Sin número de comprobante
+    // todavía: ese lo asigna el servidor recién cuando el pago se manda en
+    // serio (asignar_numero_comprobante(), migración original), así que acá
+    // no hay nada que imprimir ni mostrar como comprobante -- solo un aviso
+    // de que está guardado y va a mandarse solo.
+    const [pendientes, setPendientes] = useState(() => verCola().filter((x) => x.tipo === 'pago'));
+    // Si un pago pendiente se termina de mandar, hay que volver a pedir los
+    // pagos reales -- si no, ni aparece en la lista de abajo ni se entera de
+    // su número de comprobante real (bug encontrado en revisión, 04/09/2026).
+    const cantidadPendientesRef = useRef(0);
+    useEffect(
+        () =>
+            onCambioCola((cola) => {
+                const propios = cola.filter((x) => x.tipo === 'pago');
+                setPendientes(propios);
+                if (propios.length < cantidadPendientesRef.current) cargar();
+                cantidadPendientesRef.current = propios.length;
+            }),
+        [],
+    );
+
     const cargar = () => {
         setLoading(true);
         return Promise.all([
@@ -349,30 +372,41 @@ const PagosPage = () => {
         if (!form.alumno_id) return;
         setSaving(true);
         setError('');
+        // "Activar sin cobrar": queda el período cubierto pero con importe
+        // 0 y TODO el total como saldo pendiente, así el alumno aparece
+        // "Con deuda" en vez de aparecer como si hubiera pagado.
+        const cobrado = sinCobrar ? 0 : totalACobrar;
+        const adeudado = sinCobrar ? totalACobrar : Number(form.monto_adeudado || 0);
+        const payload = {
+            alumno_id: form.alumno_id,
+            monto: cobrado,
+            monto_adeudado: adeudado,
+            fecha_pago: form.fecha_pago,
+            periodo_desde: form.periodo_desde,
+            periodo_hasta: form.periodo_hasta || null,
+            descuento: Number(form.descuento || 0),
+            interes: Number(form.interes || 0),
+            metodo: sinCobrar ? 'Sin cobrar' : form.metodo,
+            notas: form.notas,
+        };
         try {
-            // "Activar sin cobrar": queda el período cubierto pero con importe
-            // 0 y TODO el total como saldo pendiente, así el alumno aparece
-            // "Con deuda" en vez de aparecer como si hubiera pagado.
-            const cobrado = sinCobrar ? 0 : totalACobrar;
-            const adeudado = sinCobrar ? totalACobrar : Number(form.monto_adeudado || 0);
-
-            const creado = await createRec('pagos', {
-                alumno_id: form.alumno_id,
-                monto: cobrado,
-                monto_adeudado: adeudado,
-                fecha_pago: form.fecha_pago,
-                periodo_desde: form.periodo_desde,
-                periodo_hasta: form.periodo_hasta || null,
-                descuento: Number(form.descuento || 0),
-                interes: Number(form.interes || 0),
-                metodo: sinCobrar ? 'Sin cobrar' : form.metodo,
-                notas: form.notas,
-            });
+            const creado = await createRec('pagos', payload);
             setOpen(false);
             await cargar();
             setComprobante(creado);
-        } catch (_) {
-            setError('No se pudo registrar el pago.');
+        } catch (err) {
+            // Sin conexión (pedido de Nalux, 04/09/2026): se guarda en el
+            // celular y se manda de verdad apenas vuelva la señal -- SIN
+            // número de comprobante todavía (ese lo asigna el servidor recién
+            // al insertarse en serio), así que acá no hay nada que imprimir
+            // ni mostrar como comprobante, solo el aviso de "pendiente" en la
+            // lista de abajo (queda armado solo con onCambioCola).
+            if (esErrorDeRed(err)) {
+                agregarACola({ tipo: 'pago', payload });
+                setOpen(false);
+            } else {
+                setError('No se pudo registrar el pago.');
+            }
         } finally {
             setSaving(false);
         }
@@ -439,6 +473,31 @@ const PagosPage = () => {
                             </div>
                         </Card>
                     </div>
+
+                    {pendientes.length > 0 && (
+                        <Card className="mb-6 border-warn/40 bg-warn/10">
+                            <h2 className="font-display text-lg font-bold">
+                                {pendientes.length} pago{pendientes.length === 1 ? '' : 's'} pendiente
+                                {pendientes.length === 1 ? '' : 's'} de mandar
+                            </h2>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Se cargaron sin conexión -- se van a mandar solos (con su número de
+                                comprobante real) apenas vuelva la señal.
+                            </p>
+                            <ul className="mt-3 divide-y divide-border">
+                                {pendientes.map((p) => (
+                                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                                        <span className="font-semibold">
+                                            {alumnos.find((a) => a.id === p.payload.alumno_id)?.nombre || 'Alumno'}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            {money(p.payload.monto)} · {fmtFecha(p.payload.fecha_pago)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
+                    )}
 
                     <div>
                         <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">

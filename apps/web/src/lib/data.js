@@ -1,5 +1,6 @@
 import supabase from '@/lib/supabaseClient';
 import { getCurrentGimnasioId } from '@/lib/currentGimnasio';
+import { esErrorDeRed, guardarEnCache, leerDeCache } from '@/lib/offline';
 
 // Traduce el string de sort heredado del cliente anterior ('-created_at' |
 // 'nombre') a los args de .order() de supabase-js. Sin sort => sin .order(): varias
@@ -25,14 +26,32 @@ const aplicarFiltros = (query, filters) => {
     return q;
 };
 
+// Pedido de Nalux (04/09/2026): que el panel se pueda seguir viendo si se
+// corta el wifi del gimnasio. Cada resultado que trae con éxito se guarda
+// en lib/offline.js; si la próxima vez falla por error de RED (no por
+// RLS/permiso -- esos se re-lanzan tal cual, mostrar "sin conexión" sería
+// mentir), cae a lo último guardado en vez de romper la pantalla. Sin cache
+// todavía para esa consulta puntual (primera vez que se pide, sin conexión
+// desde el arranque), no hay nada que devolver: se re-lanza el error de red
+// como siempre.
 export const listAll = async (collection, options = {}) => {
     const { sort, filters } = options;
     let query = supabase.from(collection).select('*');
     query = aplicarFiltros(query, filters);
     query = aplicarSort(query, sort);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data ?? [];
+    try {
+        const { data, error } = await query;
+        if (error) throw error;
+        const resultado = data ?? [];
+        guardarEnCache(collection, options, resultado);
+        return resultado;
+    } catch (err) {
+        if (esErrorDeRed(err)) {
+            const cacheado = leerDeCache(collection, options);
+            if (cacheado) return cacheado;
+        }
+        throw err;
+    }
 };
 
 export const createRec = async (collection, data) => {
