@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
-import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF, esperarImagenesCargadas } from '@/components/RutinaPDF';
+import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
+import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import { DIAS, agruparPorBloque, fmtFecha, hoy, semanaDeItem } from '@/lib/format';
@@ -594,12 +595,26 @@ const RutinasPage = () => {
 
         setPdfConflicto(null);
         setRutinaImprimiendo(pdfModalRutina);
-        setPdfModalRutina(null);
-        requestAnimationFrame(async () => {
-            await esperarImagenesCargadas('.rutina-pdf-hoja img');
-            window.print();
+        // Baja el archivo directo en vez de abrir el diálogo de impresión
+        // (pedido de Nalux, 07/09/2026). descargarComoPdf espera sola a que
+        // React termine de montar la hoja, así que no hace falta
+        // requestAnimationFrame -- que además no corre si la pestaña quedó en
+        // segundo plano, y ahí esto no se disparaba nunca.
+        //
+        // El modal se cierra recién cuando el PDF salió bien: si falla, queda
+        // abierto mostrando el error (el cartel de pdfError vive adentro del
+        // modal, cerrarlo antes lo dejaría invisible).
+        try {
+            await descargarComoPdf(
+                '.rutina-pdf-hoja',
+                [pdfModalRutina.nombre, pdfAlumnoNombre].filter(Boolean).join(' - '),
+            );
+            setPdfModalRutina(null);
+        } catch (_) {
+            setPdfError('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
             setRutinaImprimiendo(null);
-        });
+        }
     };
 
     // Desde la migración 0026 el FK es ON DELETE SET NULL y cada asignación
@@ -1030,9 +1045,18 @@ const RutinasPage = () => {
                         {!pdfConflicto && (
                             <Btn
                                 onClick={confirmarPdf}
-                                disabled={pdfAsignando || (pdfModo === 'alumno' && !pdfAlumnoId)}
+                                disabled={
+                                    pdfAsignando ||
+                                    !!rutinaImprimiendo ||
+                                    (pdfModo === 'alumno' && !pdfAlumnoId)
+                                }
                             >
-                                <Printer className="h-4 w-4" /> {pdfAsignando ? 'Asignando...' : 'Generar PDF'}
+                                <Printer className="h-4 w-4" />{' '}
+                                {pdfAsignando
+                                    ? 'Asignando...'
+                                    : rutinaImprimiendo
+                                      ? 'Generando...'
+                                      : 'Generar PDF'}
                             </Btn>
                         )}
                     </div>

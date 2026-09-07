@@ -20,8 +20,9 @@ import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
 import { agruparCombos, agruparItemsRutina, agruparPorBloque, armarTextoAlimentos } from '@/lib/format';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
-import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF, esperarImagenesCargadas } from '@/components/RutinaPDF';
+import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
+import { descargarComoPdf } from '@/lib/descargarPdf';
 
 // El campo "descanso" de cada ejercicio es texto libre que escribe el profe
 // ("90 s", "1:30", "2 min", "60"...), no un número — así que hay que
@@ -436,6 +437,11 @@ const MiPlanPage = () => {
     // plan de comida" arman cada uno su propio PDF con solo lo que
     // corresponde, en vez de un único PDF con todo mezclado.
     const [imprimiendoSeccion, setImprimiendoSeccion] = useState(null);
+    // Si la generación del PDF falla (navegador viejo, quedarse sin señal
+    // justo cuando va a bajar la librería), el alumno tiene que enterarse:
+    // antes el diálogo de impresión al menos aparecía o no, ahora sin aviso
+    // el botón parecería no hacer nada.
+    const [errorPdf, setErrorPdf] = useState('');
     // Cartel de aviso (Bloque G6): "Entendido" se resuelve 100% client-side
     // sin recargar la página. avisoOculto es un estado APARTE de `plan` (no
     // se muta plan.aviso_id) para no tener que reconstruir el objeto entero
@@ -444,40 +450,28 @@ const MiPlanPage = () => {
     const [marcandoAviso, setMarcandoAviso] = useState(false);
     const [avisoError, setAvisoError] = useState('');
 
-    // 'afterprint' es un evento estándar del navegador que se dispara al
-    // cerrarse el diálogo de impresión, se haya guardado el PDF o
-    // cancelado — se usa para "soltar" el filtro de sección después, sin
-    // adivinar con un timeout cuánto tarda el usuario en elegir. Es solo
-    // prolijidad (deja el estado en null cuando ya no hace falta): NO es lo
-    // que dispara la impresión en sí, ver descargarSeccion() más abajo.
-    useEffect(() => {
-        const soltar = () => setImprimiendoSeccion(null);
-        window.addEventListener('afterprint', soltar);
-        return () => window.removeEventListener('afterprint', soltar);
-    }, []);
-
-    // Fija qué hoja de impresión queda montada y recién AHÍ llama a print()
-    // — nunca desde un useEffect enganchado al valor de imprimiendoSeccion.
-    // Motivo: si 'afterprint' no llegara a dispararse en algún navegador
-    // (pasa en algunas versiones de iOS), el estado quedaría trabado en, por
-    // ejemplo, 'rutina'; un useEffect por-valor no volvería a dispararse si
-    // el alumno aprieta "Descargar en PDF" de la rutina una segunda vez
-    // (mismo valor = sin cambio = sin efecto). Acá, en cambio, cada clic
-    // llama a print() de nuevo sin importar el valor anterior.
-    // requestAnimationFrame espera al frame siguiente para que React ya haya
-    // montado la hoja (RutinaImprimiblePDF/PlanAlimentacionImprimiblePDF) en
-    // el DOM antes de abrir el diálogo — si se llamara print() en el mismo
-    // tick, se arriesga a capturar el DOM de antes de que aparezca.
-    // Además de esperar al frame siguiente, se espera a que el logo del
-    // gimnasio (EncabezadoPDF, en las dos hojas) termine de cargar antes de
-    // imprimir -- si no, la imagen recién montada puede no estar lista
-    // todavía y el logo sale en blanco (reportado por Nalux, 03/09/2026).
-    const descargarSeccion = (seccion) => {
+    // Monta la hoja de la sección pedida y, en cuanto está en el DOM, genera
+    // y baja el PDF (lib/descargarPdf.js). Antes esto abría el diálogo de
+    // impresión y había que elegir "Guardar como PDF" a mano -- pedido de
+    // Nalux (07/09/2026) que baje directo, que en el celular es mucho más
+    // claro. requestAnimationFrame espera al frame siguiente para que React
+    // ya haya montado la hoja antes de fotografiarla.
+    const descargarSeccion = async (seccion) => {
         setImprimiendoSeccion(seccion);
-        requestAnimationFrame(async () => {
-            await esperarImagenesCargadas('.rutina-pdf-hoja img, .alimentacion-pdf-hoja img');
-            window.print();
-        });
+        setErrorPdf('');
+        const esRutina = seccion === 'rutina';
+        try {
+            // descargarComoPdf espera solo a que React termine de montar la
+            // hoja, así que no hace falta coordinar el momento desde acá.
+            await descargarComoPdf(
+                esRutina ? '.rutina-pdf-hoja' : '.alimentacion-pdf-hoja',
+                `${esRutina ? 'Rutina' : 'Plan de alimentación'} - ${plan?.alumno_nombre || 'alumno'}`,
+            );
+        } catch (_) {
+            setErrorPdf('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
+            setImprimiendoSeccion(null);
+        }
     };
 
     // El alumno toca "Entendido" en el cartel de aviso (Bloque G6). Sin
@@ -694,6 +688,12 @@ const MiPlanPage = () => {
                         </p>
                     )}
 
+                    {errorPdf && (
+                        <p className="mp-no-imprimir bg-destructive/15 px-4 py-2 text-center text-xs font-semibold text-destructive">
+                            {errorPdf}
+                        </p>
+                    )}
+
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6">
                         {/* Recordatorio automático de cuota (migración 0015). A
                             diferencia del aviso manual de arriba, este NO tiene botón
@@ -778,9 +778,11 @@ const MiPlanPage = () => {
                                     <button
                                         type="button"
                                         onClick={() => descargarSeccion('rutina')}
-                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98]"
+                                        disabled={imprimiendoSeccion === 'rutina'}
+                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98] disabled:opacity-60"
                                     >
-                                        <Download className="h-5 w-5" aria-hidden="true" /> Descargar en PDF
+                                        <Download className="h-5 w-5" aria-hidden="true" />{' '}
+                                        {imprimiendoSeccion === 'rutina' ? 'Generando...' : 'Descargar en PDF'}
                                     </button>
                                 )}
                             </div>
@@ -1073,9 +1075,11 @@ const MiPlanPage = () => {
                                     <button
                                         type="button"
                                         onClick={() => descargarSeccion('alimentacion')}
-                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98]"
+                                        disabled={imprimiendoSeccion === 'alimentacion'}
+                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98] disabled:opacity-60"
                                     >
-                                        <Download className="h-5 w-5" aria-hidden="true" /> Descargar en PDF
+                                        <Download className="h-5 w-5" aria-hidden="true" />{' '}
+                                        {imprimiendoSeccion === 'alimentacion' ? 'Generando...' : 'Descargar en PDF'}
                                     </button>
                                 )}
                             </div>

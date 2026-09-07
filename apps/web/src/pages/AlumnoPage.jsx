@@ -6,8 +6,9 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
-import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF, esperarImagenesCargadas } from '@/components/RutinaPDF';
+import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
+import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
@@ -115,6 +116,10 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
     // reasignar toda la rutina (el caso común: "extendele una semana más").
     const [fechaFinEdit, setFechaFinEdit] = useState(plan?.fechaFin || '');
     const [guardandoFechaFin, setGuardandoFechaFin] = useState(false);
+    // Generación del PDF (lib/descargarPdf.js): tarda un par de segundos, así
+    // que el botón avisa mientras trabaja en vez de parecer que no hizo nada.
+    const [generandoPdf, setGenerandoPdf] = useState(false);
+    const [errorPdf, setErrorPdf] = useState('');
 
     useEffect(() => {
         setFechaFinEdit(plan?.fechaFin || '');
@@ -191,17 +196,21 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
         }
     };
 
-    // La hoja de impresión (RutinaImprimiblePDF) queda siempre montada, oculta
-    // por CSS (ver ESTILOS_IMPRESION_RUTINA) mientras hay plan -- no hace
-    // falta un estado "imprimiendo" como en RutinasPage/MiPlanPage porque acá
-    // solo hay UNA cosa para imprimir en esta pantalla, nunca dos secciones
-    // que puedan pisarse. Igual se espera a que el logo termine de cargar
-    // antes de imprimir (ver esperarImagenesCargadas) -- normalmente ya está
-    // cargado porque la hoja está montada desde que entró a la página, pero
-    // no hay que asumirlo (conexión lenta, logo recién cambiado, etc.).
-    const imprimir = async () => {
-        await esperarImagenesCargadas('.rutina-pdf-hoja img');
-        window.print();
+    // La hoja del PDF (RutinaImprimiblePDF) queda siempre montada, oculta por
+    // CSS mientras hay plan. Antes esto abría el diálogo de impresión y había
+    // que elegir "Guardar como PDF" a mano; pedido de Nalux (07/09/2026) que
+    // baje el archivo directo. descargarComoPdf ya espera a que el logo del
+    // gimnasio termine de cargar antes de sacarle la foto a la hoja.
+    const descargarPdf = async () => {
+        setGenerandoPdf(true);
+        setErrorPdf('');
+        try {
+            await descargarComoPdf('.rutina-pdf-hoja', `Rutina - ${alumnoNombre || 'alumno'}`);
+        } catch (_) {
+            setErrorPdf('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
+            setGenerandoPdf(false);
+        }
     };
 
     const grupos = useMemo(() => agruparItemsRutina(plan?.items || []), [plan]);
@@ -309,8 +318,14 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={imprimir}>
-                            <Printer className="h-3.5 w-3.5" /> Descargar PDF
+                        <Btn
+                            variant="ghost"
+                            className="px-3 py-2 text-xs"
+                            onClick={descargarPdf}
+                            disabled={generandoPdf}
+                        >
+                            <Printer className="h-3.5 w-3.5" />{' '}
+                            {generandoPdf ? 'Generando...' : 'Descargar PDF'}
                         </Btn>
                         <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={abrirSelector}>
                             Cambiar rutina
@@ -343,6 +358,7 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                 </div>
 
                 {msg && !cambiando && <p className="mt-3 text-sm text-muted-foreground">{msg}</p>}
+                {errorPdf && <p className="mt-3 text-sm font-semibold text-destructive">{errorPdf}</p>}
             </Card>
 
             {(plan.items || []).length === 0 ? (
@@ -537,6 +553,9 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
     // Fecha de fin del plan YA asignado, editable sin reasignar todo.
     const [fechaFinEdit, setFechaFinEdit] = useState(plan?.fecha_fin || '');
     const [guardandoFechaFin, setGuardandoFechaFin] = useState(false);
+    // Igual que en PlanEntrenamiento: aviso mientras se arma el PDF.
+    const [generandoPdf, setGenerandoPdf] = useState(false);
+    const [errorPdf, setErrorPdf] = useState('');
 
     useEffect(() => {
         setFechaFinEdit(plan?.fecha_fin || '');
@@ -627,9 +646,19 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
         }
     };
 
-    const imprimir = async () => {
-        await esperarImagenesCargadas('.alimentacion-pdf-hoja img');
-        window.print();
+    const descargarPdf = async () => {
+        setGenerandoPdf(true);
+        setErrorPdf('');
+        try {
+            await descargarComoPdf(
+                '.alimentacion-pdf-hoja',
+                `Plan de alimentación - ${alumnoNombre || 'alumno'}`,
+            );
+        } catch (_) {
+            setErrorPdf('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
+            setGenerandoPdf(false);
+        }
     };
 
     // Mismo modal para "asignar por primera vez" y "cambiar" -- solo cambia
@@ -751,8 +780,14 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
                         )}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={imprimir}>
-                            <Printer className="h-3.5 w-3.5" /> Descargar PDF
+                        <Btn
+                            variant="ghost"
+                            className="px-3 py-2 text-xs"
+                            onClick={descargarPdf}
+                            disabled={generandoPdf}
+                        >
+                            <Printer className="h-3.5 w-3.5" />{' '}
+                            {generandoPdf ? 'Generando...' : 'Descargar PDF'}
                         </Btn>
                         <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={abrirSelector}>
                             Cambiar plan
@@ -785,6 +820,7 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
                 </div>
 
                 {msg && !cambiando && <p className="mt-3 text-sm text-muted-foreground">{msg}</p>}
+                {errorPdf && <p className="mt-3 text-sm font-semibold text-destructive">{errorPdf}</p>}
             </Card>
 
             {(plan.items || []).length === 0 ? (

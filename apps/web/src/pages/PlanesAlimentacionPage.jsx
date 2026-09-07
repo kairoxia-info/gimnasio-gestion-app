@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus 
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
-import { esperarImagenesCargadas } from '@/components/RutinaPDF';
+import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { armarTextoAlimentos, fmtFecha, hoy } from '@/lib/format';
@@ -562,12 +562,21 @@ const PlanesAlimentacionPage = () => {
 
         setPdfConflicto(null);
         setPlanImprimiendo(pdfModalPlan);
-        setPdfModalPlan(null);
-        requestAnimationFrame(async () => {
-            await esperarImagenesCargadas('.alimentacion-pdf-hoja img');
-            window.print();
+        // Mismo criterio que en RutinasPage: baja el archivo directo, sin
+        // pasar por el diálogo de impresión (pedido de Nalux, 07/09/2026), y
+        // el modal se cierra recién si salió bien, para que un error se
+        // llegue a ver.
+        try {
+            await descargarComoPdf(
+                '.alimentacion-pdf-hoja',
+                [pdfModalPlan.nombre, pdfAlumnoNombre].filter(Boolean).join(' - '),
+            );
+            setPdfModalPlan(null);
+        } catch (_) {
+            setPdfError('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
             setPlanImprimiendo(null);
-        });
+        }
     };
 
     return (
@@ -1023,9 +1032,18 @@ const PlanesAlimentacionPage = () => {
                         {!pdfConflicto && (
                             <Btn
                                 onClick={confirmarPdf}
-                                disabled={pdfAsignando || (pdfModo === 'alumno' && !pdfAlumnoId)}
+                                disabled={
+                                    pdfAsignando ||
+                                    !!planImprimiendo ||
+                                    (pdfModo === 'alumno' && !pdfAlumnoId)
+                                }
                             >
-                                <Printer className="h-4 w-4" /> {pdfAsignando ? 'Asignando...' : 'Generar PDF'}
+                                <Printer className="h-4 w-4" />{' '}
+                                {pdfAsignando
+                                    ? 'Asignando...'
+                                    : planImprimiendo
+                                      ? 'Generando...'
+                                      : 'Generar PDF'}
                             </Btn>
                         )}
                     </div>
