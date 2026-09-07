@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Printer, Search } from 'lucide-react';
+import { Download, Plus, Printer, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll } from '@/lib/data';
+import { descargarComoPdf } from '@/lib/descargarPdf';
 import { agregarACola, esErrorDeRed, onCambioCola, verCola } from '@/lib/offline';
 import { ESTADOS_PAGO, deudaEstimada, estadoCuota, fmtFecha, hoy, money } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +25,9 @@ const ESTILOS_IMPRESION = `
   @page { size: A4; margin: 18mm; }
   body * { visibility: hidden !important; }
   .cp-hoja, .cp-hoja * { visibility: visible !important; }
+  /* La copia que se usa solo para armar el PDF descargable no se imprime:
+     si no, el comprobante saldria dos veces en el papel. */
+  .cp-hoja-pdf, .cp-hoja-pdf * { visibility: hidden !important; display: none !important; }
   .cp-hoja {
     display: block !important;
     position: absolute;
@@ -57,7 +61,7 @@ const vacioPago = {
 // holgada, cada dato en su propia fila de una tabla (nada de posicionamiento
 // absoluto que se pueda encimar) y el total bien grande al final.
 // ---------------------------------------------------------------------------
-const Comprobante = ({ pago, alumno, gimnasio, enPantalla = false }) => {
+const Comprobante = ({ pago, alumno, gimnasio, enPantalla = false, paraPdf = false }) => {
     if (!pago) return null;
     const color = gimnasio?.color_principal || '#E10600';
     const filas = [
@@ -76,7 +80,7 @@ const Comprobante = ({ pago, alumno, gimnasio, enPantalla = false }) => {
         // blanco del tema oscuro y los valores quedan blanco sobre blanco
         // (pasó exactamente eso al inspeccionarla en pantalla).
         <div
-            className={`cp-hoja${enPantalla ? ' cp-en-pantalla' : ''}`}
+            className={`cp-hoja${enPantalla ? ' cp-en-pantalla' : ''}${paraPdf ? ' cp-hoja-pdf' : ''}`}
             style={{
                 fontFamily: 'Arial, Helvetica, sans-serif',
                 fontSize: '12pt',
@@ -191,6 +195,10 @@ const PagosPage = () => {
     // solo imprimirlo, así que se muestra en un modal y desde ahí se imprime
     // si hace falta — la misma hoja sirve para las dos cosas.
     const [comprobante, setComprobante] = useState(null);
+    // Descarga del comprobante en PDF (pedido de Nalux, 07/09/2026): sirve
+    // para mandarselo al alumno por WhatsApp sin tener que imprimirlo.
+    const [generandoPdfComprobante, setGenerandoPdfComprobante] = useState(false);
+    const [errorPdfComprobante, setErrorPdfComprobante] = useState('');
 
     // Pagos cargados sin conexión (lib/offline.js), esperando a mandarse de
     // verdad -- pedido de Nalux (04/09/2026). Sin número de comprobante
@@ -423,6 +431,27 @@ const PagosPage = () => {
     };
 
     const alumnoDe = (pago) => alumnos.find((a) => a.id === pago?.alumno_id);
+
+    // Se fotografia una copia aparte del comprobante (la que lleva la clase
+    // cp-hoja-pdf), no la que se esta viendo en el modal: asi la hoja se puede
+    // medir a lo ancho de una A4 sin que al alumno le baile en pantalla lo que
+    // esta mirando.
+    const descargarComprobante = async () => {
+        if (!comprobante) return;
+        setGenerandoPdfComprobante(true);
+        setErrorPdfComprobante('');
+        const numero = String(comprobante.numero ?? '').padStart(4, '0');
+        try {
+            await descargarComoPdf(
+                '.cp-hoja-pdf',
+                `Comprobante ${numero} - ${alumnoDe(comprobante)?.nombre || 'alumno'}`,
+            );
+        } catch (_) {
+            setErrorPdfComprobante('No se pudo generar el PDF. Probar de nuevo.');
+        } finally {
+            setGenerandoPdfComprobante(false);
+        }
+    };
 
     return (
         <AppLayout
@@ -870,12 +899,29 @@ const PagosPage = () => {
                         enPantalla
                     />
                 </div>
-                <div className="mt-4 flex justify-end gap-2">
+                {/* Copia oculta, con el mismo contenido, que es la que se
+                    convierte en PDF. No se imprime (ver ESTILOS_IMPRESION). */}
+                <Comprobante
+                    pago={comprobante}
+                    alumno={alumnoDe(comprobante)}
+                    gimnasio={gimnasio}
+                    paraPdf
+                />
+
+                {errorPdfComprobante && (
+                    <p className="mt-3 text-sm font-semibold text-destructive">{errorPdfComprobante}</p>
+                )}
+
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
                     <Btn variant="ghost" onClick={() => setComprobante(null)}>
                         Cerrar
                     </Btn>
-                    <Btn onClick={() => window.print()}>
+                    <Btn variant="ghost" onClick={() => window.print()}>
                         <Printer className="h-4 w-4" /> Imprimir
+                    </Btn>
+                    <Btn onClick={descargarComprobante} disabled={generandoPdfComprobante}>
+                        <Download className="h-4 w-4" />{' '}
+                        {generandoPdfComprobante ? 'Generando...' : 'Descargar PDF'}
                     </Btn>
                 </div>
             </Modal>
