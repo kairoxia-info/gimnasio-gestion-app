@@ -413,6 +413,24 @@ no queda ninguna pendiente con el cliente por ahora. Lo único que queda como tr
 confirmó el modelo "varios gimnasios" — es una decisión de negocio (qué plan, qué medio de cobro)
 que hay que planificar antes de tocar código, ver la nota en `PLAN.md`.
 
+### Estado real al 07/09/2026
+
+Todo lo que estaba anotado como pendiente en los planes de trabajo del 04/09 **ya está hecho**:
+PDF de alimentación con la marca del gimnasio, seguimiento físico con pierna y cadera
+(migración 0023) y gráfico de ingresos mes a mes con archivado manual (0024). El plan que los
+daba por pendientes estaba viejo — ver la entrada del 07/09 en el historial.
+
+Lo que sí queda abierto:
+
+- **G3 / G4** (cargas de ejercicio y récords automáticos) siguen bloqueados, pero **la razón
+  cambió**: la Decisión 20 los bloqueaba porque el acceso del alumno era por QR, de sólo lectura
+  y sin identidad. Desde la migración **0028 el alumno tiene login propio** (usuario y contraseña
+  que le crea el profesor), así que ahora **sí hay identidad para que escriba datos propios**.
+  Antes de retomarlos hay que definir con Nalux si quiere que el alumno cargue sus pesos.
+- El pendiente de seguridad del punto 2 de arriba (trigger `BEFORE UPDATE` sobre `profiles` y
+  reactivar "Confirm email") sigue igual, sin tocar.
+- Nalux mencionó el 07/09 que quiere cambios "del lado del alumno", pero todavía no dijo cuáles.
+
 ---
 
 ## 6. Cómo levantar el proyecto en local
@@ -2031,3 +2049,194 @@ los DATOS son solo de su gimnasio (aislados por RLS), lo único global es el bot
 Verificado en vivo: "Ver demostración" en un ejercicio importado abrió la foto real adentro del
 modal (antes hubiera abierto pestaña nueva). `eslint` limpio, `vite build` sin errores (2694
 módulos). Nada subido a git.
+---
+
+## 04/09/2026 — Bloque grande: biblioteca de alimentación, rutinas congeladas, login del alumno y offline del alumno
+
+> ⚠️ Entrada reconstruida el 07/09/2026 a partir de las migraciones y del código: ese día se
+> trabajó mucho y no se fue anotando acá. Es el motivo por el que Nalux pidió, el 07/09, que
+> CONTEXT.md se actualice **en la misma tanda de cada cambio** — ver el cierre de esta entrada.
+
+Migraciones **0022 a 0028**. Lo que quedó:
+
+- **0022** — `ver_plan_por_codigo()` devuelve también `fecha_inicio`/`fecha_fin` del plan de
+  alimentación, para que el PDF del alumno pueda mostrar el rango igual que el de rutina.
+- **0023** — `progreso` suma `pierna` y `cadera`. Se investigó qué miden los gimnasios: el set
+  estándar es cintura, cadera, pecho, brazo y muslo. Nalux pidió pierna; cadera se sumó de una
+  vez por ser el complemento de cintura (relación cintura-cadera) en toda la bibliografía.
+- **0024** — `ingresos_por_mes()` (gráfico del panel) y archivado manual de pagos. El archivado
+  es **siempre** una acción explícita del profesor, nunca automática: cada fila de `pagos` es
+  también el comprobante numerado, borrarla pierde la posibilidad de reimprimirlo.
+- **0025** — biblioteca de planes de alimentación reutilizables, el equivalente de Rutinas para
+  el lado de nutrición.
+- **0026** — la rutina asignada guarda su **propia copia** del contenido ("congelada"): editar
+  después la plantilla en la biblioteca ya no le cambia la rutina a nadie sin avisar. Mismo
+  criterio que ya usaba `planes_alimentacion`.
+- **0027** — se sacó un fallback de `ver_plan_por_codigo()` que rompía esa garantía de "copia
+  congelada" en el caso borde de una rutina asignada con 0 ejercicios.
+- **0028** — **login del alumno con usuario y contraseña**, que reemplaza al QR. Lo crea el
+  profesor desde la ficha del alumno (`crear_acceso_alumno`), la contraseña se hashea con
+  `crypt()`/`gen_salt('bf')` y `iniciar_sesion_alumno()` devuelve el `codigo_acceso` que la app
+  guarda en el celular. Mensaje de error genérico a propósito (no revela si el usuario existe) y
+  límite de intentos por ventana de tiempo.
+
+Además, sin migración: **`public/sw.js`**, un service worker escrito a mano (a propósito, sin
+plugin de build: `vite.config.js` ya tiene mucha lógica propia de la plataforma de despliegue y
+no conviene tocarlo) para que el alumno pueda seguir viendo su rutina y su plan **sin señal ni
+wifi**, que es la situación real en muchos gimnasios.
+
+---
+
+## 07/09/2026 — El traductor de Chrome rompía la app, panel offline del profesor, PDF descargable y un montón de correcciones
+
+Día largo. Lo más importante primero.
+
+### El hallazgo grande: el traductor automático de Chrome rompía la app
+
+Nalux reportó que en el celular la app **se ponía en negro** al entrar o al cambiar de módulo, y
+que había que recargar a mano. También que aparecían palabras rarísimas: **"viernes" salía como
+"rivalizar"**, **"planes" como "aviones"** y la **"P" de Presente como "PAG"**.
+
+Esas tres palabras fueron la pista. Ninguna estaba en el código: eran **traducciones**. "Vie" es
+un verbo en inglés (*to vie* = rivalizar), *planes* en inglés son aviones, y la "P" la leyó como
+abreviatura de *Page* → *Pág*.
+
+**Causa raíz:** `apps/web/index.html` venía de la plantilla de Hostinger Horizons con
+`<html lang="en">`, con toda la app escrita en español. Chrome daba la página por inglesa y le
+pasaba el traductor automático por encima. Y al traducir, **Chrome reemplaza los nodos de texto
+del DOM**; React, que sigue apuntando a los nodos originales, explota al intentar actualizarlos
+(el clásico `removeChild ... is not a child of this node`). Eso era la pantalla negra, los
+crashes al entrar a Alumnos, y también **los contadores en 0** de las bibliotecas: la página se
+rompía antes de terminar de cargar los datos, y quedaba el valor inicial.
+
+**Arreglo:** `lang="es"` + `translate="no"` + `<meta name="google" content="notranslate">`.
+
+⚠️ **Gotcha para el futuro:** si alguna vez se agrega otro HTML de entrada, tiene que declarar el
+idioma real. Un `lang` equivocado no es un detalle de accesibilidad acá: rompe React en producción
+de una forma que no aparece nunca en desarrollo (el traductor no se activa en localhost).
+
+### Red de contención: error boundary
+
+No había **ningún** error boundary en toda la app, así que cualquier excepción al renderizar
+desmontaba todo React y dejaba `<div id="root">` vacío — que en modo oscuro se ve negro y mudo.
+Nuevo `components/ErrorBoundary.jsx` envolviendo la app: ahora sale un mensaje con botón de
+recargar. No evita el error, evita que el usuario se quede mirando una pantalla negra sin saber
+qué pasó.
+
+### Panel del profesor sin conexión (migraciones 0029 y 0030)
+
+Pedido de Nalux: que si el gimnasio se queda sin wifi unas horas, el panel siga usable y se
+sincronice solo al volver. Se implementó en `lib/offline.js`:
+
+- **Ver datos ya cargados**: `listAll()` guarda en `localStorage` cada resultado exitoso y, si
+  la próxima falla **por red** (no por permisos — eso se re-lanza tal cual), devuelve lo último
+  guardado.
+- **Marcar asistencia y registrar pagos sin conexión**: se encolan y se mandan solos con el
+  evento `online`. Los pagos se sincronizan **de a uno y en orden**, porque el número de
+  comprobante se asigna recién al insertarse de verdad.
+- Cartel global de "sin conexión / sincronizando N pendientes" y aviso al cerrar sesión si queda
+  algo sin mandar (cerrar sesión limpia la cola).
+
+⚠️ **Gotcha real, costó encontrarlo:** la 0029 creó el índice de `pagos.client_id` como índice
+único **parcial** (`WHERE client_id IS NOT NULL`). PostgREST arma el upsert como
+`ON CONFLICT (client_id)` sin el `WHERE`, y Postgres no lo reconoce como el mismo índice: error
+`42P10`. Resultado: **todo pago cargado sin conexión fallaba en silencio al sincronizar** (se
+descartaba de la cola sin insertarse). La **0030** lo reemplaza por un `UNIQUE` normal — no hace
+falta que sea parcial, porque en Postgres un UNIQUE ya permite cualquier cantidad de `NULL`.
+
+### Service worker: la otra causa de "hay que recargar"
+
+Cuando se sube una versión nueva, Vercel deja de servir los JS/CSS de la anterior. Si el service
+worker devolvía un HTML viejo guardado, ese HTML pedía archivos que ya no existen (404 real, no
+error de red) y la app no arrancaba. Tres arreglos: cache renombrada a `kairox-v2` (así el celular
+descarta la vieja entera), fallback al cache cuando la red responde con error y no sólo cuando
+falla la conexión, y **recarga automática una sola vez** cuando el navegador avisa que un service
+worker nuevo tomó control de la pestaña (`controllerchange`).
+
+### PDF: páginas en blanco y descarga directa
+
+- **Páginas en blanco**: el CSS de impresión ocultaba la app con `visibility: hidden`, que la hace
+  invisible **pero le deja toda su altura** — el navegador seguía paginando esas pantallas vacías
+  detrás del PDF. Ahora la hoja se monta **fuera de `#root`** (portal al `body`) y al imprimir se
+  saca la app con `display: none`. Medido después del cambio: 1 página, 0 sobrante.
+- **Descarga directa** (pedido de Nalux: "que se baje en PDF más práctico"): antes había que
+  pasar por el diálogo de imprimir y elegir "Guardar como PDF". Ahora `lib/descargarPdf.js`
+  fotografía la misma hoja y baja el archivo con nombre propio ("Rutina - Alumno 4.pdf"). Alcanza
+  a las cuatro pantallas que generan PDF más el comprobante de pago.
+  - `jspdf` y `html2canvas` se cargan con **`import()` dinámico**: entre las dos pesan ~587 KB y
+    son para una acción puntual, así que Vite las deja en archivos aparte. Verificado en el build
+    real: al abrir la app no se descarga ninguna de las dos; el bundle principal sólo creció 12 KB.
+  - El comprobante se genera desde una **copia aparte** (clase `cp-hoja-pdf`), no desde la que se
+    ve en el modal, para no moverla en pantalla mientras se la fotografía. Esa copia está excluida
+    del `@media print` para que en papel no salga el comprobante dos veces.
+
+⚠️ **Gotcha:** el código usaba `requestAnimationFrame` para esperar a que React montara la hoja.
+**rAF no corre si la pestaña está en segundo plano**, así que si el usuario cambiaba de pestaña
+justo al tocar el botón, se quedaba en "Generando..." para siempre. Reemplazado por una espera
+que consulta el DOM.
+
+### Cobro más simple (migración 0032)
+
+Nalux: *"muchos comprobantes sin cobrar, está mal eso, el comprobante saldría cuando el alumno ya
+paga"*. Tenía razón: toda fila de `pagos` se llevaba número de comprobante, incluidas las
+activaciones sin cobrar (monto 0), y la lista se llenaba de comprobantes por $ 0.
+
+Ahora el número **se asigna sólo si entró plata** (`monto > 0`). Una activación sin cobrar sigue
+siendo una fila (cubre el período y deja la deuda anotada) pero sin número: no es un comprobante,
+porque no hubo nada que comprobar. Los pagos parciales sí llevan número — hubo un cobro real.
+En pantalla, esas activaciones se muestran en su propia sección ("Activados sin cobrar") con
+botón para cobrar, y en el formulario la opción pasó a ser secundaria ("No está pagando ahora").
+
+Los comprobantes que ya se habían numerado antes de esta migración se filtran por monto en la
+UI, así que salen del listado **sin tocar ningún dato ya cargado**. Como contrapartida, esos
+números quedan ocupados y la numeración visible salta (0001 → 0004).
+
+### Asistencia (migración 0031)
+
+- **Presente en verde y ausente en rojo siempre**, sin importar el color que el gimnasio haya
+  configurado. Antes el ausente usaba el color de marca, que en un gimnasio rosa no se leía como
+  "faltó".
+- **Días que abre el gimnasio**, configurables (`gimnasios.dias_abiertos`, default lunes a
+  sábado). Los días cerrados salen en gris y no se pueden marcar. Se generalizó a los 7 días en
+  vez de un booleano sólo para el domingo: hay gimnasios que cierran otros días.
+- "Cuántas veces **vino** o faltó" en vez de "fue".
+
+### Correcciones de responsive (celular)
+
+- **Armado de rutina y vista del alumno**: series / reps / peso / descanso quedaban uno debajo del
+  otro (cuatro renglones por ejercicio). Ahora entran los cuatro en una línea, con cajas más
+  chicas.
+- **Biblioteca de alimentos**: la tabla quedaba cortada y encima el contenedor tenía
+  `overflow-hidden`, así que tampoco se podía correr al costado. En pantalla chica pasa a ser una
+  tarjeta por alimento; la tabla queda de `sm` para arriba.
+- **Barra de arriba**: botones como "Nuevo alumno" se partían en dos renglones y le comían el
+  ancho al nombre del gimnasio, que quedaba en "Mi G...". Ahora el botón de acción baja a su
+  propia fila en el celular y el nombre se ve completo.
+
+### Otras correcciones del día
+
+- **Contador de la biblioteca de alimentos** (era la única de las tres sin contador) y el
+  subtítulo de ejercicios pasa a **contar los que realmente hay** en vez de decir "500" escrito a
+  mano (Nalux: *"no mintamos por favor"*; el número resultó ser cierto, pero ahora se calcula).
+- **Botón "Ver"** en las tarjetas de rutinas y de planes de alimentación, para abrirlos en modo
+  lectura sin entrar a editarlos.
+- **Alta de alumno**: el plan pasa a ser obligatorio y muestra el precio al lado. Si todavía no
+  hay planes cargados, avisa y manda a Precios.
+- **Módulo "Rutinas" → "Rutinas de ejercicios"**, en el menú y en el título de la pantalla.
+- **Seguimiento físico**: el formulario ya tenía las siete medidas desde la 0023, pero guardaba
+  `Number(campo || 0)` — si el profesor sólo pesaba al alumno (lo normal: se pesa seguido, se mide
+  de vez en cuando), las otras cinco quedaban guardadas como **0 cm**. Ahora un campo vacío va
+  como NULL, el historial lista sólo las medidas realmente tomadas, y el gráfico de peso saltea
+  los registros sin peso. El 0 se interpreta como "no medido" en toda la pantalla, así que los
+  registros que ya habían quedado en 0 también se ven bien sin tocarles el dato.
+
+### Por qué esta entrada existe
+
+Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
+hecho desde el 04/09** — igual que el gráfico de ingresos y el PDF de alimentación. El plan que
+había guardado los daba por pendientes porque se escribió antes y nunca se actualizó. Se detectó
+a tiempo sólo por revisar la base de datos antes de escribir código.
+
+Por eso Nalux pidió (07/09/2026) que **cada cambio se anote acá en la misma tanda de trabajo**.
+CONTEXT.md es lo único que sobrevive entre sesiones: si queda viejo, se planifica sobre
+información falsa y se rehace trabajo ya hecho.
