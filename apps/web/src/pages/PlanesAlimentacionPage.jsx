@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { ArrowDown, ArrowUp, Copy, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { esperarImagenesCargadas } from '@/components/RutinaPDF';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
-import { fmtFecha, hoy } from '@/lib/format';
+import { armarTextoAlimentos, fmtFecha, hoy } from '@/lib/format';
 
 // Nombres típicos que sugiere "Agregar comida" -- el mismo criterio que
 // DIAS en rutinas (agregarDia toma el primero que todavía no se usó), pero
@@ -121,6 +121,11 @@ const PlanesAlimentacionPage = () => {
     // {id, nombre} del plan que ya tenía asignado ese alumno, o null si no
     // hay conflicto (o todavía no se comprobó).
     const [pdfConflicto, setPdfConflicto] = useState(null);
+
+    // Modal "Ver" (solo lectura). Pedido de Nalux (07/09/2026), igual que en
+    // la biblioteca de rutinas: poder abrir un plan ya armado para mirarlo
+    // sin tener que entrar a editarlo.
+    const [planViendo, setPlanViendo] = useState(null);
 
     // Modal "Asignar a alumnos" (asignación masiva), calcado del de
     // RutinasPage.jsx -- pedido de Nalux (04/09/2026): además de descargar,
@@ -649,6 +654,11 @@ const PlanesAlimentacionPage = () => {
                                 </div>
                             ) : (
                                 <div className="mt-4 flex flex-wrap gap-2">
+                                    {/* Pedido de Nalux (07/09/2026): abrir el plan para
+                                        mirarlo sin entrar a editarlo. */}
+                                    <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => setPlanViendo(p)}>
+                                        <Eye className="h-3.5 w-3.5" /> Ver
+                                    </Btn>
                                     <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirEditar(p)}>
                                         Editar
                                     </Btn>
@@ -692,6 +702,40 @@ const PlanesAlimentacionPage = () => {
                 />
             )}
             <style>{ESTILOS_IMPRESION_ALIMENTACION}</style>
+
+            {/* Vista de solo lectura del plan: las comidas en el mismo orden y
+                con el mismo texto armado que sale en el PDF y que ve el
+                alumno, sin ningún campo editable. */}
+            <Modal
+                open={!!planViendo}
+                onClose={() => setPlanViendo(null)}
+                title={planViendo?.nombre || 'Plan de alimentación'}
+                wide
+            >
+                {planViendo &&
+                    ((planViendo.items || []).length === 0 ? (
+                        <Empty>Este plan todavía no tiene comidas cargadas.</Empty>
+                    ) : (
+                        <div className="space-y-3">
+                            {(planViendo.items || []).map((comida, i) => (
+                                <div key={comida.key || i} className="rounded-2xl border border-border p-4">
+                                    <p className="font-display text-base font-bold">{comida.nombre}</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        {armarTextoAlimentos(comida.alimentos) || 'Sin alimentos cargados.'}
+                                    </p>
+                                </div>
+                            ))}
+                            {planViendo.notas && (
+                                <div className="rounded-2xl border border-border bg-secondary p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Observaciones
+                                    </p>
+                                    <p className="mt-1 whitespace-pre-line text-sm">{planViendo.notas}</p>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+            </Modal>
 
             <Modal
                 open={asignarOpen}

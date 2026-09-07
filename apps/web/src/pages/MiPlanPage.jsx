@@ -315,10 +315,21 @@ const LogoGimnasio = ({ nombre, logoUrl }) => {
 
 // Dato de ejercicio (series/reps/peso/descanso): etiqueta legible + valor
 // bien grande, pensado para leerse de un vistazo en un celular sin anteojos.
+//
+// Pedido de Nalux (07/09/2026): que los cuatro entren en UNA línea también en
+// el celular (antes iban de a dos, en dos filas). Para eso cada caja tiene que
+// ser más angosta, así que en pantalla chica bajan el padding y el cuerpo de
+// letra -- el valor sigue siendo lo más grande y en negrita, que es lo que el
+// alumno busca de un vistazo. break-words evita que un valor largo escrito a
+// mano por el profe ("12 por lado") desborde la caja.
 const DatoEjercicio = ({ label, valor }) => (
-    <div className="rounded-xl bg-secondary p-3 text-center">
-        <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-extrabold sm:text-3xl">{valor}</p>
+    <div className="rounded-xl bg-secondary p-2 text-center sm:p-3">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-sm">
+            {label}
+        </p>
+        <p className="mt-0.5 break-words text-lg font-extrabold leading-tight sm:mt-1 sm:text-3xl">
+            {valor}
+        </p>
     </div>
 );
 
@@ -935,7 +946,7 @@ const MiPlanPage = () => {
                                                                                                 {it.grupo}
                                                                                             </p>
                                                                                         )}
-                                                                                        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                                                                        <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-3">
                                                                                             <DatoEjercicio
                                                                                                 label="Series"
                                                                                                 valor={

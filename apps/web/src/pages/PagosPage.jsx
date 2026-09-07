@@ -301,6 +301,12 @@ const PagosPage = () => {
 
     const nombre = (id) => alumnos.find((a) => a.id === id)?.nombre || 'Alumno';
 
+    // Un comprobante existe solo si entró plata (migración 0032). Las filas
+    // en $ 0 son activaciones sin cobrar: cubren el período y dejan la deuda
+    // anotada, pero no son un comprobante de nada.
+    const comprobantesEmitidos = useMemo(() => pagos.filter((p) => Number(p.monto || 0) > 0), [pagos]);
+    const activacionesSinCobrar = useMemo(() => pagos.filter((p) => Number(p.monto || 0) <= 0), [pagos]);
+
     const abrirCobro = (alumnoId = '') => {
         setForm({ ...vacioPago, alumno_id: alumnoId });
         setSinCobrar(false);
@@ -372,9 +378,10 @@ const PagosPage = () => {
         if (!form.alumno_id) return;
         setSaving(true);
         setError('');
-        // "Activar sin cobrar": queda el período cubierto pero con importe
+        // "No está pagando ahora": queda el período cubierto pero con importe
         // 0 y TODO el total como saldo pendiente, así el alumno aparece
-        // "Con deuda" en vez de aparecer como si hubiera pagado.
+        // "Con deuda" en vez de aparecer como si hubiera pagado. Desde la
+        // migración 0032 estas filas tampoco se llevan número de comprobante.
         const cobrado = sinCobrar ? 0 : totalACobrar;
         const adeudado = sinCobrar ? totalACobrar : Number(form.monto_adeudado || 0);
         const payload = {
@@ -393,7 +400,10 @@ const PagosPage = () => {
             const creado = await createRec('pagos', payload);
             setOpen(false);
             await cargar();
-            setComprobante(creado);
+            // Solo se abre el comprobante si de verdad se emitió uno. Una
+            // activación sin cobrar vuelve sin número (migración 0032): no hay
+            // comprobante que mostrar ni imprimir.
+            if (creado?.numero) setComprobante(creado);
         } catch (err) {
             // Sin conexión (pedido de Nalux, 04/09/2026): se guarda en el
             // celular y se manda de verdad apenas vuelva la señal -- SIN
@@ -599,13 +609,50 @@ const PagosPage = () => {
                         </Card>
                     </div>
 
+                    {/* Reportado por Nalux (07/09/2026): "muchos comprobantes sin
+                        cobrar, está mal eso, el comprobante saldría cuando el
+                        alumno ya paga". Las activaciones sin cobrar (monto 0) ya
+                        no se numeran (migración 0032) y acá tampoco se listan
+                        como comprobantes: se muestran aparte, como lo que son --
+                        períodos habilitados que todavía están impagos. Se filtra
+                        por monto y no por numero para que los que se numeraron
+                        ANTES de esa migración también salgan del listado, sin
+                        tener que tocar ningún dato ya cargado. */}
+                    {activacionesSinCobrar.length > 0 && (
+                        <Card className="border-warn/30">
+                            <h2 className="mb-1 font-display text-lg font-bold">Activados sin cobrar</h2>
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                Se les habilitó el período pero todavía no pagaron. Cuando paguen, registrar
+                                el cobro: ahí sale el comprobante.
+                            </p>
+                            <ul className="divide-y divide-border">
+                                {activacionesSinCobrar.slice(0, 20).map((p) => (
+                                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                                        <div>
+                                            <p className="text-sm font-semibold">{nombre(p.alumno_id)}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {fmtFecha(p.fecha_pago)}
+                                                {Number(p.monto_adeudado || 0) > 0
+                                                    ? ` · debe ${money(p.monto_adeudado)}`
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                        <Btn className="px-3 py-1.5 text-xs" onClick={() => abrirCobro(p.alumno_id)}>
+                                            Cobrar
+                                        </Btn>
+                                    </li>
+                                ))}
+                            </ul>
+                        </Card>
+                    )}
+
                     <Card>
                         <h2 className="mb-3 font-display text-lg font-bold">Comprobantes emitidos</h2>
-                        {pagos.length === 0 ? (
-                            <Empty>Todavía no registraste pagos.</Empty>
+                        {comprobantesEmitidos.length === 0 ? (
+                            <Empty>Todavía no registraste ningún cobro.</Empty>
                         ) : (
                             <ul className="divide-y divide-border">
-                                {pagos.slice(0, 20).map((p) => (
+                                {comprobantesEmitidos.slice(0, 20).map((p) => (
                                     <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                                         <div>
                                             <p className="text-sm font-semibold">
@@ -764,21 +811,29 @@ const PagosPage = () => {
                         <Textarea value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} />
                     </Field>
 
-                    <label className="flex items-start gap-3 rounded-xl border border-border p-4">
-                        <input
-                            type="checkbox"
-                            checked={sinCobrar}
-                            onChange={(e) => setSinCobrar(e.target.checked)}
-                            className="mt-1 h-4 w-4"
-                        />
-                        <span className="text-sm">
-                            <span className="font-semibold">Activar sin cobrar</span>
-                            <span className="block text-xs text-muted-foreground">
-                                Le habilita el período igual, sin recibir plata. Queda registrado como deuda
-                                completa ({money(totalACobrar)}) y el alumno aparece &quot;Con deuda&quot;.
+                    {/* Reportado por Nalux (07/09/2026): esta parte confundía --
+                        aparecía al mismo nivel que el cobro normal, como si
+                        fueran dos formas igual de habituales de registrar algo.
+                        Es el caso raro (dejarlo entrenar fiado), así que ahora
+                        queda como una opción chica y aparte; el camino normal y
+                        único del formulario es cobrar. */}
+                    <div className="rounded-xl border border-dashed border-border p-3">
+                        <label className="flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                checked={sinCobrar}
+                                onChange={(e) => setSinCobrar(e.target.checked)}
+                                className="mt-0.5 h-4 w-4"
+                            />
+                            <span className="text-xs">
+                                <span className="font-semibold">No está pagando ahora</span>
+                                <span className="block text-muted-foreground">
+                                    Le habilita el período igual y queda debiendo {money(totalACobrar)}. No se
+                                    emite comprobante: sale recién cuando pague.
+                                </span>
                             </span>
-                        </span>
-                    </label>
+                        </label>
+                    </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-secondary px-4 py-3">
                         <span className="text-sm text-muted-foreground">
@@ -792,7 +847,7 @@ const PagosPage = () => {
                             Cancelar
                         </Btn>
                         <Btn type="submit" disabled={saving}>
-                            {saving ? 'Guardando...' : sinCobrar ? 'Activar sin cobrar' : 'Cobrar'}
+                            {saving ? 'Guardando...' : sinCobrar ? 'Habilitar y anotar la deuda' : 'Cobrar'}
                         </Btn>
                     </div>
                 </form>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ClipboardList, Copy, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF, esperarImagenesCargadas } from '@/components/RutinaPDF';
@@ -56,6 +56,105 @@ const BLOQUES_SUGERIDOS = [
     'Elongación',
 ];
 
+// Vista de solo lectura de una rutina ya armada (botón "Ver" de cada
+// tarjeta, pedido de Nalux el 07/09/2026). Respeta el mismo agrupamiento que
+// el armador -- semana, día, bloque y superseries -- para que sea la misma
+// rutina que el profesor tiene en la cabeza, nada más que sin campos
+// editables.
+const DetalleRutina = ({ rutina }) => {
+    const items = rutina.items || [];
+    if (items.length === 0) return <Empty>Esta rutina todavía no tiene ejercicios cargados.</Empty>;
+
+    const semanas = [...new Set(items.map(semanaDeItem))].sort((a, b) => a - b);
+
+    return (
+        <div className="space-y-6">
+            {rutina.descripcion && <p className="text-sm text-muted-foreground">{rutina.descripcion}</p>}
+
+            {semanas.map((sem) => {
+                const deLaSemana = items.filter((it) => semanaDeItem(it) === sem);
+                return (
+                    <div key={sem} className="space-y-4">
+                        {semanas.length > 1 && (
+                            <p className="font-display text-sm font-bold uppercase text-primary">
+                                Semana {sem}
+                            </p>
+                        )}
+                        {diasUsados(deLaSemana).map((d) => {
+                            const delDia = deLaSemana.filter((it) => it.dia === d);
+                            if (delDia.length === 0) return null;
+                            return (
+                                <div key={d} className="rounded-2xl border border-border p-4">
+                                    <p className="font-display text-base font-bold">{d}</p>
+                                    <div className="mt-3 space-y-3">
+                                        {agruparPorBloque(delDia).map(([bloque, delBloque]) => (
+                                            <div key={bloque || 'sin-bloque'}>
+                                                {bloque && (
+                                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        {bloque}
+                                                    </p>
+                                                )}
+                                                <div className="space-y-2">
+                                                    {agruparPorCombo(delBloque).map((combo, i) => (
+                                                        <div
+                                                            key={combo[0].key || `${combo[0].nombre}-${i}`}
+                                                            className={
+                                                                combo.length > 1
+                                                                    ? 'rounded-xl border border-primary/30 bg-primary/5 p-3'
+                                                                    : ''
+                                                            }
+                                                        >
+                                                            {combo.length > 1 && (
+                                                                <p className="mb-2 text-xs font-bold uppercase text-primary">
+                                                                    Superserie
+                                                                </p>
+                                                            )}
+                                                            {combo.map((it, j) => (
+                                                                <div
+                                                                    key={it.key || `${it.nombre}-${j}`}
+                                                                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-1"
+                                                                >
+                                                                    <span className="min-w-0 text-sm font-semibold">
+                                                                        {it.nombre}
+                                                                        {it.grupo && (
+                                                                            <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                                                {it.grupo}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {it.series} x {it.reps}
+                                                                        {it.peso ? ` · ${it.peso}` : ''}
+                                                                        {it.descanso ? ` · ${it.descanso}` : ''}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                            {combo[0].intensidad && (
+                                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                                    Intensidad: {combo[0].intensidad}
+                                                                </p>
+                                                            )}
+                                                            {combo[0].comentario && (
+                                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                                    {combo[0].comentario}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 // Biblioteca de rutinas reutilizables: se arman UNA vez acá y se asignan a
 // N alumnos (rutinas_asignadas). Reemplaza al viejo modelo "un plan por
 // alumno" que vivía embebido en AlumnoPage — ver PLAN.md, Decisión 4.
@@ -107,6 +206,11 @@ const RutinasPage = () => {
     // Modal "Asignar a alumnos" (asignación masiva)
     const [asignarOpen, setAsignarOpen] = useState(false);
     const [rutinaAsignando, setRutinaAsignando] = useState(null);
+
+    // Modal "Ver" (solo lectura). Pedido de Nalux (07/09/2026): abrir una
+    // rutina ya armada para mirarla sin el riesgo de tocar algo sin querer,
+    // que es lo que pasaba usando "Editar" para eso.
+    const [rutinaViendo, setRutinaViendo] = useState(null);
     const [seleccionados, setSeleccionados] = useState(new Set());
     const [asignando, setAsignando] = useState(false);
     const [asignarMsg, setAsignarMsg] = useState('');
@@ -748,6 +852,11 @@ const RutinasPage = () => {
                                     {semanasUsadas > 1 ? ` · ${semanasUsadas} semanas distintas` : ''}
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-2">
+                                    {/* Pedido de Nalux (07/09/2026): poder abrir la rutina
+                                        para mirarla sin entrar a editarla. */}
+                                    <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => setRutinaViendo(r)}>
+                                        <Eye className="h-3.5 w-3.5" /> Ver
+                                    </Btn>
                                     <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirEditar(r)}>
                                         Editar
                                     </Btn>
@@ -788,6 +897,18 @@ const RutinasPage = () => {
                     duracionSemanas={rutinaImprimiendo.duracion_semanas}
                 />
             )}
+
+            {/* Vista de solo lectura de una rutina ya armada. Agrupa igual que
+                el armador (semana -> día -> superserie) pero sin ningún campo
+                editable, para poder repasarla de un vistazo. */}
+            <Modal
+                open={!!rutinaViendo}
+                onClose={() => setRutinaViendo(null)}
+                title={rutinaViendo?.nombre || 'Rutina'}
+                wide
+            >
+                {rutinaViendo && <DetalleRutina rutina={rutinaViendo} />}
+            </Modal>
 
             <Modal
                 open={!!pdfModalRutina}
@@ -1087,8 +1208,16 @@ const RutinasPage = () => {
                                                         );
                                                         return (
                                                             <div key={it.key} className="rounded-xl border border-border p-3">
-                                                                <div className="grid items-end gap-3 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto]">
-                                                                    <div>
+                                                                {/* En el celular (menos de sm) el grid colapsaba a una
+                                                                    sola columna y series/reps/peso/descanso quedaban
+                                                                    una debajo de la otra: cuatro renglones por
+                                                                    ejercicio. Pedido de Nalux (07/09/2026): cajas más
+                                                                    chicas pero los cuatro datos en la misma línea,
+                                                                    como se ven en la computadora. Con grid-cols-4 el
+                                                                    nombre y los botones ocupan su propia fila
+                                                                    (col-span-4) y los cuatro campos entran en una. */}
+                                                                <div className="grid grid-cols-4 items-end gap-2 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto] sm:gap-3">
+                                                                    <div className="col-span-4 min-w-0 sm:col-span-1">
                                                                         <p className="text-sm font-bold">{it.nombre}</p>
                                                                         <p className="text-xs text-muted-foreground">
                                                                             {it.grupo}
@@ -1128,7 +1257,7 @@ const RutinasPage = () => {
                                                                             }
                                                                         />
                                                                     </Field>
-                                                                    <div className="mb-1 flex gap-1">
+                                                                    <div className="col-span-4 mb-1 flex justify-end gap-1 sm:col-span-1 sm:justify-start">
                                                                         <button
                                                                             type="button"
                                                                             aria-label="Subir ejercicio"

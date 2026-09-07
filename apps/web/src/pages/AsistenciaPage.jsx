@@ -7,6 +7,7 @@ import { Btn, Card, Empty, ErrorBox, Input, Loading, Modal } from '@/components/
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { agregarACola, esErrorDeRed, onCambioCola } from '@/lib/offline';
 import { fmtFecha } from '@/lib/format';
+import { useAuth } from '@/contexts/AuthContext';
 
 // El lunes de la semana en la que cae `fecha`. getDay() devuelve 0 para
 // domingo, así que (getDay() + 6) % 7 da los días que hay que restar para
@@ -53,12 +54,25 @@ const etiquetaMes = (mes) => {
 
 const NOMBRES_DIA_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+// Días en los que el gimnasio abre (migración 0031, configurable en
+// Configuración). Pedido de Nalux (07/09/2026): los domingos suele estar
+// cerrado y no tiene sentido que ese día se vea igual que el resto en la
+// grilla, ni que cuente como falta de nadie. Si el gimnasio todavía no
+// tiene el dato (perfil recién cargado), se asume la semana entera abierta
+// para no esconder días por error.
+const DIAS_ABIERTOS_POR_DEFECTO = [0, 1, 2, 3, 4, 5, 6];
+
+const esDiaCerrado = (fechaIso, diasAbiertos) =>
+    !(diasAbiertos || DIAS_ABIERTOS_POR_DEFECTO).includes(new Date(`${fechaIso}T00:00:00`).getDay());
+
 const etiquetaDia = (fecha) => {
     const d = new Date(`${fecha}T00:00:00`);
     return `${NOMBRES_DIA_LARGO[d.getDay()]} ${d.getDate()} de ${NOMBRES_MES[d.getMonth()].toLowerCase()}`;
 };
 
 const AsistenciaPage = () => {
+    const { gimnasio } = useAuth();
+    const diasAbiertos = gimnasio?.dias_abiertos;
     const [alumnos, setAlumnos] = useState([]);
     const [asistencias, setAsistencias] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -313,7 +327,7 @@ const AsistenciaPage = () => {
                 esDia
                     ? 'Marcar presente o ausente alumno por alumno y cerrar el día al terminar.'
                     : esMes
-                      ? 'Todos los días del mes y cuántos fue o faltó cada alumno. Tocar un día para elegir presente o ausente.'
+                      ? 'Todos los días del mes y cuántas veces vino o faltó cada alumno. Tocar un día para elegir presente o ausente.'
                       : 'Marcar presente o ausente para toda la semana. Tocar un día para elegir presente o ausente.'
             }
         >
@@ -421,10 +435,22 @@ const AsistenciaPage = () => {
                 <Empty>Ningún alumno activo coincide con esa búsqueda.</Empty>
             ) : esDia ? (
                 <>
+                    {/* El gimnasio no abre este día (Configuración): igual se
+                        puede marcar -- puede haber una clase suelta o un
+                        feriado trabajado -- pero se avisa para que no parezca
+                        que faltaron todos. */}
+                    {esDiaCerrado(dia, diasAbiertos) && (
+                        <Card className="mb-4 border-warn/30 bg-warn/10 py-3">
+                            <p className="text-sm font-semibold text-warn">
+                                Este día el gimnasio no abre. Se puede marcar igual si hubo actividad.
+                            </p>
+                        </Card>
+                    )}
+
                     <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 py-4">
                         <p className="text-sm">
                             <span className="font-bold text-ok">{presentesDelDia} presentes</span> ·{' '}
-                            <span className="font-bold text-primary">{ausentesDelDia} ausentes</span> ·{' '}
+                            <span className="font-bold text-destructive">{ausentesDelDia} ausentes</span> ·{' '}
                             <span className="font-semibold text-muted-foreground">
                                 {sinMarcar.length} sin marcar
                             </span>
@@ -476,8 +502,8 @@ const AsistenciaPage = () => {
                                             onClick={() => marcarComo(a.id, dia, false)}
                                             className={`rounded-xl border px-4 py-2 text-xs font-bold transition active:scale-95 ${
                                                 reg?.presente === false
-                                                    ? 'border-transparent bg-primary text-primary-foreground'
-                                                    : 'border-border text-muted-foreground hover:border-primary hover:text-foreground'
+                                                    ? 'border-transparent bg-destructive text-destructive-foreground'
+                                                    : 'border-border text-muted-foreground hover:border-destructive hover:text-foreground'
                                             }`}
                                         >
                                             Ausente
@@ -524,8 +550,8 @@ const AsistenciaPage = () => {
                                         {a.nombre}
                                     </Link>
                                     <span className="text-xs text-muted-foreground">
-                                        <span className="font-bold text-ok">{presentes} fue</span> ·{' '}
-                                        <span className="font-bold text-primary">{ausentes} faltó</span>
+                                        <span className="font-bold text-ok">{presentes} vino</span> ·{' '}
+                                        <span className="font-bold text-destructive">{ausentes} faltó</span>
                                         {porcentaje !== null && (
                                             <span className="ml-1 font-semibold text-foreground">({porcentaje}%)</span>
                                         )}
@@ -545,18 +571,28 @@ const AsistenciaPage = () => {
                                     ))}
                                     {dias.map((d) => {
                                         const reg = mapa[`${a.id}|${d}`];
-                                        const estilo = !reg
-                                            ? 'border-border text-muted-foreground hover:border-primary'
-                                            : reg.presente
-                                              ? 'border-transparent bg-[hsl(var(--ok))] text-white'
-                                              : 'border-transparent bg-primary text-primary-foreground';
+                                        const cerrado = esDiaCerrado(d, diasAbiertos);
+                                        const estilo = cerrado
+                                            ? 'border-dashed border-border/60 text-muted-foreground/40'
+                                            : !reg
+                                              ? 'border-border text-muted-foreground hover:border-primary'
+                                              : reg.presente
+                                                ? 'border-transparent bg-[hsl(var(--ok))] text-white'
+                                                : 'border-transparent bg-destructive text-destructive-foreground';
                                         return (
                                             <button
                                                 key={d}
                                                 type="button"
-                                                aria-label={`Marcar ${a.nombre} el ${d}`}
+                                                disabled={cerrado}
+                                                aria-label={
+                                                    cerrado
+                                                        ? `${d}: el gimnasio no abre este día`
+                                                        : `Marcar ${a.nombre} el ${d}`
+                                                }
                                                 onClick={(ev) => abrirEligiendo(ev, a.id, a.nombre, d)}
-                                                className={`aspect-square rounded-xl border text-sm font-semibold transition active:scale-95 ${estilo}`}
+                                                className={`aspect-square rounded-xl border text-sm font-semibold transition ${
+                                                    cerrado ? 'cursor-default' : 'active:scale-95'
+                                                } ${estilo}`}
                                             >
                                                 {Number(d.slice(8))}
                                             </button>
@@ -574,7 +610,12 @@ const AsistenciaPage = () => {
                             <tr>
                                 <th className="px-4 py-3 text-left">Alumno</th>
                                 {dias.map((d, i) => (
-                                    <th key={d} className="px-2 py-3 text-center">
+                                    <th
+                                        key={d}
+                                        className={`px-2 py-3 text-center ${
+                                            esDiaCerrado(d, diasAbiertos) ? 'text-muted-foreground/40' : ''
+                                        }`}
+                                    >
                                         {nombresDia[i]}
                                         <span className="block text-[10px] font-normal">{d.slice(8)}</span>
                                     </th>
@@ -594,20 +635,30 @@ const AsistenciaPage = () => {
                                         </td>
                                         {dias.map((d) => {
                                             const reg = mapa[`${a.id}|${d}`];
-                                            const estilo = !reg
-                                                ? 'border-border text-muted-foreground hover:border-primary'
-                                                : reg.presente
-                                                  ? 'border-transparent bg-[hsl(var(--ok))] text-white'
-                                                  : 'border-transparent bg-primary text-primary-foreground';
+                                            const cerrado = esDiaCerrado(d, diasAbiertos);
+                                            const estilo = cerrado
+                                                ? 'border-dashed border-border/60 text-muted-foreground/40'
+                                                : !reg
+                                                  ? 'border-border text-muted-foreground hover:border-primary'
+                                                  : reg.presente
+                                                    ? 'border-transparent bg-[hsl(var(--ok))] text-white'
+                                                    : 'border-transparent bg-destructive text-destructive-foreground';
                                             return (
                                                 <td key={d} className="px-2 py-2 text-center">
                                                     <button
                                                         type="button"
-                                                        aria-label={`Marcar ${a.nombre} el ${d}`}
+                                                        disabled={cerrado}
+                                                        aria-label={
+                                                            cerrado
+                                                                ? `${d}: el gimnasio no abre este día`
+                                                                : `Marcar ${a.nombre} el ${d}`
+                                                        }
                                                         onClick={(ev) => abrirEligiendo(ev, a.id, a.nombre, d)}
-                                                        className={`h-9 w-9 rounded-xl border text-xs font-bold transition active:scale-95 ${estilo}`}
+                                                        className={`h-9 w-9 rounded-xl border text-xs font-bold transition ${
+                                                            cerrado ? 'cursor-default' : 'active:scale-95'
+                                                        } ${estilo}`}
                                                     >
-                                                        {!reg ? '·' : reg.presente ? 'P' : 'A'}
+                                                        {cerrado ? '–' : !reg ? '·' : reg.presente ? 'P' : 'A'}
                                                     </button>
                                                 </td>
                                             );

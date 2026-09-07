@@ -95,6 +95,11 @@ const EjerciciosPage = () => {
         [items],
     );
 
+    // Los de la biblioteca base son los que no pertenecen a ningún gimnasio
+    // (gimnasio_id NULL); el resto los cargó este gimnasio.
+    const cantidadBase = items.filter((e) => !e.gimnasio_id).length;
+    const cantidadPropios = items.length - cantidadBase;
+
     // Los 3 filtros se combinan con AND: cada uno reduce la lista, no la
     // reemplaza. El de grupo sigue siendo chips (es el que más se usa, tapa
     // grande); demostración es un select más chico (se usa menos seguido)
@@ -217,7 +222,18 @@ const EjerciciosPage = () => {
                     </span>
                 </span>
             }
-            subtitle="Ya vienen 500 ejercicios de la biblioteca base, compartida por todos los gimnasios. Se pueden sumar más propios para completarla."
+            subtitle={
+                // Contado sobre lo que realmente llegó, no un número escrito a
+                // mano: Nalux pidió (07/09/2026) que no diga una cantidad que
+                // después no coincida con lo que hay.
+                cantidadBase > 0
+                    ? `${cantidadBase} ejercicios vienen de la biblioteca base, compartida por todos los gimnasios${
+                          cantidadPropios > 0
+                              ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
+                              : ''
+                      }. Se pueden sumar más propios para completarla.`
+                    : 'Cargar los ejercicios del gimnasio una sola vez y reutilizarlos en todas las rutinas.'
+            }
             actions={
                 <Btn
                     onClick={() => {

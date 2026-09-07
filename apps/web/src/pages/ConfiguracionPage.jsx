@@ -14,6 +14,20 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const MIME_TO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const COLOR_DEFAULT = '#E10600';
 
+// Días que abre el gimnasio (migración 0031). Los números son los mismos
+// que devuelve Date.getDay() (0 = domingo), pero se listan arrancando en
+// lunes porque es como se lee una semana acá.
+const DIAS_SEMANA = [
+    { numero: 1, etiqueta: 'Lun' },
+    { numero: 2, etiqueta: 'Mar' },
+    { numero: 3, etiqueta: 'Mié' },
+    { numero: 4, etiqueta: 'Jue' },
+    { numero: 5, etiqueta: 'Vie' },
+    { numero: 6, etiqueta: 'Sáb' },
+    { numero: 0, etiqueta: 'Dom' },
+];
+const DIAS_ABIERTOS_DEFAULT = [1, 2, 3, 4, 5, 6];
+
 const ConfiguracionPage = () => {
     const { profile, refreshProfile } = useAuth();
 
@@ -25,7 +39,11 @@ const ConfiguracionPage = () => {
     const [gimnasioLoading, setGimnasioLoading] = useState(true);
     const [gimnasioError, setGimnasioError] = useState('');
 
-    const [dgForm, setDgForm] = useState({ nombre: '', color_principal: COLOR_DEFAULT });
+    const [dgForm, setDgForm] = useState({
+        nombre: '',
+        color_principal: COLOR_DEFAULT,
+        dias_abiertos: DIAS_ABIERTOS_DEFAULT,
+    });
     const [logoFile, setLogoFile] = useState(null);
     const [logoPreview, setLogoPreview] = useState('');
     const [dgSaving, setDgSaving] = useState(false);
@@ -97,6 +115,7 @@ const ConfiguracionPage = () => {
                 setDgForm({
                     nombre: data.nombre || '',
                     color_principal: data.color_principal || COLOR_DEFAULT,
+                    dias_abiertos: data.dias_abiertos?.length ? data.dias_abiertos : DIAS_ABIERTOS_DEFAULT,
                 });
                 setVencForm({
                     dias_gracia_cuota: String(data.dias_gracia_cuota ?? 0),
@@ -146,10 +165,19 @@ const ConfiguracionPage = () => {
         if (!gimnasioFull?.id) return;
         setDgSaving(true);
         setDgError('');
+        // La base tiene un CHECK que exige al menos un día (migración 0031);
+        // se avisa acá con un mensaje entendible en vez de dejar que vuelva
+        // el error crudo de Postgres.
+        if (dgForm.dias_abiertos.length === 0) {
+            setDgError('Elegir al menos un día en el que el gimnasio abre.');
+            setDgSaving(false);
+            return;
+        }
         try {
             await updateRec('gimnasios', gimnasioFull.id, {
                 nombre: dgForm.nombre.trim(),
                 color_principal: dgForm.color_principal || COLOR_DEFAULT,
+                dias_abiertos: dgForm.dias_abiertos,
             });
 
             if (logoFile) {
@@ -356,6 +384,44 @@ const ConfiguracionPage = () => {
                                     />
                                 </Field>
                             </div>
+
+                            {/* Pedido de Nalux (07/09/2026): los domingos el gimnasio
+                                suele estar cerrado, pero que lo elija cada profesor.
+                                En la grilla de asistencia los días cerrados quedan
+                                atenuados y no se pueden marcar. */}
+                            <Field label="Días que abre el gimnasio">
+                                <div className="flex flex-wrap gap-2">
+                                    {DIAS_SEMANA.map(({ numero, etiqueta }) => {
+                                        const activo = dgForm.dias_abiertos.includes(numero);
+                                        return (
+                                            <button
+                                                key={numero}
+                                                type="button"
+                                                aria-pressed={activo}
+                                                onClick={() =>
+                                                    setDgForm((f) => ({
+                                                        ...f,
+                                                        dias_abiertos: activo
+                                                            ? f.dias_abiertos.filter((n) => n !== numero)
+                                                            : [...f.dias_abiertos, numero].sort(),
+                                                    }))
+                                                }
+                                                className={`h-10 w-12 rounded-xl border text-xs font-bold uppercase transition active:scale-95 ${
+                                                    activo
+                                                        ? 'border-transparent bg-primary text-primary-foreground'
+                                                        : 'border-border text-muted-foreground hover:border-primary'
+                                                }`}
+                                            >
+                                                {etiqueta}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                    Los días apagados aparecen en gris en la asistencia y no cuentan como
+                                    falta. Tiene que quedar al menos uno encendido.
+                                </span>
+                            </Field>
 
                             {dgError && <ErrorBox>{dgError}</ErrorBox>}
 

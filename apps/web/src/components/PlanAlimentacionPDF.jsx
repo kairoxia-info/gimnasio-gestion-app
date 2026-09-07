@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { EncabezadoPDF, fmtFechaCorta } from './RutinaPDF';
 import { armarTextoAlimentos } from '@/lib/format';
 
@@ -47,7 +48,10 @@ export const PlanAlimentacionImprimiblePDF = ({
     // una, esa sola (sin el " · " colgando).
     const subtitulo = [alumnoNombre, rango].filter(Boolean).join(' · ') || null;
 
-    return (
+    // Portal al <body>, mismo motivo que en RutinaPDF.jsx: si la hoja queda
+    // adentro de #root, el resto de la app sigue ocupando altura al imprimir y
+    // salen páginas en blanco detrás del PDF (reportado por Nalux, 07/09/2026).
+    return createPortal(
         <div className="alimentacion-pdf-hoja">
             <EncabezadoPDF logoUrl={logoUrl} titulo={nombre} subtitulo={subtitulo} />
 
@@ -89,13 +93,14 @@ export const PlanAlimentacionImprimiblePDF = ({
                     </ul>
                 </div>
             )}
-        </div>
+        </div>,
+        document.body,
     );
 };
 
-// Mismo truco de visibility + print-color-adjust: exact que
-// ESTILOS_IMPRESION_RUTINA (RutinaPDF.jsx) -- ver los comentarios ahí para
-// el porqué de cada regla. Duplicado a propósito (no importado desde
+// Mismo esquema (hoja fuera de #root + display:none de la app al imprimir +
+// print-color-adjust: exact) que ESTILOS_IMPRESION_RUTINA (RutinaPDF.jsx) --
+// ver los comentarios ahí para el porqué de cada regla. Duplicado a propósito (no importado desde
 // RutinaPDF.jsx) porque cada hoja usa su propia clase (.alimentacion-pdf-hoja
 // vs .rutina-pdf-hoja): si compartieran una sola clase, imprimir una
 // dejaría la otra oculta también cuando conviven montadas en la misma
@@ -103,18 +108,16 @@ export const PlanAlimentacionImprimiblePDF = ({
 export const ESTILOS_IMPRESION_ALIMENTACION = `
 .alimentacion-pdf-hoja { display: none; }
 @media print {
-  body * { visibility: hidden !important; }
+  #root { display: none !important; }
+  html, body { height: auto !important; background: #fff !important; }
   .alimentacion-pdf-hoja, .alimentacion-pdf-hoja * {
-    visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
   .alimentacion-pdf-hoja {
     display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 100%;
+    margin: 0;
     padding: 0;
     color: #000;
     background: #fff;

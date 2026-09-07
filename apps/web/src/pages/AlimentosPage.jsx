@@ -84,7 +84,16 @@ const AlimentosPage = () => {
 
     return (
         <AppLayout
-            title="Biblioteca de alimentos"
+            title={
+                <span className="inline-flex flex-wrap items-center gap-3">
+                    Biblioteca de alimentos
+                    {/* Pedido de Nalux (07/09/2026): esta biblioteca era la
+                        única de las tres sin contador arriba. */}
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-bold normal-case text-primary">
+                        {items.length} {items.length === 1 ? 'alimento' : 'alimentos'}
+                    </span>
+                </span>
+            }
             subtitle="Cargar cada alimento una vez con su información nutricional y reutilizarlo en los planes."
             actions={
                 <Btn
@@ -155,7 +164,62 @@ const AlimentosPage = () => {
             ) : visibles.length === 0 ? (
                 <Empty>No hay alimentos que coincidan con estos filtros.</Empty>
             ) : (
-                <div className="overflow-hidden rounded-2xl border border-border">
+                <>
+                    {/* Reportado por Nalux (07/09/2026): en el celular la tabla
+                        quedaba cortada y encima no dejaba correrla al costado
+                        (el contenedor tenía overflow-hidden). Con 6 columnas no
+                        hay forma de que entre en 375px sin achicar la letra
+                        hasta lo ilegible, así que en pantalla chica se muestra
+                        una tarjeta por alimento -- se ve TODO, sin scroll
+                        horizontal -- y la tabla queda de sm para arriba. */}
+                    <div className="space-y-3 sm:hidden">
+                        {visibles.map((a) => (
+                            <div key={a.id} className="rounded-2xl border border-border bg-card p-4">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <p className="min-w-0 font-semibold">{a.nombre}</p>
+                                    <Badge className="border-border text-muted-foreground">
+                                        {a.categoria || '—'}
+                                    </Badge>
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    {a.unidad || '100 g'} · {a.calorias || 0} kcal
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    P {a.proteinas || 0} · C {a.carbohidratos || 0} · G {a.grasas || 0}
+                                </p>
+                                <div className="mt-3 flex gap-2">
+                                    <Btn
+                                        variant="ghost"
+                                        className="flex-1 px-3 py-1.5 text-xs"
+                                        onClick={() => {
+                                            setForm({
+                                                nombre: a.nombre || '',
+                                                categoria: a.categoria || CATEGORIAS[0],
+                                                unidad: a.unidad || '100 g',
+                                                calorias: a.calorias ?? '',
+                                                proteinas: a.proteinas ?? '',
+                                                carbohidratos: a.carbohidratos ?? '',
+                                                grasas: a.grasas ?? '',
+                                            });
+                                            setEditId(a.id);
+                                            setOpen(true);
+                                        }}
+                                    >
+                                        Editar
+                                    </Btn>
+                                    <Btn
+                                        variant="danger"
+                                        className="flex-1 px-3 py-1.5 text-xs"
+                                        onClick={() => removeRec('alimentos', a.id).then(cargar)}
+                                    >
+                                        Eliminar
+                                    </Btn>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto rounded-2xl border border-border sm:block">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-secondary text-xs uppercase tracking-wide text-muted-foreground">
                             <tr>
@@ -213,7 +277,8 @@ const AlimentosPage = () => {
                             ))}
                         </tbody>
                     </table>
-                </div>
+                    </div>
+                </>
             )}
 
             <Modal open={open} onClose={() => setOpen(false)} title={editId ? 'Editar alimento' : 'Nuevo alimento'}>

@@ -22,7 +22,9 @@ export const AuthProvider = ({ children }) => {
         // sigue aplicando dentro del embed, así que esto nunca expone el gimnasio de otro.
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, email, first_name, last_name, gimnasio_id, role, gimnasios(nombre, logo_url, color_principal)')
+            .select(
+                'id, email, first_name, last_name, gimnasio_id, role, gimnasios(nombre, logo_url, color_principal, dias_abiertos)',
+            )
             .eq('id', userId)
             .single();
         if (error) {

@@ -1,9 +1,20 @@
 <!doctype html>
-<html lang="en">
+<!-- lang="es" + notranslate: reportado por Nalux (07/09/2026) -- en el celular
+	 aparecían palabras traducidas al inglés y de vuelta ("viernes" -> "rivalizar",
+	 "planes" -> "aviones") y la app se caía con el cartel de recargar. Causa: este
+	 archivo venía de la plantilla de Hostinger Horizons con lang="en", así que
+	 Chrome daba la página por inglesa y le pasaba el traductor automático encima.
+	 Al traducir, Chrome REEMPLAZA los nodos de texto del DOM por otros nuevos, y
+	 React -- que sigue apuntando a los originales -- explota al intentar
+	 actualizarlos ("removeChild ... is not a child of this node"). Declarando el
+	 idioma real ya no hay nada que traducir; el notranslate es el cinturón por si
+	 alguien abre la app con el navegador en otro idioma. -->
+<html lang="es" translate="no">
 	<head>
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
 		<meta name="generator" content="Hostinger Horizons" />
+		<meta name="google" content="notranslate" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Gestión GYM Kairox IA</title>
 	</head>

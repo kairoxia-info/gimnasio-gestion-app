@@ -5,7 +5,7 @@ import { Info, Plus, Search, UserRound, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
-import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy } from '@/lib/format';
+import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '@/lib/format';
 
 const vacio = {
     nombre: '',
@@ -339,18 +339,37 @@ const AlumnosPage = () => {
                                 onChange={(e) => setForm({ ...form, fecha_alta: e.target.value })}
                             />
                         </Field>
+                        {/* Pedido de Nalux (07/09/2026): que el plan sea obligatorio
+                            al dar de alta. Sin plan, después el cobro arranca sin
+                            precio y hay que acordarse de cuál le corresponde a cada
+                            uno -- que era justo la parte que se prestaba a
+                            confusión. Los planes salen de Precios, ya cargados por
+                            el profesor; si todavía no hay ninguno se avisa y se
+                            manda para allá, en vez de dejar un select vacío que no
+                            se puede completar. */}
                         <Field label="Plan contratado">
-                            <Select
-                                value={form.plan_precio_nombre}
-                                onChange={(e) => setForm({ ...form, plan_precio_nombre: e.target.value })}
-                            >
-                                <option value="">Sin plan asignado</option>
-                                {planes.map((p) => (
-                                    <option key={p.id} value={p.nombre}>
-                                        {p.nombre}
-                                    </option>
-                                ))}
-                            </Select>
+                            {planes.length === 0 ? (
+                                <p className="rounded-xl border border-warn/30 bg-warn/10 px-3 py-2.5 text-xs text-warn">
+                                    Todavía no hay planes cargados.{' '}
+                                    <Link to="/precios" className="font-semibold underline">
+                                        Cargar precios
+                                    </Link>{' '}
+                                    y volver para poder dar de alta al alumno.
+                                </p>
+                            ) : (
+                                <Select
+                                    value={form.plan_precio_nombre}
+                                    onChange={(e) => setForm({ ...form, plan_precio_nombre: e.target.value })}
+                                    required
+                                >
+                                    <option value="">Elegir un plan...</option>
+                                    {planes.map((p) => (
+                                        <option key={p.id} value={p.nombre}>
+                                            {p.nombre} — {money(p.precio)}
+                                        </option>
+                                    ))}
+                                </Select>
+                            )}
                         </Field>
                         <Field label="Fecha de nacimiento (opcional)">
                             <Input

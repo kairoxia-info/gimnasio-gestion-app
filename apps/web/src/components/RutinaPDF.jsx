@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { agruparCombos, agruparItemsRutina, agruparPorBloque } from '@/lib/format';
 
 // Diseño de PDF de rutina, con la marca del gimnasio (logo, nombre, color) y
@@ -122,7 +123,15 @@ export const RutinaImprimiblePDF = ({
     // una, esa sola (sin el " · " colgando).
     const subtitulo = [alumnoNombre, rango].filter(Boolean).join(' · ') || null;
 
-    return (
+    // Portal al <body>: la hoja NO puede quedar colgando adentro de #root.
+    // Reportado por Nalux (07/09/2026): "se descarga como una o más páginas
+    // en blanco". Con la hoja adentro de la app, el CSS de impresión escondía
+    // el resto con visibility:hidden -- que lo hace invisible pero le deja
+    // toda su altura, así que el navegador seguía contando esas pantallas y
+    // las imprimía vacías detrás del PDF. Estando afuera de #root, el CSS de
+    // impresión puede sacar la app entera con display:none (ver
+    // ESTILOS_IMPRESION_RUTINA) y no queda nada que ocupe páginas.
+    return createPortal(
         <div className="rutina-pdf-hoja">
             <EncabezadoPDF logoUrl={logoUrl} titulo={nombre} subtitulo={subtitulo} />
 
@@ -194,13 +203,18 @@ export const RutinaImprimiblePDF = ({
                     ))}
                 </div>
             ))}
-        </div>
+        </div>,
+        document.body,
     );
 };
 
-// Mismo truco de visibility en vez de display:none en el body en las tres
-// pantallas que imprimen esto: display:none rompería el layout del resto de
-// la página mientras la hoja está montada pero no imprimiendo.
+// La hoja se monta por fuera de #root (createPortal al body, ver arriba), así
+// que para imprimir alcanza con esconder la app entera con display:none. Antes
+// se usaba "body * { visibility: hidden }", que la dejaba invisible pero
+// conservando toda su altura: el navegador seguía contando esas pantallas y
+// atrás del PDF salían una o más páginas en blanco (reportado por Nalux el
+// 07/09/2026). display:none saca esos nodos del flujo y no queda nada que
+// paginar de más.
 //
 // print-color-adjust: exact (+ el prefijo -webkit) en TODA la hoja: reportado
 // por Nalux (03/09/2026) que el PDF salía sin ningún color -- el nombre del
@@ -213,18 +227,16 @@ export const RutinaImprimiblePDF = ({
 export const ESTILOS_IMPRESION_RUTINA = `
 .rutina-pdf-hoja { display: none; }
 @media print {
-  body * { visibility: hidden !important; }
+  #root { display: none !important; }
+  html, body { height: auto !important; background: #fff !important; }
   .rutina-pdf-hoja, .rutina-pdf-hoja * {
-    visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
   .rutina-pdf-hoja {
     display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 100%;
+    margin: 0;
     padding: 0;
     color: #000;
     background: #fff;
