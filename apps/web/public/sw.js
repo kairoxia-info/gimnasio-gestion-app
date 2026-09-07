@@ -19,7 +19,19 @@
 // panel del profesor (alumnos, pagos, rutinas, etc. -- datos que cambian
 // todo el tiempo y donde mostrar algo viejo sin avisar sería peor que no
 // mostrar nada).
-const CACHE_NAME = 'kairox-v1';
+// Reportado por Nalux (07/09/2026): pantalla en negro al entrar/cambiar de
+// módulo en el celular, hay que recargar a mano. Causa real encontrada:
+// justo después de subir una versión nueva del sitio, Vercel deja de servir
+// los archivos JS/CSS de la versión ANTERIOR (cambian de nombre en cada
+// build). Si este service worker todavía tenía guardado un HTML de una
+// versión vieja (por ejemplo por haberse servido desde acá una vez por
+// algún corte de red momentáneo) y lo devuelve, ese HTML apunta a un
+// archivo .js que YA NO EXISTE en el servidor: la red responde con un 404
+// real (no es un error de conexión, así que antes esto NO caía al bloque
+// catch de más abajo) y la app nunca llega a arrancar. Subiendo v2 para que
+// cualquier celular con la v1 vieja todavía guardada la descarte entera en
+// vez de mezclar archivos de las dos versiones.
+const CACHE_NAME = 'kairox-v2';
 const MARCADOR_PLAN = '/rest/v1/rpc/ver_plan_por_codigo';
 // Key fija donde queda guardada una copia del documento HTML de la SPA
 // (siempre el mismo, sea cual sea la ruta -- React Router decide qué
@@ -79,7 +91,16 @@ self.addEventListener('fetch', (event) => {
                     // genérica de la SPA -- todas devuelven el mismo index.html,
                     // React Router arma la pantalla del lado del cliente.
                     if (esNavegacion) cache.put(APP_SHELL_KEY, respuestaRed.clone());
+                    return respuestaRed;
                 }
+                // La red respondió (no es un error de conexión) pero con un
+                // error -- típicamente un 404 de un archivo .js/.css que ya no
+                // existe porque se subió una versión nueva del sitio mientras
+                // este celular tenía guardada una HTML de la vieja. Cae al
+                // último bueno guardado en vez de dejar ese error tal cual (que
+                // rompía la carga de la app entera, pantalla negra sin aviso).
+                const cacheadaPorError = await cache.match(cacheKey);
+                if (cacheadaPorError) return cacheadaPorError;
                 return respuestaRed;
             } catch (_) {
                 const cacheada = await cache.match(cacheKey);
