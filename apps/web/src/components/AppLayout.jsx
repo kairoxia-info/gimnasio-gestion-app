@@ -345,19 +345,30 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                 type="button"
                                 onClick={() => setOpen(true)}
                                 aria-label="Abrir menú"
-                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border lg:hidden"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border lg:hidden"
                             >
                                 <Menu className="h-5 w-5" />
                             </button>
                             <div className="min-w-0 lg:hidden">
                                 <GimnasioMark className="h-9" />
                             </div>
-                            <div className="ml-auto flex items-center gap-2">
+                            <div className="ml-auto flex shrink-0 items-center gap-2">
                                 <NotificacionesCampana />
-                                {actions}
+                                {/* El botón de acción de cada pantalla ("Nuevo alumno",
+                                    "Registrar pago", etc.) sale de esta barra en el
+                                    celular y pasa a la fila de abajo. Reportado por
+                                    Nalux (07/09/2026) como "letras encimadas": en 375px
+                                    no entran a la vez el nombre del gimnasio y un botón
+                                    con texto, así que el nombre quedaba cortado en
+                                    "Mi G..." y el botón se partía en dos renglones.
+                                    Abajo entra entero y además es más fácil de tocar. */}
+                                <div className="hidden items-center gap-2 sm:flex">{actions}</div>
                                 <ThemeToggle />
                             </div>
                         </div>
+                        {actions && (
+                            <div className="flex flex-wrap gap-2 px-4 pb-3 sm:hidden [&>*]:flex-1">{actions}</div>
+                        )}
                     </header>
 
                     {(sinConexion || pendientes > 0) && (

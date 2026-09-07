@@ -11,10 +11,16 @@ export const Btn = ({ variant = 'primary', className = '', type = 'button', ...p
         ghost: 'border border-border text-foreground hover:border-primary',
         danger: 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
     };
+    // whitespace-nowrap: reportado por Nalux (07/09/2026) que en el celular
+    // se veían "letras encimadas". En la barra de arriba, botones como "Nuevo
+    // alumno" se partían en dos renglones al no entrar, el botón crecía a lo
+    // alto y de paso le comía el ancho al nombre del gimnasio, que quedaba
+    // cortado ("Mi G..."). Sin cortar el texto, el botón ocupa un solo
+    // renglón y el reparto de ancho de la barra queda estable.
     return (
         <button
             type={type}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 ${styles[variant]} ${className}`}
+            className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 ${styles[variant]} ${className}`}
             {...props}
         />
     );
