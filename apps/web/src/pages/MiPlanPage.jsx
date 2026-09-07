@@ -620,9 +620,12 @@ const MiPlanPage = () => {
                 <title>
                     {plan?.alumno_nombre ? `Tu plan | ${plan.alumno_nombre}` : 'Tu plan de entrenamiento'}
                 </title>
+                {/* Actualizado (07/09/2026): desde la migración 0028 el ingreso es
+                    con usuario y contraseña, no sin ellos -- este texto había
+                    quedado desactualizado desde antes de ese cambio. */}
                 <meta
                     name="description"
-                    content="Rutina de entrenamiento y plan de alimentación, sin necesidad de usuario ni contraseña."
+                    content="Rutina de entrenamiento y plan de alimentación del alumno, con acceso mediante usuario y contraseña."
                 />
             </Helmet>
 

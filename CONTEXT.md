@@ -2230,6 +2230,37 @@ números quedan ocupados y la numeración visible salta (0001 → 0004).
   los registros sin peso. El 0 se interpreta como "no medido" en toda la pantalla, así que los
   registros que ya habían quedado en 0 también se ven bien sin tocarles el dato.
 
+### Más del mismo día: sidebar cortado en desktop y limpieza de lenguaje
+
+Nalux reportó que en la **computadora**, con la ventana poco alta, no se veían ni el botón
+"Cerrar sesión" ni la marca "Gestión GYM Kairox IA" — sí se veían en el celular.
+
+**Causa:** todo el sidebar (`AppLayout.jsx`) era un solo bloque de alto fijo (`h-screen`) con
+`justify-between` y sin ningún `overflow`. El menú de 11 ítems más el pie (correo, botón, marca)
+podían sumar más que el alto disponible; lo que no entraba se cortaba por debajo del borde sin
+ninguna forma de llegar ahí — la página no ayuda porque el aside es `sticky` y queda fijo en la
+ventana, no tiene su propio scroll. Reproducido a 1280×600 (común en laptops de resolución baja
+o ventana sin maximizar); a 1280×720 no pasaba, por eso no era obvio.
+
+**Arreglo:** el aside pasa a tener tres secciones en vez de un bloque `justify-between`: logo
+arriba (`shrink-0`, fijo), menú en el medio (`min-h-0 flex-1 overflow-y-auto`, scrollea sólo él
+si hace falta) y pie abajo (`shrink-0`, siempre fijo y visible). Verificado a 1280×600 antes de
+subirlo: el botón queda dentro de la ventana (antes se cortaba, quedaba fuera del `viewport`).
+
+**Lenguaje poco profesional**, pedido explícito de Nalux con un ejemplo puntual ("al toque" en
+Asistencia semanal). Revisados todos los textos visibles de la app; se encontraron y corrigieron:
+
+- Asistencia (vista de día): "se ve **al toque**" → "se refleja de inmediato"; "marcar **de una**
+  a los que faltaron" → "marcar a todos los que faltaron **de una vez**".
+- Pagos: "**Pisa** el % de acá abajo" (jerga técnica) → "Completa el porcentaje de abajo
+  automáticamente"; "**Le tocaría** \{monto\}" → "Deuda estimada: \{monto\}".
+- Dos restos de **voseo** que se habían escapado de la limpieza de idioma de días anteriores
+  (`PlanesAlimentacionPage.jsx`: "Agregá" → "Agregar"; `ResetPasswordPage.jsx`: "Pedí" → "Pedir").
+- De paso, dos textos que habían quedado **desactualizados** desde la migración 0028 (login del
+  alumno): el subtítulo de Avisos y la meta description de `/mi-plan/:codigo` seguían diciendo
+  "sin necesidad de que el alumno tenga sesión" / "sin necesidad de usuario ni contraseña", cuando
+  desde el 04/09 el alumno sí inicia sesión con usuario y contraseña.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

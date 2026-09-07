@@ -189,7 +189,7 @@ const AvisosPage = () => {
     return (
         <AppLayout
             title="Avisos"
-            subtitle="Enviar un aviso segmentado por estado de cuota. Le llega solo, sin necesidad de que el alumno tenga sesión."
+            subtitle="Enviar un aviso segmentado por estado de cuota. Se calcula solo según el estado de cada alumno, cada vez que entra a ver su plan."
             actions={
                 <Btn onClick={abrirNuevo}>
                     <Plus className="h-4 w-4" /> Nuevo aviso

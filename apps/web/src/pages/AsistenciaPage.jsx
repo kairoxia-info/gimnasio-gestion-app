@@ -519,9 +519,9 @@ const AsistenciaPage = () => {
                         atajo para el resto. Se aclara acá para que no quede la duda. */}
                     <p className="mt-3 text-xs text-muted-foreground">
                         Cada marca se guarda sola apenas se toca — no hace falta cerrar el día para que quede
-                        registrada, y se ve al toque en la semana y en el mes. Cerrar el día es solo el atajo
-                        para marcar de una a los que faltaron. Tocar de nuevo el botón marcado para borrar la
-                        marca.
+                        registrada, y se refleja de inmediato en la semana y en el mes. Cerrar el día es solo el
+                        atajo para marcar a todos los que faltaron de una vez. Tocar de nuevo el botón marcado
+                        para borrar la marca.
                     </p>
                 </>
             ) : esMes ? (

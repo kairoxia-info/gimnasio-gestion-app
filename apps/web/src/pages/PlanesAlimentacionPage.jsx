@@ -354,7 +354,7 @@ const PlanesAlimentacionPage = () => {
         e.preventDefault();
         const comidasConAlimentos = comidas.filter((c) => c.alimentos.length > 0);
         if (comidasConAlimentos.length === 0) {
-            setFormError('Agregá al menos un alimento en alguna comida.');
+            setFormError('Agregar al menos un alimento en alguna comida.');
             return;
         }
         setSaving(true);

@@ -615,7 +615,7 @@ const PagosPage = () => {
                                                         </Badge>
                                                         {deuda && (
                                                             <span className="mt-1 block text-xs text-muted-foreground">
-                                                                Le tocaría {money(deuda.total)}
+                                                                Deuda estimada: {money(deuda.total)}
                                                                 {deuda.recargo > 0 && ' con recargo'}
                                                             </span>
                                                         )}
@@ -804,7 +804,8 @@ const PagosPage = () => {
                                     ))}
                                 </Select>
                                 <span className="text-xs text-muted-foreground">
-                                    Pisa el % de acá abajo. Se puede seguir editando a mano después.
+                                    Completa el porcentaje de abajo automáticamente. Se puede seguir editando a
+                                    mano después.
                                 </span>
                             </Field>
                         )}

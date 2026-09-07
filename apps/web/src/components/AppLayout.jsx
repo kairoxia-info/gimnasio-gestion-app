@@ -318,14 +318,25 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
     return (
         <div className="min-h-screen bg-background">
             <div className="mx-auto flex w-full max-w-[110rem]">
-                <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between border-r border-border px-4 py-6 lg:flex">
-                    <div>
+                {/* Reportado por Nalux (07/09/2026): en la computadora, con la ventana
+                    poco alta (zoom del navegador, laptop de resolución baja, ventana
+                    sin maximizar), no se veían ni el botón "Cerrar sesión" ni la marca
+                    "Gestión GYM Kairox IA". Causa: todo el sidebar era un solo bloque
+                    de alto fijo (h-screen) sin scroll propio -- si el menú de 11 ítems
+                    más el pie no entraban en el alto disponible, lo que sobraba se
+                    cortaba por debajo del borde, sin ninguna forma de llegar ahí (ni la
+                    página scrollea, porque el aside es sticky y queda fijo en la
+                    ventana). Ahora solo el menú del medio tiene scroll propio si hace
+                    falta; el logo arriba y el pie (correo, Cerrar sesión, marca) quedan
+                    siempre fijos y visibles, sin importar cuán baja sea la ventana. */}
+                <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border py-6 lg:flex">
+                    <div className="shrink-0 px-4">
                         <Link to="/panel" className="mb-8 block px-1">
                             <GimnasioMark className="h-12" />
                         </Link>
-                        {links}
                     </div>
-                    <div className="space-y-3 px-1">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-4">{links}</div>
+                    <div className="shrink-0 space-y-3 px-4 pt-3">
                         <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                         <button
                             type="button"

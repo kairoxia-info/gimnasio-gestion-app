@@ -82,7 +82,7 @@ const ResetPasswordPage = () => {
                 ) : !user ? (
                     <div className="space-y-4 text-center">
                         <p className="text-sm text-foreground">
-                            Este enlace no es válido o ya expiró. Pedí uno nuevo desde la pantalla de ingreso.
+                            Este enlace no es válido o ya expiró. Pedir uno nuevo desde la pantalla de ingreso.
                         </p>
                         <Link to="/login" className="inline-block">
                             <Btn
