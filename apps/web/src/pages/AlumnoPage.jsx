@@ -888,6 +888,23 @@ const FORM_VACIO = {
     observaciones: '',
 };
 
+// Un campo vacio se guarda como null, NO como 0: el profesor casi nunca
+// mide todo el mismo dia (lo normal es pesar seguido y medir de vez en
+// cuando), y un 0 se guardaba como si le hubiera medido 0 cm de cintura.
+// Ademas ensuciaba el historial ("Cintura 0 · Cadera 0 · ...") y arruinaria
+// cualquier grafico de evolucion de esa medida mas adelante.
+const medida = (v) => {
+    const texto = String(v ?? '').trim();
+    if (texto === '') return null;
+    const n = Number(texto);
+    if (!Number.isFinite(n)) return null;
+    // El 0 tambien cuenta como "no medido": nadie pesa 0 kg ni tiene 0 cm de
+    // cintura. Ademas de los que se carguen vacios de ahora en mas, esto tapa
+    // los registros que ya quedaron con 0 guardado antes de este arreglo, sin
+    // tener que tocarle ningun dato ya cargado.
+    return n > 0 ? n : null;
+};
+
 const Progreso = ({ alumnoId, registros, onChange }) => {
     const [form, setForm] = useState(FORM_VACIO);
     const [saving, setSaving] = useState(false);
@@ -899,12 +916,12 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
             await createRec('progreso', {
                 alumno_id: alumnoId,
                 fecha: form.fecha,
-                peso: Number(form.peso || 0),
-                cintura: Number(form.cintura || 0),
-                cadera: Number(form.cadera || 0),
-                pecho: Number(form.pecho || 0),
-                brazo: Number(form.brazo || 0),
-                pierna: Number(form.pierna || 0),
+                peso: medida(form.peso),
+                cintura: medida(form.cintura),
+                cadera: medida(form.cadera),
+                pecho: medida(form.pecho),
+                brazo: medida(form.brazo),
+                pierna: medida(form.pierna),
                 observaciones: form.observaciones,
             });
             setForm({ ...FORM_VACIO, fecha: hoy() });
@@ -914,9 +931,13 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
         }
     };
 
+    // Solo los dias en que efectivamente se pesó: un registro donde el
+    // profesor midió la cintura pero no el peso no tiene que hundir la linea
+    // hasta cero.
     const serie = [...registros]
+        .filter((r) => medida(r.peso) !== null)
         .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
-        .map((r) => ({ fecha: fmtFecha(r.fecha).slice(0, 5), peso: Number(r.peso || 0) }));
+        .map((r) => ({ fecha: fmtFecha(r.fecha).slice(0, 5), peso: Number(r.peso) }));
 
     return (
         <div className="grid gap-5 lg:grid-cols-[1fr,1.2fr]">
@@ -1036,12 +1057,27 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                 <li key={r.id} className="flex items-start justify-between gap-3 py-3">
                                     <div>
                                         <p className="text-sm font-semibold">
-                                            {fmtFecha(r.fecha)} · {r.peso || 0} kg
+                                            {fmtFecha(r.fecha)}
+                                            {medida(r.peso) !== null ? ` · ${r.peso} kg` : ''}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            Cintura {r.cintura || 0} · Cadera {r.cadera || 0} · Pecho {r.pecho || 0} ·
-                                            Brazo {r.brazo || 0} · Pierna {r.pierna || 0}
-                                        </p>
+                                        {/* Solo las medidas realmente tomadas ese dia: antes
+                                            salian las cinco siempre, con 0 en las que no se
+                                            habian medido. */}
+                                        {(() => {
+                                            const tomadas = [
+                                                ['Cintura', r.cintura],
+                                                ['Cadera', r.cadera],
+                                                ['Pecho', r.pecho],
+                                                ['Brazo', r.brazo],
+                                                ['Pierna', r.pierna],
+                                            ].filter(([, v]) => medida(v) !== null);
+                                            if (tomadas.length === 0) return null;
+                                            return (
+                                                <p className="text-xs text-muted-foreground">
+                                                    {tomadas.map(([n, v]) => `${n} ${v}`).join(' · ')}
+                                                </p>
+                                            );
+                                        })()}
                                         {r.observaciones && <p className="mt-1 text-xs">{r.observaciones}</p>}
                                     </div>
                                     <button
