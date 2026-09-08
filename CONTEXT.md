@@ -2563,9 +2563,29 @@ de prueba de la migración 0033): por los logs de `auth_logs` se vio la secuenci
   accesible. No hace falta re-probarlo aparte -- la confirmación en sí ya quedó probada por los
   logs, independientemente de a dónde redirija después.
 
-Sigue pendiente, sin urgencia: personalizar en español la plantilla del mail de confirmación
-(`Authentication → Email Templates → Confirm signup`, viene en inglés por default) -- ofrecido,
-no pedido todavía.
+**Plantilla del mail, en español** (pedida después, ya aplicada): se le armó el texto y Nalux lo
+pegó en `Authentication → Email Templates → Confirm signup` -- asunto "Confirmar cuenta - Gestión
+GYM Kairox IA" y cuerpo HTML propio (botón dorado `#c9a86a`, el mismo de la marca, más el link en
+texto plano abajo por si algún cliente bloquea el HTML). Ojo: el **asunto es un campo aparte** del
+cuerpo en esa pantalla y es fácil pasarlo por alto -- quedó en el default en inglés hasta que se
+corrigió en un segundo paso.
+
+**Re-probado de punta a punta desde producción** (no local, para que el link fuera a una URL
+siempre accesible): registro → mail con la plantilla nueva → confirmación → onboarding → panel.
+Nalux confirmó que el correo se ve bien. De paso se vio que el gimnasio nuevo salió con el dorado
+de fábrica, o sea que el fix de la migración 0034 sigue firme.
+
+**Gotcha que apareció en el medio, para no volver a tropezar:** al borrar una cuenta directo por
+SQL (para reusar el correo en otra prueba), el navegador **se queda con la sesión vieja** -- el
+token no se invalida solo. La app entonces cree que hay sesión, no encuentra el perfil, y manda a
+`/onboarding` en vez de mostrar el login, sin ningún error visible. Confirmado reproduciéndolo en
+otro navegador y viendo la clave `sb-<proyecto>-auth-token` en el localStorage: al borrarla, el
+login carga normal. Esto NO pasa cuando la cuenta se borra desde la propia app ("Eliminar cuenta"),
+porque ahí `eliminarCuenta()` hace el `signOut()` después. Si en el futuro se borra una cuenta a
+mano por SQL, hay que limpiar el localStorage de ese navegador (o usar otro) antes de re-probar.
+
+**Cuenta de prueba viva:** quedó "FULL GYM NT" (`nadia.creceonline@gmail.com`), que Nalux dijo
+expresamente que va a seguir usando para probar -- **no borrarla** sin consultarle primero.
 
 ### Por qué esta entrada existe
 
