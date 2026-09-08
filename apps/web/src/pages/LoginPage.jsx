@@ -53,7 +53,9 @@ const LoginPage = () => {
                 if (data?.session) {
                     navigate('/panel', { replace: true });
                 } else {
-                    setInfo('Cuenta creada. Revisar el correo para confirmar antes de ingresar.');
+                    setInfo(
+                        'Cuenta creada. Revisar el correo para confirmar antes de ingresar (si no aparece en unos minutos, revisar también la carpeta de spam).',
+                    );
                 }
             }
         } catch (err) {

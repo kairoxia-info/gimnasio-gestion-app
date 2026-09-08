@@ -88,11 +88,22 @@ export const AuthProvider = ({ children }) => {
             isAuthed: !!user,
             loading,
             signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
+            // emailRedirectTo (08/09/2026, pedido de Nalux de verificar el correo al
+            // registrarse): mismo criterio que resetPasswordForEmail más abajo -- sin
+            // esto, el link del mail de confirmación vuelve al "Site URL" fijo que
+            // tenga configurado el proyecto en Supabase, que puede no ser el mismo
+            // entorno desde el que se registró (local en pruebas vs. producción).
+            // Apunta a la raíz (no a una página propia): LoginPage ya redirige solo a
+            // /onboarding en cuanto detecta la sesión (ver ProtectedRoute.jsx), así que
+            // no hace falta una pantalla dedicada para "correo confirmado".
             signUp: (email, password, { first_name, last_name } = {}) =>
                 supabase.auth.signUp({
                     email,
                     password,
-                    options: { data: { first_name, last_name } },
+                    options: {
+                        data: { first_name, last_name },
+                        emailRedirectTo: window.location.origin,
+                    },
                 }),
             // Limpia el cache y la cola de sincronización de este celular
             // (lib/offline.js) -- si no, un profesor distinto que se loguee

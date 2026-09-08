@@ -2505,6 +2505,68 @@ Verificado en `/login`: se probó escribiendo una contraseña de prueba y altern
 pasa de puntos a texto plano y de vuelta, con el ícono y el `aria-label` ("Mostrar
 contraseña"/"Ocultar contraseña") cambiando en cada click.
 
+### 08/09/2026 — Verificar el correo al registrarse (pendiente: falta un paso en el Dashboard de Supabase)
+
+Pedido de Nalux: que al registrarse un profesor, se confirme que el correo existe de verdad (mail
+de verificación) en vez de aceptar cualquier texto con forma de correo.
+
+**Investigado antes de tocar nada:** el frontend (`LoginPage.jsx`) **ya está preparado para esto
+desde antes** -- `onSubmit` ya revisa si `signUp()` devuelve una sesión: si la hay, entra directo
+(`Confirm email` desactivado); si no, muestra "Cuenta creada. Revisar el correo para confirmar
+antes de ingresar." (`Confirm email` activado). Se confirmó en la base que hoy está **desactivado**:
+la única cuenta que queda en `auth.users` tiene `email_confirmed_at` a 33 milisegundos de
+`created_at` -- se autoconfirmó sola, nadie hizo clic en ningún link.
+
+**Por qué no se activó directo:** `Confirm email` no es una tabla ni una función de Postgres -- es
+una configuración del servicio de Auth de Supabase (GoTrue), que se prende desde el Dashboard del
+proyecto (o la API de administración de Supabase, no la base de datos). Ninguna herramienta
+disponible acá llega a ese nivel, así que **le queda a Nalux prenderlo a mano**:
+`Authentication → Sign In / Providers → Email → "Confirm email"`, activarlo.
+
+**Lo que sí se hizo desde el código:** `signUp()` (`AuthContext.jsx`) ahora manda
+`emailRedirectTo: window.location.origin`, mismo criterio que ya usa `resetPasswordForEmail` --
+sin esto, el link del mail de confirmación volvería siempre al "Site URL" fijo del proyecto,
+sin importar si el registro se hizo en local o en producción. Apunta a la raíz de la app (no a una
+pantalla propia): en cuanto `ProtectedRoute` detecta la sesión ya confirmada, redirige solo a
+`/onboarding`.
+
+**Configuración completada en el Dashboard, guiando a Nalux paso a paso (ninguna herramienta
+disponible acá llega a estos ajustes, son del servicio de Auth, no de la base):**
+1. **SMTP propio:** en vez del mailer limitado de Supabase, se conectó como remitente el Gmail
+   `equipokairox.ia@gmail.com` (`Authentication → Emails → SMTP Settings`), con una "Contraseña de
+   aplicación" de Google (nunca la contraseña real de esa cuenta, y nunca pasada por este chat --
+   Nalux la generó y la pegó directo en Supabase).
+2. **URL Configuration:** se agregaron `http://localhost:3001/**` y
+   `https://gimnasio-gestion-app-web.vercel.app/**` a las Redirect URLs (antes solo estaban las de
+   `/restablecer-password`, ninguna cubría el link de confirmación de cuenta), y se corrigió el
+   Site URL de `http://localhost:3001` a la URL de producción -- ese campo es el destino de
+   respaldo cuando un link no matchea ninguna Redirect URL, tenerlo en localhost hubiera mandado a
+   cualquier usuario real ahí.
+3. **`Confirm email` activado** en `Sign In / Providers → Email`.
+
+**Verificado de punta a punta con un registro real** (`nadia.creceonline@gmail.com`, mismo email
+de prueba de la migración 0033): por los logs de `auth_logs` se vio la secuencia completa --
+`POST /signup` (200) → `user_confirmation_requested` → `GET /verify` (303) con
+`email_confirmed_at` recién ahí seteado en la base. La confirmación en sí funciona.
+
+**Dos problemas reales que salieron de esa prueba, y cómo quedaron:**
+- **El mail cae en spam:** esperable con un Gmail personal como remitente -- no tiene la reputación
+  ni las firmas (SPF/DKIM/DMARC) de un proveedor pensado para correo transaccional, que es
+  justo lo que ya advertía Supabase al cargar el SMTP. Se le ofreció migrar a Resend (mejor
+  entrega, plan gratis); **Nalux decidió seguir con Gmail por ahora**. Mitigación aplicada en
+  el código: el mensaje de "Cuenta creada" en `LoginPage.jsx` ahora suma "revisar también la
+  carpeta de spam".
+- **El link llevaba a una página que no cargaba:** pasó porque la prueba se hizo con la app abierta
+  en `localhost:3001`, así que el link de confirmación apuntaba ahí -- si se abre desde otro
+  dispositivo o sin el server local corriendo, no hay nada que responda. No es un bug: un usuario
+  real que se registre desde la URL de producción va a recibir un link a esa URL, siempre
+  accesible. No hace falta re-probarlo aparte -- la confirmación en sí ya quedó probada por los
+  logs, independientemente de a dónde redirija después.
+
+Sigue pendiente, sin urgencia: personalizar en español la plantilla del mail de confirmación
+(`Authentication → Email Templates → Confirm signup`, viene en inglés por default) -- ofrecido,
+no pedido todavía.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
