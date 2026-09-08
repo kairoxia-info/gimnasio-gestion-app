@@ -2,7 +2,8 @@
 // tiene que reflejarse en TODA la app -- no alcanzaba con guardarlo en la
 // base. Bug real reportado por Nalux (03/09/2026): "recién cambié a un color
 // morado pero la app no cambió de color". Causa: --primary/--accent/--ring
-// están hardcodeados en index.css al rojo de Kairox (2 100% 44%) y NADA en
+// están hardcodeados en index.css al color de fábrica de Kairox (un dorado
+// brillante, desde el 07/09/2026 -- antes era un rojo saturado) y NADA en
 // el código los sobreescribía -- el color guardado solo se usaba, suelto, en
 // el PDF del comprobante (PagosPage) y en los PDF de MiPlanPage. El picker
 // de color de ConfiguracionPage.jsx guardaba el valor perfectamente; nunca
@@ -67,7 +68,7 @@ const luminanciaRelativa = ({ r, g, b }) => {
 };
 
 // Sin color válido (todavía no cargó el gimnasio, o el campo está vacío/mal
-// cargado) vuelve al rojo de fábrica quitando el override -- nunca deja la
+// cargado) vuelve al color de fábrica quitando el override -- nunca deja la
 // interfaz sin ningún --primary definido.
 export const aplicarColorGimnasio = (hexColor) => {
     if (typeof document === 'undefined') return; // guarda por las dudas en SSR/tests

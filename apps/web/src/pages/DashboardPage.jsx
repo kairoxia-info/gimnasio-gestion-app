@@ -2,12 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Cake, CalendarCheck, TrendingUp, UserPlus, Users, Wallet } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import AppLayout from '@/components/AppLayout';
 import { Card, Empty, Loading } from '@/components/ui-kit';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 import { ESTADOS_PAGO, estadoAlumno, estadoDesdeVencimiento, fmtFecha, fmtMes, money } from '@/lib/format';
+
+// Carga diferida: saca recharts (~100 KB) del bundle principal. El gráfico
+// está más abajo de lo que se ve al entrar al panel, así que no tiene por
+// qué demorar la primera pantalla -- mismo criterio que jsPDF/html2canvas.
+const GraficoIngresos = React.lazy(() => import('@/components/GraficoIngresos'));
 
 // Últimos 12 meses, agrupados en el servidor (ingresos_por_mes(), migración
 // 0024) -- reemplaza el viejo listAll('pagos') sin filtro que traía TODA la
@@ -360,30 +364,21 @@ const DashboardPage = () => {
                                 Ver pagos
                             </Link>
                         </div>
+                        {/* El gráfico se carga aparte del resto del panel (ver
+                            components/GraficoIngresos.jsx): recharts pesa ~100 KB y
+                            esto queda más abajo de lo que se ve al entrar. El
+                            fallback tiene el mismo alto que el gráfico para que la
+                            página no pegue un salto cuando termina de cargar. */}
                         <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={serieIngresos}>
-                                    <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
-                                    <XAxis dataKey="mes" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                    <YAxis
-                                        stroke="hsl(var(--muted-foreground))"
-                                        fontSize={12}
-                                        width={70}
-                                        tickFormatter={(v) => money(v)}
-                                    />
-                                    <Tooltip
-                                        cursor={{ fill: 'hsl(var(--secondary))' }}
-                                        contentStyle={{
-                                            background: 'hsl(var(--card))',
-                                            border: '1px solid hsl(var(--border))',
-                                            borderRadius: 12,
-                                            color: 'hsl(var(--foreground))',
-                                        }}
-                                        formatter={(v) => [money(v), 'Cobrado']}
-                                    />
-                                    <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <React.Suspense
+                                fallback={
+                                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                                        Cargando el gráfico...
+                                    </div>
+                                }
+                            >
+                                <GraficoIngresos serie={serieIngresos} />
+                            </React.Suspense>
                         </div>
                     </Card>
 

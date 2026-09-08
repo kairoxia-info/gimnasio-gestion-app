@@ -2316,6 +2316,60 @@ agente): Google Fonts bloqueando el render (`@import` en `index.css`), Recharts 
 el Dashboard, color de fábrica más neutro y títulos de página sin `uppercase` sostenido,
 transición en el `Modal`, hover consistente en `Btn`.
 
+### Más del mismo día: segunda pasada de rediseño -- se cerró toda la lista pendiente
+
+Nalux pidió seguir con el resto de la propuesta del agente y dijo "hazlo tú" -- sin nuevas
+decisiones que consultarle, salvo una que ya se había resuelto en un tramo de la conversación
+resumido antes de este punto (ver el punto 0). Quedó cerrada toda la lista que había quedado
+pendiente en la entrada anterior:
+
+**0. Color de fábrica -- ya decidido, no en esta tanda.** El `--primary`/`--accent`/`--ring` de
+`index.css` (antes de que un gimnasio configure el suyo) pasó de un rojo saturado a un **dorado
+brillante** (`42 92% 54%`, texto oscuro encima). Nalux pidió "que parezca como oro" y lo eligió
+viendo tres variantes lado a lado -- la decisión y la implementación ya estaban en el working
+directory cuando se retomó esta tanda (turno resumido). De paso `--warn` se corrió de 42° a 28°
+(amarillo-dorado a naranja): con el `--primary` nuevo en 42°, "Próximo a vencer"/"Con deuda"
+quedaban casi del mismo color que la marca y se confundían. `--destructive` no se tocó (sigue el
+rojo fijo corregido en la tanda anterior). Ningún gimnasio con color propio configurado se ve
+afectado -- `colorTema.js` sigue pisando estas variables apenas carga su `color_principal`.
+
+**1. Google Fonts ya no bloquea el render.** El `@import` de `index.css` (bloqueante: el
+navegador tenía que resolver la descarga externa antes de poder pintar el CSS propio) pasó a
+`<link rel="preconnect">` + `<link rel="stylesheet">` en `index.html`, que bajan en paralelo con
+el resto.
+
+**2. Recharts diferido de verdad -- costó una vuelta extra.** Primer intento: diferir solo el
+gráfico del panel (`components/GraficoIngresos.jsx`, `React.lazy` en `DashboardPage.jsx`). Build
+de prueba: el bundle principal **no bajó de tamaño** (1220 KB, igual que antes) porque
+`AlumnoPage.jsx` importaba recharts de forma estática para el gráfico de "Evolución del peso" --
+con un segundo punto de entrada no-diferido, Rollup no puede separar la librería de verdad. Se
+extrajo también ese gráfico (`components/GraficoPeso.jsx`) con el mismo patrón. Resultado medido:
+el bundle principal bajó de **1220 KB a 826 KB (-32%)**, con recharts ahora en un chunk aparte
+(`generateCategoricalChart`, 381 KB) que sólo se descarga cuando el profesor entra al panel o a la
+pestaña de Progreso de un alumno.
+
+**3. Títulos de pantalla sin `uppercase` sostenido** (`AppLayout.jsx`, el `<h1>` de cada
+pantalla) -- las mayúsculas quedan reservadas para la marca (wordmark de Kairox y nombre del
+gimnasio), que es donde aportan identidad en vez de sumar al tono "cartel de gimnasio de fierros".
+
+**4. `Modal` con transición de entrada/salida** (`ui-kit.jsx`, `AnimatePresence` + fade del fondo
++ scale de la tarjeta) y **cierre con Escape** además de la X. A propósito NO se cierra con clic
+en el fondo: la mayoría de estos modales son formularios largos (alta de alumno, registrar pago,
+armar una rutina) y un clic al costado sin querer haría perder todo lo cargado.
+
+**5. Hover consistente en `Btn`** (`hover:-translate-y-px` en los tres variantes) -- antes solo
+las tarjetas del panel "respondían" al pasar el mouse por encima y los botones no.
+
+**6. `Loading` con la forma real del contenido**, no bloques grises parejos: ahora imita una fila
+de lista (avatar redondo + título + detalle más corto), que es la silueta de casi todas las
+listas de la app.
+
+Verificado con sesión real de profesor en local (no sólo lint/build): título de página sin
+mayúscula, botón "Eliminar" en rojo fijo aunque el gimnasio de prueba tiene su color propio
+(celeste) configurado, modal con transición y cierre por Escape, gráfico del panel cargando sin
+errores de consola. Con esto **no queda nada pendiente** de la lista que dejó la auditoría del
+agente `frontend-architect`.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -25,6 +24,11 @@ import {
     hoy,
     money,
 } from '@/lib/format';
+
+// Carga diferida: recharts (~100 KB) recién se descarga cuando el profesor
+// entra a la pestaña de Progreso, no de entrada con el resto de la ficha del
+// alumno -- mismo criterio que components/GraficoIngresos.jsx.
+const GraficoPeso = React.lazy(() => import('@/components/GraficoPeso'));
 
 // rutinas es la plantilla (nombre/descripcion/duracion_semanas/items),
 // rutinas_asignadas es el vínculo con el alumno Y la copia de lo que se le
@@ -1021,28 +1025,15 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                         <Empty>Cargar al menos dos registros para ver el gráfico.</Empty>
                     ) : (
                         <div className="h-56">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={serie}>
-                                    <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
-                                    <XAxis dataKey="fecha" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={['auto', 'auto']} />
-                                    <Tooltip
-                                        contentStyle={{
-                                            background: 'hsl(var(--card))',
-                                            border: '1px solid hsl(var(--border))',
-                                            borderRadius: 12,
-                                            color: 'hsl(var(--foreground))',
-                                        }}
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="peso"
-                                        stroke="hsl(var(--primary))"
-                                        strokeWidth={3}
-                                        dot={{ r: 3 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            <React.Suspense
+                                fallback={
+                                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                                        Cargando el gráfico...
+                                    </div>
+                                }
+                            >
+                                <GraficoPeso serie={serie} />
+                            </React.Suspense>
                         </div>
                     )}
                 </Card>

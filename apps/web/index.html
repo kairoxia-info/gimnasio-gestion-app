@@ -16,6 +16,23 @@
 		<meta name="generator" content="Hostinger Horizons" />
 		<meta name="google" content="notranslate" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<!-- Las fuentes se cargan acá y no con un @import adentro de index.css
+			 (07/09/2026). Un @import de CSS es bloqueante en cascada: el navegador
+			 tiene que ir a buscar la hoja de Google ANTES de poder pintar nada del
+			 CSS propio, así que el texto tarda de más en aparecer. Con <link> baja
+			 en paralelo con el resto, y el preconnect abre la conexión a los dos
+			 dominios de Google Fonts antes de que se sepa qué archivo pedir.
+			 display=swap (ya venía en la URL) hace que el texto se vea con la
+			 tipografía del sistema mientras la definitiva termina de bajar, en vez
+			 de quedar invisible. -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+		/>
+
 		<title>Gestión GYM Kairox IA</title>
 	</head>
 	<body>

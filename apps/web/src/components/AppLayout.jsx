@@ -499,8 +499,15 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                     <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
                         {(title || subtitle) && (
                             <div className="mb-7">
+                                {/* Sin uppercase (07/09/2026): el título de cada pantalla
+                                    en mayúscula sostenida ("PANEL GENERAL", "PAGOS Y CAJA")
+                                    le daba a toda la navegación un tono de cartel de
+                                    gimnasio de fierros. Las mayúsculas quedan reservadas
+                                    para la marca -- el wordmark de Kairox y el nombre del
+                                    gimnasio -- que es donde aportan identidad en vez de
+                                    volumen. */}
                                 {title && (
-                                    <h1 className="font-display text-3xl font-extrabold uppercase sm:text-4xl">
+                                    <h1 className="font-display text-3xl font-extrabold sm:text-4xl">
                                         {title}
                                     </h1>
                                 )}

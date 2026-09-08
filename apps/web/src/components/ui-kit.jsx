@@ -1,4 +1,5 @@
 import React from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
 export const Card = ({ className = '', children }) => (
@@ -25,10 +26,15 @@ export const Btn = ({ variant = 'primary', className = '', type = 'button', ...p
     // alto y de paso le comía el ancho al nombre del gimnasio, que quedaba
     // cortado ("Mi G..."). Sin cortar el texto, el botón ocupa un solo
     // renglón y el reparto de ancho de la barra queda estable.
+    // hover:-translate-y-px: micro-interacción consistente en toda la app
+    // (07/09/2026). Antes solo las tarjetas del panel "respondían" al pasar
+    // por encima y los botones no, así que la sensación de la interfaz
+    // cambiaba de pantalla en pantalla. disabled:translate-y-0 para que un
+    // botón deshabilitado no se mueva (no hay nada que responder ahí).
     return (
         <button
             type={type}
-            className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50 ${styles[variant]} ${className}`}
+            className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] hover:-translate-y-px disabled:translate-y-0 disabled:opacity-50 ${styles[variant]} ${className}`}
             {...props}
         />
     );
@@ -56,27 +62,59 @@ export const Select = ({ className = '', children, ...props }) => (
     </select>
 );
 
+// Transición de entrada y salida (07/09/2026): antes aparecía y desaparecía
+// de golpe, lo que quedaba raro al lado del resto de la app. El fondo hace
+// fade y la tarjeta entra creciendo apenas.
+//
+// A propósito NO se cierra al hacer clic en el fondo: la mayoría de estos
+// modales son formularios largos (nuevo alumno, registrar pago, armar una
+// rutina) y un clic al costado sin querer haría perder todo lo cargado. Se
+// cierra con la X o con Escape, que son acciones deliberadas.
 export const Modal = ({ open, onClose, title, children, wide = false }) => {
-    if (!open) return null;
+    React.useEffect(() => {
+        if (!open) return undefined;
+        const alPresionar = (e) => {
+            if (e.key === 'Escape') onClose?.();
+        };
+        window.addEventListener('keydown', alPresionar);
+        return () => window.removeEventListener('keydown', alPresionar);
+    }, [open, onClose]);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10">
-            <div
-                className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-2xl border border-border bg-card p-6`}
-            >
-                <div className="mb-5 flex items-start justify-between gap-4">
-                    <h2 className="font-display text-xl font-bold">{title}</h2>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Cerrar"
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+        <AnimatePresence>
+            {open && (
+                <motion.div
+                    className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                >
+                    <motion.div
+                        role="dialog"
+                        aria-modal="true"
+                        className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-2xl border border-border bg-card p-6`}
+                        initial={{ opacity: 0, scale: 0.96, y: -8 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96, y: -8 }}
+                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-                {children}
-            </div>
-        </div>
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                            <h2 className="font-display text-xl font-bold">{title}</h2>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                aria-label="Cerrar"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border transition hover:border-primary"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        {children}
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
     );
 };
 
@@ -86,10 +124,23 @@ export const Empty = ({ children }) => (
     </div>
 );
 
+// Esqueleto de carga con la forma de lo que viene después (07/09/2026):
+// antes eran bloques grises parejos, así que al terminar de cargar el
+// contenido "saltaba" a otra forma. Ahora imita una fila de lista real
+// -- avatar redondo + un renglón de título y otro más corto de detalle --
+// que es la silueta de casi todas las listas de la app (alumnos, pagos,
+// ejercicios). El ancho del segundo renglón alterna para que no se lea
+// como un patrón mecánico.
 export const Loading = ({ rows = 3 }) => (
     <div className="space-y-3">
         {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-2xl bg-secondary" />
+            <div key={i} className="flex items-center gap-4 rounded-2xl border border-border p-4">
+                <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-secondary" />
+                <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3.5 w-2/5 animate-pulse rounded-full bg-secondary" />
+                    <div className={`h-3 animate-pulse rounded-full bg-secondary ${i % 2 ? 'w-1/3' : 'w-1/4'}`} />
+                </div>
+            </div>
         ))}
     </div>
 );

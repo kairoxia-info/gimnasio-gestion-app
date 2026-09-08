@@ -1,4 +1,8 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap");
+/* Las fuentes ya no se piden desde acá: un @import de CSS bloquea la
+   cascada (el navegador tiene que resolver la descarga externa antes de
+   pintar el CSS propio, y el texto tarda de más en aparecer). Pasaron a
+   <link rel="preconnect"> + <link rel="stylesheet"> en index.html, donde
+   bajan en paralelo -- ver el comentario ahí. */
 
 @tailwind base;
 @tailwind components;
@@ -10,6 +14,27 @@ body {
 }
 
 @layer base {
+  /* Color "de fábrica" (07/09/2026): antes de que un gimnasio configure el
+     suyo en Configuración, --primary/--accent/--ring usaban un rojo
+     saturado -- energético, pero se leía como "gimnasio de fierros" antes
+     de siquiera entrar a la app, y no encajaba bien para un profesor de
+     yoga, pilates o cualquier disciplina que no fuera musculación. Nalux
+     pidió un dorado brillante, "que parezca como oro" -- eligió esta
+     variante (la más viva de tres) viéndolas lado a lado, con el mismo
+     criterio de texto oscuro que ya usa el botón "Ingresar" del login
+     (luminancia relativa > 0.5 -> texto oscuro, misma fórmula que
+     colorTema.js). --destructive queda IGUAL (rojo fijo, sin tocar): eso ya
+     se corrigió por separado hoy para que "Atrasado"/"Eliminar" nunca
+     dependan de este color -- ver el comentario en colorTema.js. Ningún
+     gimnasio que ya haya elegido su propio color en Configuración se ve
+     afectado por esto: colorTema.js sigue pisando estas variables apenas
+     carga su color_principal.
+
+     --warn se corrió de 42° (amarillo-dorado) a 28° (naranja): con el
+     dorado nuevo, ambos en 42° quedaban casi idénticos y "Próximo a
+     vencer"/"Con deuda" se confundían con el color de marca. El naranja
+     sigue leyéndose como advertencia (entre el verde de --ok y el rojo de
+     --destructive) pero ya no compite con el dorado. */
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 8%;
@@ -17,22 +42,22 @@ body {
     --card-foreground: 0 0% 8%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 8%;
-    --primary: 2 100% 44%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 42 92% 54%;
+    --primary-foreground: 0 0% 8%;
     --secondary: 0 0% 94%;
     --secondary-foreground: 0 0% 10%;
     --muted: 0 0% 94%;
     --muted-foreground: 0 0% 32%;
-    --accent: 2 100% 44%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 42 92% 54%;
+    --accent-foreground: 0 0% 8%;
     --destructive: 2 100% 44%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 88%;
     --input: 0 0% 88%;
-    --ring: 2 100% 44%;
+    --ring: 42 92% 54%;
     --radius: 0.85rem;
     --ok: 145 72% 33%;
-    --warn: 42 96% 45%;
+    --warn: 28 92% 42%;
   }
   .dark {
     --background: 0 0% 5%;
@@ -41,21 +66,21 @@ body {
     --card-foreground: 0 0% 100%;
     --popover: 0 0% 10%;
     --popover-foreground: 0 0% 100%;
-    --primary: 2 100% 44%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 42 92% 54%;
+    --primary-foreground: 0 0% 8%;
     --secondary: 0 0% 14%;
     --secondary-foreground: 0 0% 100%;
     --muted: 0 0% 14%;
     --muted-foreground: 0 0% 82%;
-    --accent: 2 100% 44%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 42 92% 54%;
+    --accent-foreground: 0 0% 8%;
     --destructive: 2 100% 50%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 18%;
     --input: 0 0% 20%;
-    --ring: 2 100% 50%;
+    --ring: 42 92% 54%;
     --ok: 145 65% 45%;
-    --warn: 42 100% 58%;
+    --warn: 28 95% 55%;
   }
   * {
     border-color: hsl(var(--border));
