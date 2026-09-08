@@ -113,6 +113,55 @@ export const AuthProvider = ({ children }) => {
                 return result;
             },
             refreshProfile: () => fetchProfile(user?.id),
+            // Borrado de cuenta (migración 0035), pedido de Nalux (08/09/2026):
+            // borrado definitivo e inmediato -- sin papelera ni período de
+            // gracia (lo pidió así a propósito, para que el mismo correo quede
+            // libre enseguida para una cuenta nueva). Por eso exige reingresar
+            // la contraseña acá mismo antes de tocar nada: es la única traba
+            // real contra un borrado accidental si alguien deja la sesión
+            // abierta en un dispositivo compartido.
+            //
+            // No hace signOut() acá a propósito: el llamador (ConfiguracionPage)
+            // necesita esos segundos de margen para mostrar la confirmación
+            // antes de que se cierre la sesión y ProtectedRoute redirija solo.
+            eliminarCuenta: async (password) => {
+                if (!user?.email) return { error: { message: 'No hay sesión activa.' } };
+
+                const { error: authError } = await supabase.auth.signInWithPassword({
+                    email: user.email,
+                    password,
+                });
+                if (authError) return { error: { message: 'La contraseña no es correcta.' } };
+
+                // Los archivos del gimnasio (logo, fotos/videos de ejercicios) no
+                // se pueden borrar por SQL -- Supabase lo bloquea a propósito
+                // (ver comentario en la migración 0035) para que nunca quede un
+                // archivo huérfano en el storage real. Se listan y remueven acá
+                // por la Storage API, con la sesión del propio admin (mismas
+                // policies de las migraciones 0003/0005), antes de borrar el
+                // resto por la RPC. Si esto falla no bloquea el borrado de la
+                // cuenta -- lo importante es que los datos salgan de la base.
+                if (profile?.role === 'admin' && profile?.gimnasio_id) {
+                    const gimnasioId = profile.gimnasio_id;
+                    for (const bucket of ['gimnasio-logos', 'ejercicios-media']) {
+                        try {
+                            const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId);
+                            if (archivos?.length) {
+                                const paths = archivos.map((a) => `${gimnasioId}/${a.name}`);
+                                await supabase.storage.from(bucket).remove(paths);
+                            }
+                        } catch (_) {
+                            // Ignorado a propósito -- ver comentario arriba.
+                        }
+                    }
+                }
+
+                const { error } = await supabase.rpc('eliminar_mi_cuenta');
+                if (error) return { error: { message: 'No se pudo eliminar la cuenta. Reintentar en unos minutos.' } };
+
+                limpiarTodoOffline();
+                return { error: null };
+            },
         }),
         [user, profile, loading, fetchProfile],
     );

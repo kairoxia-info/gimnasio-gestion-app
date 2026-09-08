@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Dumbbell, Loader2, Lock, User } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
-import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 
 // Clave de localStorage donde queda guardado el codigo_acceso después de un
 // login exitoso -- mismo valor que MiPlanPage.jsx lee para "Cerrar sesión"
@@ -147,8 +147,7 @@ const AlumnoLoginPage = () => {
                                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                                 strokeWidth={1.8}
                             />
-                            <Input
-                                type="password"
+                            <PasswordInput
                                 value={contrasena}
                                 onChange={(e) => setContrasena(e.target.value)}
                                 placeholder="••••••••"

@@ -2370,6 +2370,141 @@ mayúscula, botón "Eliminar" en rojo fijo aunque el gimnasio de prueba tiene su
 errores de consola. Con esto **no queda nada pendiente** de la lista que dejó la auditoría del
 agente `frontend-architect`.
 
+### 08/09/2026 — Bug crítico: el alta de un gimnasio nuevo estaba rota (migración 0033)
+
+Nalux probó crear una cuenta de profesor nueva ("Registrarse" en `/login`) y dio error. Investigado
+por logs, no por reproducirlo a mano (no hay forma de loguearse como ella sin pedirle credenciales,
+regla de la sesión) -- `auth_logs` mostró el `/signup` con status 200 y el perfil se creaba bien
+(`profiles`, con `gimnasio_id` en NULL, que es lo esperado hasta completar el onboarding), pero
+`postgres_logs` tenía, justo después:
+
+```
+null value in column "codigo_invitacion" of relation "gimnasios" violates not-null constraint
+```
+
+**Causa:** `create_gimnasio()` (la RPC que llama `OnboardingPage.jsx` al crear el gimnasio)
+insertaba en `public.gimnasios` sin asignar `codigo_invitacion` -- columna `NOT NULL` y `UNIQUE`
+(migración 0004, es el código que usa `/unirse/:codigo` para el autorregistro de alumnos), sin
+ningún `DEFAULT`. El `INSERT` fallaba siempre, para cualquier usuario, no solo para esta prueba --
+**el alta de un gimnasio nuevo estaba rota desde que se agregó esa columna**, probablemente porque
+nadie había vuelto a probar el registro completo de punta a punta desde entonces.
+
+**Arreglo:** `create_gimnasio()` ahora genera el código con el mismo patrón que ya usaba
+`regenerar_codigo_invitacion()` (`encode(extensions.gen_random_bytes(16), 'hex')`, con reintentos
+ante una colisión improbable contra el `UNIQUE`). Verificado con un `INSERT` de prueba dentro de una
+transacción con `ROLLBACK` (no se creó ningún gimnasio de prueba real) -- ya no lanza el error.
+
+Quedó una cuenta de prueba de Nalux (`nadia.creceonline@gmail.com`, "Micaela Tecera") con sesión
+creada pero sin gimnasio, del intento que falló antes del fix -- no se tocó sin confirmar con ella
+si reintentar el registro con esa cuenta ahora que anda, o si prefiere que se borre para empezar de
+cero.
+
+**Actualización, mismo día:** Nalux reintentó el registro y confirmó que ya funciona ("listo ya
+funciono"). Se verificó en la base: el gimnasio "Full GYM" quedó creado con `codigo_invitacion`
+válido y la cuenta con `role: admin`. Como ya la usó para probar exitosamente, esa cuenta **no se
+tocó ni se borró** -- queda como cuenta real de prueba adoptada, mismo criterio que el resto de la
+sesión con datos que el usuario ya usó.
+
+### 08/09/2026 — El gimnasio nuevo se mostraba todo en rojo en vez del dorado de fábrica (migración 0034)
+
+Reportado por Nalux con dos capturas: el panel de "Full GYM" (el gimnasio creado en la prueba de
+arriba) se veía entero en rojo -- menú, íconos de las tarjetas, "CAJA DEL MES" -- en vez del dorado
+nuevo de fábrica (`index.css`, cambiado más temprano esta sesión).
+
+**Causa:** la columna `gimnasios.color_principal` tenía `DEFAULT '#E10600'`, el rojo viejo de
+Kairox de antes del rediseño a dorado -- nadie lo había actualizado al cambiar el CSS. Como
+`create_gimnasio()` nunca especifica `color_principal` al insertar, todo gimnasio nuevo recibía ese
+rojo como valor **explícito** de la fila (no `NULL`), así que `aplicarColorGimnasio()`
+(`lib/colorTema.js`) lo tomaba como "el profesor eligió este color" y lo aplicaba, pisando el
+dorado de fábrica del CSS (que solo se ve cuando `color_principal` es `NULL`).
+
+**Arreglo:** se sacó el `DEFAULT` de la columna (queda `NULL` hasta que el profesor elija un color
+en Configuración) y se corrigió a `NULL` el único gimnasio ya afectado ("Full GYM"). Se confirmó
+que "Mi GYM FIT" -- que tiene su propio color celeste elegido a propósito -- no se tocó, porque el
+`UPDATE` filtraba específicamente por `color_principal = '#E10600'`.
+
+### 08/09/2026 — Eliminar cuenta, con borrado completo en cascada (migración 0035)
+
+Pedido de Nalux, sobre las mismas capturas del bug de arriba: poder eliminar la cuenta de un
+profesor, **y que al borrarla se borre también de la base todo lo que estuvo cargado en esa
+cuenta** -- no una baja lógica, un borrado real.
+
+**Diseño:** antes de tocar código se revisaron las 17 foreign keys que apuntan a `gimnasios` --
+16 tablas de negocio (alumnos, rutinas, pagos, asistencias, ejercicios propios, planes de
+alimentación, notificaciones, configuración, progreso, etc.) ya tenían `ON DELETE CASCADE`, así
+que borrar la fila de `gimnasios` ya arrastra todo eso solo. La única excepción a propósito es
+`profiles.gimnasio_id` (`ON DELETE SET NULL`): un gimnasio puede tener más de un miembro de staff,
+así que borrarlo no tiene por qué borrarles la cuenta a todos.
+
+Nueva función `eliminar_mi_cuenta()` (`SECURITY DEFINER`, sin necesitar ningún `GRANT EXECUTE`
+extra -- mismo criterio que `create_gimnasio()`, los privilegios por defecto ya alcanzan):
+- Si quien la llama es **admin** de un gimnasio: borra el gimnasio entero (dispara los 16
+  `CASCADE`).
+- Siempre: borra su propia fila de `profiles` y, al final, su fila de `auth.users` directamente
+  (confirmado antes de escribir esto que el rol `postgres`, dueño de la función, tiene privilegio
+  `DELETE` explícito sobre `auth.users` en este proyecto -- no hace falta Edge Function ni Admin
+  API). Borrar `auth.users` invalida la sesión y libera el correo para una cuenta nueva.
+- Si quien la llama es **staff** (no admin): solo se borra su propio acceso -- el gimnasio del
+  dueño y sus datos quedan intactos. No correspondería que un empleado borre todo el negocio del
+  dueño solo por eliminar su cuenta personal.
+
+**Hallazgo durante la implementación:** un intento de borrar también los archivos del gimnasio
+(logo, fotos/videos de ejercicios en Storage) con un `DELETE FROM storage.objects` directo por SQL
+lo rechazó un trigger de protección propio de Supabase ("Direct deletion from storage tables is not
+allowed. Use the Storage API instead") -- borrar solo la fila del catálogo dejaría el archivo real
+huérfano en el storage. Se resolvió del lado del cliente: `eliminarCuenta()` (`AuthContext.jsx`)
+lista y borra esos archivos por la Storage API, con la sesión del propio admin (mismas policies de
+las migraciones 0003/0005), *antes* de llamar a la función SQL.
+
+**Decisión de producto que cambió a mitad de camino:** Nalux pidió inicialmente reautenticación con
+contraseña + una "papelera" de 15 días (para poder recuperar una cuenta borrada por error), pero
+con el requisito de que un correo recién borrado pudiera reusarse de inmediato para una cuenta
+nueva -- ambas cosas chocan (Supabase Auth no permite dos filas de `auth.users` activas con el
+mismo correo). Al preguntarle cómo se recuperaría una cuenta en esos 15 días, decidió simplificar:
+**sin papelera, borrado definitivo e inmediato**, y que el correo quede libre al toque porque la
+fila realmente se borra. Se mantuvo sí la reautenticación con contraseña.
+
+**Frontend** (`ConfiguracionPage.jsx`, sección "Eliminar cuenta", tarjeta con
+`border-destructive`): botón que abre un `Modal` pidiendo la contraseña, con el texto de
+advertencia distinto según sea admin (borra el gimnasio entero) o staff (borra solo su acceso).
+`eliminarCuenta(password)` en `AuthContext.jsx` reautentica con `signInWithPassword` antes de
+tocar nada -- si la contraseña no coincide, no se ejecuta nada. Tras confirmar, el modal muestra
+una pantalla de "Cuenta eliminada" por ~2 segundos (mismo patrón que `ResetPasswordPage.jsx`) y
+recién ahí llama a `signOut()`, que dispara el redirect automático a `/login` vía `ProtectedRoute`.
+
+**Verificado sin tocar ninguna cuenta real:** función probada dos veces dentro de una transacción
+`BEGIN`/`ROLLBACK` con filas 100% descartables (`auth.users`, `gimnasios`, `alumnos` de prueba,
+simulando la sesión con `SET LOCAL request.jwt.claims`) -- una vez como admin (confirmó que
+`auth.users`, `profiles`, `gimnasios` y `alumnos` quedan todos en cero) y otra vez como staff
+(confirmó que solo se borra la cuenta del empleado, con el gimnasio y el admin dueño intactos).
+Nada de esto persistió: todo se revirtió con `ROLLBACK`.
+
+Nalux lo probó de punta a punta en local con una cuenta real de prueba y confirmó que anda
+("listo se borro bien").
+
+### 08/09/2026 — Ojito para mostrar/ocultar contraseña en toda la app
+
+Pedido de Nalux, junto con la confirmación de que el borrado de cuenta funcionaba: agregar el
+botón de mostrar/ocultar (el "ojito") a cada caja de contraseña de la app, no solo a la nueva de
+"Eliminar cuenta".
+
+Se armó un solo componente compartido, `PasswordInput` (`ui-kit.jsx`), en vez de repetir el botón
+en cada pantalla: envuelve el `<input>` en su propio `position: relative` y agrega el botón del
+ojito (`Eye`/`EyeOff` de lucide-react) alterando `type="password"`/`type="text"` con estado local.
+`tabIndex={-1}` a propósito: es un atajo visual, no un campo del formulario, así que no debe
+interrumpir el paso normal de tab de "Contraseña" al botón de enviar.
+
+Reemplazó los `<Input type="password">` sueltos en las **5 cajas de contraseña** que había en la
+app: `LoginPage.jsx` (entrenador), `AlumnoLoginPage.jsx` (alumno), `ResetPasswordPage.jsx` (nueva
+contraseña + confirmar, son dos), y la nueva de `ConfiguracionPage.jsx` (eliminar cuenta). Las
+pantallas que ya tenían un ícono de candado a la izquierda (`Lock`, con el input en `pl-9`) lo
+conservan tal cual -- `PasswordInput` solo resuelve el botón de la derecha, el candado sigue
+siendo responsabilidad de cada pantalla.
+
+Verificado en `/login`: se probó escribiendo una contraseña de prueba y alternando el botón --
+pasa de puntos a texto plano y de vuelta, con el ícono y el `aria-label` ("Mostrar
+contraseña"/"Ocultar contraseña") cambiando en cada click.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

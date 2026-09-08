@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 
 export const Card = ({ className = '', children }) => (
     <div className={`rounded-2xl border border-border bg-card p-5 ${className}`}>{children}</div>
@@ -61,6 +61,34 @@ export const Select = ({ className = '', children, ...props }) => (
         {children}
     </select>
 );
+
+// Pedido de Nalux (08/09/2026): un ojito para mostrar/ocultar en toda caja de
+// contraseña de la app (login de profesor, login de alumno, restablecer
+// contraseña, confirmación al eliminar cuenta). Se arma acá, un solo lugar,
+// para no repetir el mismo botón cuatro veces. Cada pantalla sigue poniendo
+// su propio ícono de candado a la izquierda si quiere (queda afuera de este
+// componente); acá solo se resuelve el botón de la derecha y el
+// type="password"/"text" que alterna.
+export const PasswordInput = ({ className = '', ...props }) => {
+    const [visible, setVisible] = React.useState(false);
+    return (
+        <div className="relative">
+            <input type={visible ? 'text' : 'password'} className={`${controlClass} pr-10 ${className}`} {...props} />
+            <button
+                type="button"
+                onClick={() => setVisible((v) => !v)}
+                // Fuera del orden de tab: es un atajo visual, no un campo del
+                // formulario -- si quedara en el tab natural, interrumpiría el
+                // paso de "Contraseña" al botón de enviar.
+                tabIndex={-1}
+                aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+            >
+                {visible ? <EyeOff className="h-4 w-4" strokeWidth={1.8} /> : <Eye className="h-4 w-4" strokeWidth={1.8} />}
+            </button>
+        </div>
+    );
+};
 
 // Transición de entrada y salida (07/09/2026): antes aparecía y desaparecía
 // de golpe, lo que quedaba raro al lado del resto de la app. El fondo hace

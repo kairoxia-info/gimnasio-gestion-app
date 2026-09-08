@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/AppLayout';
-import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import { Btn, ErrorBox, Field, PasswordInput } from '@/components/ui-kit';
 import AuthBackdrop from '@/components/AuthBackdrop';
 
 const ResetPasswordPage = () => {
@@ -101,8 +101,7 @@ const ResetPasswordPage = () => {
                                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                                     strokeWidth={1.8}
                                 />
-                                <Input
-                                    type="password"
+                                <PasswordInput
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
@@ -119,8 +118,7 @@ const ResetPasswordPage = () => {
                                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                                     strokeWidth={1.8}
                                 />
-                                <Input
-                                    type="password"
+                                <PasswordInput
                                     value={confirm}
                                     onChange={(e) => setConfirm(e.target.value)}
                                     placeholder="••••••••"
