@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import {
     Apple,
@@ -171,6 +172,110 @@ const ThemeToggle = () => {
 };
 
 export { ThemeToggle };
+
+// Menú del celular con entrada en cascada + un brillo que recorre cada
+// botón una sola vez, pedido de Nalux (07/09/2026): "que vallan
+// desplegándose los botones del menu como si un rayo dorado pasara".
+// Reemplazado por un brillo neutro (blanco/plata, no dorado) a pedido suyo
+// también: un dorado fijo desentonaría en un gimnasio cuyo color de marca
+// no combine con él, mientras que este blanco translúcido queda bien
+// encima de cualquier color que el profesor elija en Configuración.
+//
+// A propósito SOLO se usa acá, en el drawer del celular (que se abre/cierra
+// a demanda) -- nunca en el sidebar fijo de la computadora. AppLayout se
+// remonta en cada cambio de página (cada pantalla lo envuelve por separado,
+// no hay un layout persistente a nivel de rutas), así que animar el sidebar
+// se vería como un parpadeo en cada click de navegación, no como un menú
+// "que se despliega". El drawer sí es un despliegue real, a pedido del
+// profesor, así que ahí el efecto tiene sentido y se ve una vez por apertura.
+const contenedorMenuVariants = {
+    oculto: {},
+    visible: { transition: { staggerChildren: 0.045, delayChildren: 0.05 } },
+};
+
+const itemMenuVariants = {
+    oculto: { opacity: 0, x: -14 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } },
+};
+
+// El brillo en sí: una franja diagonal translúcida que atraviesa el botón
+// una vez, con un pequeño delay para que se sienta "detrás" de la aparición
+// del texto, no encima. transform (no background-position) para que sea
+// composición GPU, no repintado -- barato incluso repetido 11 veces.
+const brilloVariants = {
+    oculto: { opacity: 0, x: '-120%' },
+    visible: {
+        opacity: [0, 1, 0],
+        x: ['-120%', '120%'],
+        transition: { duration: 0.65, delay: 0.1, ease: 'easeInOut' },
+    },
+};
+
+const NavLinksAnimados = ({ nav, onNavegar }) => {
+    const reduceMotion = useReducedMotion();
+    if (reduceMotion) {
+        // Sin animación si el sistema la pidió apagada -- mismo criterio que
+        // ya usa Reveal.jsx en el resto de la app.
+        return (
+            <nav className="flex flex-col gap-1">
+                {nav.map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                        key={to}
+                        to={to}
+                        onClick={onNavegar}
+                        className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                                isActive
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                            }`
+                        }
+                    >
+                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                        {label}
+                    </NavLink>
+                ))}
+            </nav>
+        );
+    }
+
+    return (
+        <motion.nav
+            className="flex flex-col gap-1"
+            variants={contenedorMenuVariants}
+            initial="oculto"
+            animate="visible"
+        >
+            {nav.map(({ to, label, icon: Icon }) => (
+                <motion.div key={to} variants={itemMenuVariants} className="relative overflow-hidden rounded-xl">
+                    <NavLink
+                        to={to}
+                        onClick={onNavegar}
+                        className={({ isActive }) =>
+                            `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                                isActive
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                            }`
+                        }
+                    >
+                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                        {label}
+                    </NavLink>
+                    <motion.span
+                        aria-hidden="true"
+                        variants={brilloVariants}
+                        className="pointer-events-none absolute inset-y-0 left-0 w-2/3 skew-x-[-20deg]"
+                        style={{
+                            background:
+                                'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                        }}
+                    />
+                </motion.div>
+            ))}
+        </motion.nav>
+    );
+};
 
 // Pedido de Nalux (04/09/2026): que el panel se pueda seguir usando si se
 // corta el wifi del gimnasio, y que avise cuándo hay algo (asistencia,
@@ -407,39 +512,56 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                 </main>
             </div>
 
-            {open && (
-                <div className="fixed inset-0 z-50 lg:hidden">
-                    <div
-                        className="absolute inset-0 bg-black/70"
-                        onClick={() => setOpen(false)}
-                        role="presentation"
-                    />
-                    <div className="absolute inset-y-0 left-0 w-72 border-r border-border bg-background px-4 py-6">
-                        <div className="mb-6 flex items-center justify-between gap-3">
-                            <GimnasioMark className="h-10" />
+            {/* AnimatePresence: antes esto aparecía y desaparecía de golpe
+                (if (open) return null-equivalente). Ahora el fondo hace fade y
+                el panel entra deslizando desde la izquierda, y lo mismo a la
+                inversa al cerrar -- consistente con el brillo del menú de
+                abajo, en vez de un corte seco al lado de una animación nueva. */}
+            <AnimatePresence>
+                {open && (
+                    <div className="fixed inset-0 z-50 lg:hidden">
+                        <motion.div
+                            className="absolute inset-0 bg-black/70"
+                            onClick={() => setOpen(false)}
+                            role="presentation"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                        />
+                        <motion.div
+                            className="absolute inset-y-0 left-0 w-72 border-r border-border bg-background px-4 py-6"
+                            initial={{ x: '-100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '-100%' }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                            <div className="mb-6 flex items-center justify-between gap-3">
+                                <GimnasioMark className="h-10" />
+                                <button
+                                    type="button"
+                                    onClick={() => setOpen(false)}
+                                    aria-label="Cerrar menú"
+                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <NavLinksAnimados nav={NAV} onNavegar={() => setOpen(false)} />
                             <button
                                 type="button"
-                                onClick={() => setOpen(false)}
-                                aria-label="Cerrar menú"
-                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+                                onClick={salir}
+                                className="mt-6 flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium"
                             >
-                                <X className="h-4 w-4" />
+                                <LogOut className="h-4 w-4" /> Cerrar sesión
                             </button>
-                        </div>
-                        {links}
-                        <button
-                            type="button"
-                            onClick={salir}
-                            className="mt-6 flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium"
-                        >
-                            <LogOut className="h-4 w-4" /> Cerrar sesión
-                        </button>
-                        <div className="mt-3">
-                            <KairoxFooterMark />
-                        </div>
+                            <div className="mt-3">
+                                <KairoxFooterMark />
+                            </div>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
         </div>
     );
 };

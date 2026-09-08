@@ -6,10 +6,18 @@ export const Card = ({ className = '', children }) => (
 );
 
 export const Btn = ({ variant = 'primary', className = '', type = 'button', ...props }) => {
+    // "danger" (Eliminar/Quitar/Borrar en toda la app) va con --destructive,
+    // no con --primary: bug real encontrado en revisión (07/09/2026). El
+    // color de peligro tiene que ser siempre el mismo rojo, sin importar el
+    // color de marca que cada gimnasio elija -- si un profesor configurara,
+    // por ejemplo, un rojo o un naranja como color principal, un botón
+    // "Eliminar" en ese mismo tono se distinguiría peor que uno que sigue
+    // siendo rojo fijo (--destructive nunca lo pisa colorTema.js, a
+    // propósito -- ver el comentario ahí).
     const styles = {
         primary: 'bg-primary text-primary-foreground hover:brightness-110',
         ghost: 'border border-border text-foreground hover:border-primary',
-        danger: 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
+        danger: 'border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground',
     };
     // whitespace-nowrap: reportado por Nalux (07/09/2026) que en el celular
     // se veían "letras encimadas". En la barra de arriba, botones como "Nuevo
@@ -86,8 +94,13 @@ export const Loading = ({ rows = 3 }) => (
     </div>
 );
 
+// border-destructive, no border-primary: mismo motivo que "danger" en Btn
+// (ver arriba) -- un error tiene que leerse como error, no como el color de
+// marca de turno.
 export const ErrorBox = ({ children }) => (
-    <div className="rounded-2xl border border-primary/60 bg-primary/10 p-4 text-sm text-foreground">{children}</div>
+    <div className="rounded-2xl border border-destructive/60 bg-destructive/10 p-4 text-sm text-foreground">
+        {children}
+    </div>
 );
 
 export const Badge = ({ children, className = '' }) => (

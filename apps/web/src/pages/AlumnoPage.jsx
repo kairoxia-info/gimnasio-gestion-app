@@ -1172,11 +1172,15 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
                     const dia = String(i + 1).padStart(2, '0');
                     const fecha = `${mes}-${dia}`;
                     const reg = mapa[fecha];
+                    // bg-destructive, no bg-primary: mismo bug que en
+                    // AsistenciaPage.jsx (corregido 07/09/2026, ver ese
+                    // archivo) -- este calendario cíclico es un componente
+                    // paralelo y se había quedado afuera de ese arreglo.
                     const estilo = !reg
                         ? 'border-border text-muted-foreground hover:border-primary'
                         : reg.presente
                           ? 'border-transparent bg-[hsl(var(--ok))] text-white'
-                          : 'border-transparent bg-primary text-primary-foreground';
+                          : 'border-transparent bg-destructive text-destructive-foreground';
                     return (
                         <button
                             key={fecha}
@@ -1192,7 +1196,7 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
 
             <p className="mt-5 text-sm text-muted-foreground">
                 En el mes: <span className="font-bold text-ok">{presentes} presentes</span> ·{' '}
-                <span className="font-bold text-primary">{ausentes} ausentes</span>
+                <span className="font-bold text-destructive">{ausentes} ausentes</span>
                 {porcentaje !== null && (
                     <>
                         {' · '}

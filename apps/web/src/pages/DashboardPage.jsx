@@ -414,9 +414,12 @@ const DashboardPage = () => {
                                         </Link>
                                         <span className="text-right text-xs text-muted-foreground">
                                             {v.tipo} · {v.vencido ? 'Venció' : 'Vence'} {fmtFecha(v.fecha)}
+                                            {/* text-destructive, no text-primary: mismo bug que
+                                                ESTADOS_PAGO.vencido (lib/format.js) -- "Vencido"
+                                                tiene que ser siempre rojo, no el color de marca. */}
                                             <span
                                                 className={`ml-2 font-semibold ${
-                                                    v.vencido ? 'text-primary' : 'text-warn'
+                                                    v.vencido ? 'text-destructive' : 'text-warn'
                                                 }`}
                                             >
                                                 {v.vencido ? 'Vencido' : 'Por vencer'}

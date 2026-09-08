@@ -2261,6 +2261,61 @@ Asistencia semanal). Revisados todos los textos visibles de la app; se encontrar
   "sin necesidad de que el alumno tenga sesión" / "sin necesidad de usuario ni contraseña", cuando
   desde el 04/09 el alumno sí inicia sesión con usuario y contraseña.
 
+### Más del mismo día: primera pasada de rediseño (menú animado + bug de colores de alerta)
+
+Nalux pidió empezar a mejorar la estética ("que no quede tan lenta", diseño neutro para
+cualquier persona, un efecto de "rayo dorado" en el menú al desplegarse). Antes de tocar código
+se lanzó al agente `frontend-architect` a auditar el sistema de diseño actual y proponer opciones
+— la auditoría completa (paleta real, qué pesa de más, riesgos de neutralidad de género) quedó
+resumida en la conversación con Nalux, no repetida acá en detalle. Dos hallazgos de esa auditoría
+se implementaron esta misma tanda:
+
+**1. Corrección de expectativa importante:** dentro del panel logueado **no había dorado en
+ningún lado** — el dorado (`#c9a86a`/`#d8b876`) está confinado a las 3 pantallas antes del login
+(`AuthBackdrop.jsx`). El color "de fábrica" real, antes de que un gimnasio configure el suyo, es
+el rojo de `--primary` en `index.css`. Relevante porque cambia qué significa "agregar dorado" acá
+y también conecta con el pedido de neutralidad (ese rojo de fábrica es agresivo/"gym de fierros").
+
+**2. Menú del celular con entrada en cascada + brillo.** Nalux pidió un "rayo dorado que pasa";
+elegida, entre las opciones presentadas, la versión con **brillo neutro** (blanco/plata) en vez
+de dorado fijo, para que combine con cualquier color de marca que el gimnasio elija (un dorado
+fijo podría desentonar con un verde o celeste, por ejemplo). Implementado en
+`components/AppLayout.jsx` (`NavLinksAnimados`): cada ítem entra con `framer-motion`
+(`staggerChildren`) y un `motion.span` con gradiente translúcido cruza el botón una sola vez, con
+un pequeño delay para sentirse "detrás" del texto, no encima. Verificado antes de subir con una
+réplica visual aislada (HTML+CSS puro, **fuera del repo**, borrada después) simulando dos colores
+de marca (magenta y verde): el brillo se ve bien en ambos.
+
+El efecto **solo vive en el drawer del celular**, nunca en el sidebar fijo de la computadora —
+decisión técnica, no solo de gusto: como cada página envuelve su propio `<AppLayout>` (no hay un
+layout persistente a nivel de rutas), el sidebar se remonta en cada click de navegación; animarlo
+ahí se vería como un parpadeo constante, no como "un menú que se despliega". El drawer sí es un
+despliegue real a demanda del profesor. De paso, el propio drawer (fondo + panel) pasó de
+aparecer/desaparecer de golpe a animarse con `AnimatePresence` al abrir y cerrar.
+
+`framer-motion` ya estaba instalado (se usa en el embudo previo al login, `Reveal.jsx` y compañía)
+así que esto no suma peso nuevo: build de producción antes/después, +5 KB sobre 1.2 MB.
+
+**3. Bug real de usabilidad, no solo estético, encontrado en la misma auditoría:** varios lugares
+usaban `--primary` (el color que cada gimnasio elige) para alertas, en vez de `--destructive`
+(fijo siempre en rojo — `colorTema.js` lo deja sin tocar a propósito, ver el comentario ahí). Si
+un gimnasio elegía, por ejemplo, verde o celeste como color de marca, "Atrasado", los cuadros de
+error y el botón "Eliminar" en **toda la app** se veían en ese mismo tono amigable, sin ninguna
+fuerza de alerta. Corregido en cuatro lugares:
+- `ESTADOS_PAGO.vencido` (`lib/format.js`) — "Atrasado" en Pagos y en la ficha del alumno.
+- `ErrorBox` y el botón `variant="danger"` (`components/ui-kit.jsx`) — este último es el que usan
+  **todos** los "Eliminar"/"Quitar"/"Borrar" de la app; era el caso de mayor alcance.
+- El cartel "Vencido" de "Planes por vencer" en el panel (`DashboardPage.jsx`).
+- El calendario cíclico de asistencia dentro de la ficha del alumno (`AlumnoPage.jsx`,
+  `AsistenciaAlumno`): tenía el mismo bug que ya se había corregido hoy más temprano en
+  `AsistenciaPage.jsx`, pero es un componente paralelo distinto que se había quedado afuera de
+  ese arreglo.
+
+Pendiente para una próxima tanda (no implementado hoy, quedó priorizado en la propuesta del
+agente): Google Fonts bloqueando el render (`@import` en `index.css`), Recharts sin lazy-load en
+el Dashboard, color de fábrica más neutro y títulos de página sin `uppercase` sostenido,
+transición en el `Modal`, hover consistente en `Btn`.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

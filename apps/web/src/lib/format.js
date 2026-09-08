@@ -115,7 +115,13 @@ export const ESTADOS_PAGO = {
     al_dia: { label: 'Al día', className: 'text-ok border-current' },
     proximo: { label: 'Próximo a vencer', className: 'text-warn border-current' },
     en_gracia: { label: 'Venció, en plazo', className: 'text-warn border-current' },
-    vencido: { label: 'Atrasado', className: 'text-primary border-current' },
+    // text-destructive, no text-primary: "Atrasado" tiene que leerse siempre
+    // como alerta, sin importar el color de marca que haya elegido el
+    // gimnasio (--destructive es fijo, --primary es el que cada profesor
+    // configura en Configuración -- ver colorTema.js). Bug real encontrado
+    // en revisión (07/09/2026): con --primary, un gimnasio que eligiera
+    // verde o celeste vería "Atrasado" en ese mismo tono amigable.
+    vencido: { label: 'Atrasado', className: 'text-destructive border-current' },
     con_deuda: { label: 'Con deuda', className: 'text-warn border-current' },
     sin_cuota: { label: 'Sin cuota', className: 'border-border text-muted-foreground' },
 };
