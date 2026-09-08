@@ -2587,6 +2587,35 @@ mano por SQL, hay que limpiar el localStorage de ese navegador (o usar otro) ant
 **Cuenta de prueba viva:** quedó "FULL GYM NT" (`nadia.creceonline@gmail.com`), que Nalux dijo
 expresamente que va a seguir usando para probar -- **no borrarla** sin consultarle primero.
 
+### 08/09/2026 — Foto del alumno: de URL pegada a archivo subido (migración 0036)
+
+Pedido de Nalux: en la ficha del alumno, el campo de foto era una URL de texto libre
+("Foto (URL opcional)") -- en la práctica el profesor tiene la foto en el celular o la compu, no
+un link ya público. Pidió cambiarlo a subida de archivo, manteniéndolo opcional.
+
+**Nuevo bucket `alumnos-fotos`** (migración 0036), mismo patrón que ya usan `gimnasio-logos`
+(0003) y `ejercicios-media` (0005): path `{gimnasio_id}/{alumno_id}.<ext>`, 2 MB de tope, solo
+PNG/JPG/WEBP, policies que atan cada archivo a una fila real de `public.alumnos` del propio tenant
+(mismo fix de cuota que encontró la revisión de AppSec en 0005), sin exigir `role='admin'` porque
+`alumnos_tenant_isolation` (0001) tampoco lo exige.
+
+**Decisión de privacidad, documentada en la cabecera de la migración:** a diferencia del logo y el
+media de ejercicios (marca/contenido genérico), una foto de alumno sí identifica a una persona
+real. Se decidió igual mantener el bucket público (lectura sin autenticación) por consistencia con
+el resto del storage de la app y para no sumar la complejidad de URLs firmadas -- la mitigación es
+que el path incluye el UUID del alumno, no adivinable ni enumerable. Vale la pena revisarlo si en
+algún momento se necesita más privacidad que eso.
+
+**Frontend** (`AlumnosPage.jsx`): mismo flujo que `EjerciciosPage.jsx` para su media -- primero se
+guarda (crea o actualiza) la fila del alumno, recién después se sube el archivo (la policy del
+bucket exige que la fila ya exista), y si la subida falla el alumno igual queda guardado, con un
+aviso ("se guardó, pero la foto no se pudo subir") en vez de perder el resto de los datos
+cargados. El campo pasó de `<Input>` de texto a un `<input type="file">` con preview, mismo look
+que el logo del gimnasio en `ConfiguracionPage.jsx`.
+
+Verificado con `npx vite build` (limpio, sin errores) y lint; falta la prueba real subiendo una
+foto desde la app, pendiente de que Nalux la haga en `localhost:3001` o en "FULL GYM NT".
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

@@ -1,11 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
-import { Info, Plus, Search, UserRound, X } from 'lucide-react';
+import { AlertTriangle, Info, Plus, Search, UserRound, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '@/lib/format';
+import { useAuth } from '@/contexts/AuthContext';
+import supabase from '@/lib/supabaseClient';
+
+// Pedido de Nalux (08/09/2026): la foto pasa de "pegar una URL" a "subir el
+// archivo" -- en la práctica el profesor tiene la foto guardada en el
+// celular o la compu, no un link ya público. Mismo criterio que el logo del
+// gimnasio (ConfiguracionPage.jsx): 2 MB de tope, solo estos tres formatos
+// (mismo límite que ya impone el bucket 'alumnos-fotos', migración 0036).
+const MAX_FOTO_BYTES = 2 * 1024 * 1024;
+const MIME_TO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 
 const vacio = {
     nombre: '',
@@ -36,10 +46,12 @@ const AYUDA_ESTADOS = [
 ];
 
 const AlumnosPage = () => {
+    const { profile } = useAuth();
     const [alumnos, setAlumnos] = useState([]);
     const [planes, setPlanes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [warning, setWarning] = useState('');
     const [q, setQ] = useState('');
     const [filtroEstado, setFiltroEstado] = useState('todos');
     const [mostrarAyudaEstados, setMostrarAyudaEstados] = useState(false);
@@ -47,6 +59,15 @@ const AlumnosPage = () => {
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
+
+    // Archivo de foto elegido para subir a Storage (mismo criterio que
+    // logoFile en ConfiguracionPage.jsx). fotoPreview es el object URL local
+    // para mostrarlo antes de guardar; sin archivo nuevo, se sigue mostrando
+    // form.foto_url (la foto que ya tenía el alumno, si la tenía).
+    const [fotoFile, setFotoFile] = useState(null);
+    const [fotoPreview, setFotoPreview] = useState('');
+    const [fotoError, setFotoError] = useState('');
+    const fotoInputRef = useRef(null);
 
     const cargar = () => {
         setLoading(true);
@@ -62,9 +83,17 @@ const AlumnosPage = () => {
 
     useEffect(cargar, []);
 
+    const limpiarFoto = () => {
+        setFotoFile(null);
+        setFotoPreview('');
+        setFotoError('');
+        if (fotoInputRef.current) fotoInputRef.current.value = '';
+    };
+
     const abrirNuevo = () => {
         setForm(vacio);
         setEditId(null);
+        limpiarFoto();
         setOpen(true);
     };
 
@@ -85,21 +114,82 @@ const AlumnosPage = () => {
             plan_precio_nombre: a.plan_precio_nombre || '',
         });
         setEditId(a.id);
+        limpiarFoto();
         setOpen(true);
+    };
+
+    const onFotoChange = (e) => {
+        const file = e.target.files?.[0];
+        setFotoError('');
+        if (!file) {
+            setFotoFile(null);
+            setFotoPreview('');
+            return;
+        }
+        if (!MIME_TO_EXT[file.type]) {
+            setFotoError('La foto debe ser PNG, JPG o WEBP.');
+            e.target.value = '';
+            return;
+        }
+        if (file.size > MAX_FOTO_BYTES) {
+            setFotoError('La foto no puede pesar más de 2 MB.');
+            e.target.value = '';
+            return;
+        }
+        setFotoFile(file);
+        setFotoPreview(URL.createObjectURL(file));
     };
 
     const guardar = async (e) => {
         e.preventDefault();
         setSaving(true);
+        setWarning('');
         try {
             // fecha_nacimiento es opcional y es DATE en la base: un '' (el
             // input vacío) rompe el insert/update ("invalid input syntax for
             // type date"), a diferencia de un campo TEXT donde '' es válido.
             // Postgres sí acepta null.
+            //
+            // foto_url NO se toca acá cuando hay fotoFile: si la subida de
+            // abajo falla, este guardado tiene que dejar intacta la foto que
+            // ya hubiera (nunca pisarla con vacío antes de saber si la nueva
+            // se subió bien) — mismo criterio que media_url en
+            // EjerciciosPage.jsx.
             const payload = { ...form, fecha_nacimiento: form.fecha_nacimiento || null };
+
+            let id = editId;
             if (editId) await updateRec('alumnos', editId, payload);
-            else await createRec('alumnos', payload);
+            else {
+                const creado = await createRec('alumnos', payload);
+                id = creado.id;
+            }
+
+            // La foto se sube DESPUÉS de guardar el alumno, nunca antes: la
+            // policy del bucket 'alumnos-fotos' (migración 0036) exige que ya
+            // exista una fila real de alumnos con ese id.
+            if (fotoFile && profile?.gimnasio_id && id) {
+                try {
+                    const ext = MIME_TO_EXT[fotoFile.type];
+                    const path = `${profile.gimnasio_id}/${id}.${ext}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('alumnos-fotos')
+                        .upload(path, fotoFile, { upsert: true });
+                    if (uploadError) throw uploadError;
+
+                    const {
+                        data: { publicUrl },
+                    } = supabase.storage.from('alumnos-fotos').getPublicUrl(path);
+
+                    await updateRec('alumnos', id, { foto_url: publicUrl });
+                } catch (_) {
+                    setWarning(
+                        'El alumno se guardó, pero la foto no se pudo subir. Se puede volver a intentar editando el alumno.',
+                    );
+                }
+            }
+
             setOpen(false);
+            limpiarFoto();
             cargar();
         } catch (_) {
             setError('No se pudo guardar el alumno.');
@@ -227,6 +317,12 @@ const AlumnosPage = () => {
             </div>
 
             {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
+            {warning && !error && (
+                <div className="mb-4 flex items-start gap-2 rounded-2xl border border-border bg-secondary p-4 text-sm text-foreground">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" strokeWidth={1.8} />
+                    <span>{warning}</span>
+                </div>
+            )}
 
             {loading ? (
                 <Loading rows={4} />
@@ -402,12 +498,29 @@ const AlumnosPage = () => {
                             />
                         </Field>
                     </div>
-                    <Field label="Foto (URL opcional)">
-                        <Input
-                            value={form.foto_url}
-                            onChange={(e) => setForm({ ...form, foto_url: e.target.value })}
-                            placeholder="https://..."
-                        />
+                    <Field label="Foto (opcional)">
+                        <div className="flex items-center gap-3">
+                            {fotoPreview || form.foto_url ? (
+                                <img
+                                    src={fotoPreview || form.foto_url}
+                                    alt="Foto del alumno"
+                                    className="h-12 w-12 shrink-0 rounded-xl border border-border object-cover"
+                                />
+                            ) : (
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
+                                    <UserRound className="h-5 w-5" strokeWidth={1.6} />
+                                </div>
+                            )}
+                            <input
+                                ref={fotoInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={onFotoChange}
+                                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground file:transition hover:file:brightness-110"
+                            />
+                        </div>
+                        <span className="text-xs text-muted-foreground">PNG, JPG o WEBP. Máximo 2 MB.</span>
+                        {fotoError && <ErrorBox>{fotoError}</ErrorBox>}
                     </Field>
                     <Field label="Observaciones de salud, lesiones o restricciones">
                         <Textarea
