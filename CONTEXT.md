@@ -2774,6 +2774,44 @@ ficha del alumno y la tarjeta de Configuración):
 - El link pasó de `<span>` a un `<input readOnly>` que se autoselecciona al tocarlo, para poder
   copiarlo a mano como último recurso.
 
+### 09/09/2026 — "Los datos se tienen que poder ver": recuperar el acceso de un alumno
+
+Nalux, sobre el cartel "después no se van a poder volver a ver" de la ficha: *"se tiene que poder
+ver, porque a lo mejor el alumno pierde el acceso y no puede entrar, el profe le vuelve a mandar el
+link"*.
+
+**Se verificó primero cómo estaba guardada:** `crear_acceso_alumno()` usa
+`crypt(p_contrasena, gen_salt('bf'))` -- bcrypt. La contraseña no es recuperable ni para la propia
+app, no es una limitación de la pantalla. Mostrarla de nuevo exigiría guardarla en texto plano, y
+son contraseñas de terceros (los alumnos), que además suelen reusarlas en otros lados. Se le
+plantearon las dos opciones con el riesgo explícito; **eligió mantenerlas cifradas** y resolver la
+recuperación generando una nueva.
+
+**Cambios en `AlumnoPage.jsx` (`AccesoAlumno`):**
+- Se sacó el cartel alarmante. Ahora explica el camino: la contraseña se guarda cifrada, y si el
+  alumno la pierde se le crea una nueva con "Cambiar contraseña" y se le reenvía.
+- **Botón "Reenviar link" siempre a mano** (antes el de WhatsApp aparecía solo justo después de
+  crear el acceso). El mensaje se arma distinto según el caso: recién creada va con
+  usuario + contraseña; después va solo con el link y el usuario, porque la contraseña ya no
+  existe en texto plano en ningún lado.
+- Nota fija debajo del usuario actual explicando qué hacer si la perdió.
+
+**Prueba en vivo del lado del alumno** (pedida por Nalux, hecha en `localhost:3001` contra "Full
+GYM NT", su gimnasio de pruebas -- nunca contra "Mi GYM FIT"):
+1. Se completó y envió el formulario público de autorregistro como lo haría un alumno real.
+2. Se verificó en la base: nombre y apellido unidos bien ("PruebaBorrar TestAutorregistro"), todos
+   los campos guardados (teléfono, correo, DNI, fecha de nacimiento, contacto de emergencia),
+   `fecha_alta` de hoy, plan y foto en NULL (los carga el profesor), y **estado visible
+   "pendiente"**.
+3. Se corrió el filtro exacto de la campanita: levanta ese alumno.
+4. Se probó el login del alumno con las RPC reales, dentro de transacciones con `ROLLBACK`:
+   - Contraseña incorrecta -> rechazada.
+   - Contraseña correcta pero alumno **todavía pendiente** -> **rechazada también**
+     (`iniciar_sesion_alumno` exige `activo = true`). No es un bug: un alumno sin aprobar no entra
+     a nada.
+   - Aprobado + con acceso creado -> **entra bien**.
+5. Se borró el alumno de prueba al terminar; no quedó nada en la base.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

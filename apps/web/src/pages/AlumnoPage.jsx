@@ -1405,11 +1405,19 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
         setTimeout(() => setLinkCopiado(''), 2500);
     };
 
-    const linkWhatsapp = creado
-        ? `https://wa.me/?text=${encodeURIComponent(
-              `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}! Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`,
-          )}`
-        : '';
+    // Dos mensajes distintos según el momento (pedido de Nalux, 09/09/2026:
+    // "a lo mejor el alumno pierde el acceso y no puede entrar, el profe le
+    // vuelve a mandar el link"):
+    //  - Recién creada/cambiada la contraseña: va completo, con la
+    //    contraseña -- es la única vez que existe en texto plano.
+    //  - Después: se puede reenviar igual el link y el usuario, pero sin
+    //    contraseña, porque está hasheada y ni la app la sabe. Si el alumno
+    //    la perdió, el camino es "Cambiar contraseña" y reenviar.
+    const saludo = `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}!`;
+    const textoWhatsapp = creado
+        ? `${saludo} Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`
+        : `${saludo} Para ver la rutina y el plan de alimentación, entrar en ${urlIngreso}. Usuario: ${alumno?.usuario}`;
+    const linkWhatsapp = `https://wa.me/?text=${encodeURIComponent(textoWhatsapp)}`;
 
     return (
         <Card className="mb-6">
@@ -1474,14 +1482,20 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
 
             {creado && (
                 <div className="mt-4 space-y-3 rounded-xl border border-ok bg-ok/10 p-4">
-                    <p className="text-sm font-semibold">
-                        Acceso guardado. Enviarle estos datos al alumno -- después no se van a poder
-                        volver a ver.
-                    </p>
+                    <p className="text-sm font-semibold">Acceso guardado. Enviarle estos datos al alumno.</p>
                     <p className="text-sm">
                         Usuario <span className="font-mono font-semibold">{creado.usuario}</span>
                         {' · '}
                         Contraseña <span className="font-mono font-semibold">{creado.contrasena}</span>
+                    </p>
+                    {/* La contraseña se guarda cifrada, así que esta es la única
+                        vez que se puede leer. No es un problema: si el alumno la
+                        pierde, se le crea una nueva acá mismo en dos toques
+                        (pedido de Nalux, 09/09/2026). */}
+                    <p className="text-xs text-muted-foreground">
+                        La contraseña se guarda cifrada, así que esta es la única vez que aparece. Si el alumno
+                        la pierde, se le crea una nueva con &ldquo;Cambiar contraseña&rdquo; y se le reenvía --
+                        no se pierde el acceso.
                     </p>
                     <Btn
                         type="button"
@@ -1499,6 +1513,17 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                         Usuario actual: <span className="font-mono font-semibold">{alumno.usuario}</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
+                        {/* Reenviar sin contraseña: sirve para el caso "perdió el
+                            link" sin tener que cambiarle nada. Si además perdió la
+                            contraseña, ahí sí "Cambiar contraseña". */}
+                        <Btn
+                            type="button"
+                            variant="ghost"
+                            className="px-3 py-2 text-xs"
+                            onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
+                        >
+                            <MessageCircle className="h-3.5 w-3.5" /> Reenviar link
+                        </Btn>
                         <Btn type="button" variant="ghost" className="px-3 py-2 text-xs" onClick={abrirForm}>
                             Cambiar contraseña
                         </Btn>
@@ -1534,6 +1559,10 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             </Btn>
                         )}
                     </div>
+                    <p className="w-full text-xs text-muted-foreground">
+                        Si el alumno perdió la contraseña, con &ldquo;Cambiar contraseña&rdquo; se le crea una
+                        nueva al instante y queda lista para reenviársela.
+                    </p>
                 </div>
             )}
 
