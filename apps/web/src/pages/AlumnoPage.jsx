@@ -1074,8 +1074,15 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                     <button
                                         type="button"
                                         aria-label="Eliminar registro"
-                                        onClick={() => removeRec('progreso', r.id).then(onChange)}
-                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-primary"
+                                        onClick={() => {
+                                            // Sin confirmación y con el color de marca en vez del
+                                            // rojo fijo de peligro -- bug real encontrado en
+                                            // revisión (09/09/2026), mismo patrón que "Eliminar
+                                            // pago" más abajo.
+                                            if (!window.confirm(`¿Eliminar el registro del ${fmtFecha(r.fecha)}? No se puede deshacer.`)) return;
+                                            removeRec('progreso', r.id).then(onChange);
+                                        }}
+                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-destructive"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </button>
@@ -1275,8 +1282,22 @@ const PagosAlumno = ({ alumnoId, pagos, config, onChange }) => {
                                     <button
                                         type="button"
                                         aria-label="Eliminar pago"
-                                        onClick={() => removeRec('pagos', p.id).then(onChange)}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-primary"
+                                        onClick={() => {
+                                            // Sin confirmación y con el color de marca en vez del
+                                            // rojo fijo de peligro -- bug real encontrado en
+                                            // revisión (09/09/2026). Especialmente grave acá: cada
+                                            // pago es también el comprobante numerado, borrarlo sin
+                                            // querer pierde esa numeración para siempre.
+                                            if (
+                                                !window.confirm(
+                                                    `¿Eliminar este pago de ${money(p.monto)} del ${fmtFecha(p.fecha_pago)}? Se pierde el número de comprobante para siempre. No se puede deshacer.`,
+                                                )
+                                            ) {
+                                                return;
+                                            }
+                                            removeRec('pagos', p.id).then(onChange);
+                                        }}
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-destructive"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </button>

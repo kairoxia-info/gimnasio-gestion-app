@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { AlertTriangle, CheckCircle2, ImagePlus } from 'lucide-react';
+import QRCode from 'qrcode';
+import { AlertTriangle, Check, CheckCircle2, Copy, ImagePlus, RefreshCw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Btn, Card, ErrorBox, Field, Input, Loading, Modal, PasswordInput, Textarea } from '@/components/ui-kit';
 import { updateRec } from '@/lib/data';
@@ -111,6 +112,87 @@ const ConfiguracionPage = () => {
     const [eliminarError, setEliminarError] = useState('');
     const [eliminarLoading, setEliminarLoading] = useState(false);
     const [eliminarHecho, setEliminarHecho] = useState(false);
+
+    // Autorregistro de alumnos por link/QR (migración 0004, pedido de Nalux
+    // 09/09/2026): la base y las RPC (join_gimnasio_por_codigo,
+    // regenerar_codigo_invitacion) ya existían desde antes, pero no había
+    // NINGUNA pantalla donde el profesor pudiera ver, copiar o compartir el
+    // link, ni prender/apagar el autorregistro -- quedó a mitad de camino,
+    // documentado como pendiente en el propio archivo de esa migración.
+    const [autorregistroSaving, setAutorregistroSaving] = useState(false);
+    const [autorregistroError, setAutorregistroError] = useState('');
+    const [qrDataUrl, setQrDataUrl] = useState('');
+    const [linkCopiado, setLinkCopiado] = useState(false);
+    const [confirmandoRegenerar, setConfirmandoRegenerar] = useState(false);
+    const [regenerando, setRegenerando] = useState(false);
+    const [regenerarError, setRegenerarError] = useState('');
+
+    const linkAutorregistro = gimnasioFull?.codigo_invitacion
+        ? `${window.location.origin}/unirse/${gimnasioFull.codigo_invitacion}`
+        : '';
+
+    // El QR se genera del lado del cliente (librería 'qrcode', ya estaba
+    // instalada mano a mano en package.json desde antes sin usarse en
+    // ningún lado) -- no depende de ningún servicio externo, así que
+    // funciona igual en local que en producción.
+    useEffect(() => {
+        if (!linkAutorregistro) {
+            setQrDataUrl('');
+            return;
+        }
+        let cancelado = false;
+        QRCode.toDataURL(linkAutorregistro, { width: 220, margin: 1 })
+            .then((url) => {
+                if (!cancelado) setQrDataUrl(url);
+            })
+            .catch(() => {
+                if (!cancelado) setQrDataUrl('');
+            });
+        return () => {
+            cancelado = true;
+        };
+    }, [linkAutorregistro]);
+
+    const copiarLinkAutorregistro = async () => {
+        try {
+            await navigator.clipboard.writeText(linkAutorregistro);
+            setLinkCopiado(true);
+            setTimeout(() => setLinkCopiado(false), 2000);
+        } catch (_) {
+            setAutorregistroError('No se pudo copiar. Se puede seleccionar el link a mano.');
+        }
+    };
+
+    const toggleAutorregistro = async () => {
+        if (!gimnasioFull?.id) return;
+        setAutorregistroSaving(true);
+        setAutorregistroError('');
+        try {
+            const actualizado = await updateRec('gimnasios', gimnasioFull.id, {
+                autorregistro_activo: !gimnasioFull.autorregistro_activo,
+            });
+            setGimnasioFull((g) => ({ ...g, ...actualizado }));
+        } catch (_) {
+            setAutorregistroError('No se pudo guardar el cambio.');
+        } finally {
+            setAutorregistroSaving(false);
+        }
+    };
+
+    const regenerarCodigo = async () => {
+        setRegenerando(true);
+        setRegenerarError('');
+        try {
+            const { data, error: err } = await supabase.rpc('regenerar_codigo_invitacion');
+            if (err) throw err;
+            setGimnasioFull((g) => ({ ...g, codigo_invitacion: data }));
+            setConfirmandoRegenerar(false);
+        } catch (_) {
+            setRegenerarError('No se pudo regenerar el código.');
+        } finally {
+            setRegenerando(false);
+        }
+    };
 
     const cargarGimnasio = () => {
         if (!profile?.gimnasio_id) return;
@@ -478,6 +560,112 @@ const ConfiguracionPage = () => {
                     ) : null}
                 </Card>
             </div>
+
+            {/* Alta de alumnos por link/QR (migración 0004): la base y las RPC ya
+                existían, esta tarjeta es la pantalla que faltaba para poder
+                usarlas -- pedido de Nalux (09/09/2026). */}
+            {gimnasioFull && (
+                <Card className="mb-8">
+                    <h2 className="font-display text-lg font-bold">Alta de alumnos por link</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Un link (o el mismo QR) para que los alumnos se anoten solos, sin tener que cargarlos
+                        uno por uno. Quedan como &quot;Pendiente&quot; en Alumnos hasta que se revisan y se
+                        aprueban.
+                    </p>
+
+                    <label className="mt-4 flex items-center gap-3 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={!!gimnasioFull.autorregistro_activo}
+                            onChange={toggleAutorregistro}
+                            disabled={autorregistroSaving}
+                            className="h-4 w-4 accent-[hsl(var(--primary))]"
+                        />
+                        Permitir que los alumnos se anoten solos con este link
+                    </label>
+
+                    {autorregistroError && (
+                        <div className="mt-3">
+                            <ErrorBox>{autorregistroError}</ErrorBox>
+                        </div>
+                    )}
+
+                    {gimnasioFull.autorregistro_activo ? (
+                        <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-start">
+                            {qrDataUrl && (
+                                <img
+                                    src={qrDataUrl}
+                                    alt="Código QR para anotarse"
+                                    className="h-40 w-40 shrink-0 rounded-2xl border border-border bg-white p-2"
+                                />
+                            )}
+                            <div className="min-w-0 flex-1 space-y-3">
+                                <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-3 py-2.5">
+                                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                                        {linkAutorregistro}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={copiarLinkAutorregistro}
+                                        aria-label="Copiar link"
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary hover:text-primary"
+                                    >
+                                        {linkCopiado ? (
+                                            <Check className="h-4 w-4 text-ok" />
+                                        ) : (
+                                            <Copy className="h-4 w-4" />
+                                        )}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Se puede compartir por WhatsApp o imprimir el QR. Al escanearlo o abrirlo, el
+                                    alumno completa su nombre y queda pendiente de aprobación -- no hace falta
+                                    que tenga usuario ni contraseña para esto.
+                                </p>
+
+                                {regenerarError && <ErrorBox>{regenerarError}</ErrorBox>}
+
+                                {confirmandoRegenerar ? (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">
+                                            El link y el QR actuales dejan de funcionar (incluido cualquier QR ya
+                                            impreso). ¿Seguro?
+                                        </span>
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-1.5 text-xs"
+                                            disabled={regenerando}
+                                            onClick={regenerarCodigo}
+                                        >
+                                            {regenerando ? 'Regenerando...' : 'Sí, regenerar'}
+                                        </Btn>
+                                        <Btn
+                                            variant="ghost"
+                                            className="px-3 py-1.5 text-xs"
+                                            disabled={regenerando}
+                                            onClick={() => setConfirmandoRegenerar(false)}
+                                        >
+                                            Cancelar
+                                        </Btn>
+                                    </div>
+                                ) : (
+                                    <Btn
+                                        variant="ghost"
+                                        className="px-3 py-1.5 text-xs"
+                                        onClick={() => setConfirmandoRegenerar(true)}
+                                    >
+                                        <RefreshCw className="h-3.5 w-3.5" /> Regenerar código
+                                    </Btn>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="mt-4 text-xs text-muted-foreground">
+                            Desactivado -- nadie puede anotarse por este link hasta que se active de nuevo.
+                        </p>
+                    )}
+                </Card>
+            )}
 
             <Card className="mb-8">
                 <h2 className="font-display text-lg font-bold">Vencimiento de cuotas</h2>

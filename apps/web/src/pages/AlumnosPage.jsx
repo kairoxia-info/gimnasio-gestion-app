@@ -198,8 +198,20 @@ const AlumnosPage = () => {
         }
     };
 
-    const borrar = async (id) => {
-        await removeRec('alumnos', id);
+    // Sin confirmación era un clic y se perdía TODO el historial del alumno
+    // en cascada (pagos, asistencias, rutina y plan asignados, medidas) --
+    // bug real encontrado en revisión (09/09/2026). Mismo patrón que ya usa
+    // "Eliminar rutina" en RutinasPage.jsx: window.confirm(), sin armar un
+    // modal aparte para una acción de una lista.
+    const borrar = async (a) => {
+        if (
+            !window.confirm(
+                `¿Eliminar a ${a.nombre} para siempre? Se borra también todo su historial: pagos, asistencias, rutina y plan de alimentación asignados, y las medidas cargadas. No se puede deshacer.`,
+            )
+        ) {
+            return;
+        }
+        await removeRec('alumnos', a.id);
         cargar();
     };
 
@@ -396,7 +408,7 @@ const AlumnosPage = () => {
                                         Activar
                                     </Btn>
                                 )}
-                                <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(a.id)}>
+                                <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(a)}>
                                     Eliminar
                                 </Btn>
                             </div>

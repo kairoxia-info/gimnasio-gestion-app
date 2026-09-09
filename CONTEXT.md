@@ -2613,8 +2613,65 @@ aviso ("se guardó, pero la foto no se pudo subir") en vez de perder el resto de
 cargados. El campo pasó de `<Input>` de texto a un `<input type="file">` con preview, mismo look
 que el logo del gimnasio en `ConfiguracionPage.jsx`.
 
-Verificado con `npx vite build` (limpio, sin errores) y lint; falta la prueba real subiendo una
-foto desde la app, pendiente de que Nalux la haga en `localhost:3001` o en "FULL GYM NT".
+Verificado con `npx vite build` (limpio, sin errores) y lint. Nalux la probó en producción
+("listo, seguimos con la parte de alumnos", sin reportar ningún problema).
+
+### 09/09/2026 — Revisión de la sección Alumnos: 3 borrados sin confirmación
+
+Pedido de Nalux: revisar en general la lista y la ficha del alumno buscando cosas para mejorar
+(sin pedido puntual). Encontrados y corregidos, los dos más graves:
+
+- **"Eliminar pago" (ficha del alumno, pestaña Pagos):** un solo clic y el pago desaparecía para
+  siempre, sin ningún aviso -- grave porque cada pago es también el comprobante numerado
+  (migración 0013), perderlo por error pierde esa numeración para siempre. El ícono además estaba
+  pintado con `text-primary` (el color de marca del gimnasio) en vez de `text-destructive` -- mismo
+  bug de color ya corregido en otros botones esta semana, este quedó suelto.
+- **"Eliminar alumno" (lista de Alumnos):** un clic borraba en cascada TODO el historial del
+  alumno (pagos, asistencias, rutina y plan de alimentación asignados, medidas), sin confirmación.
+- **"Eliminar registro" (ficha del alumno, pestaña de medidas/progreso):** mismo patrón que
+  "Eliminar pago" -- sin confirmar y con `text-primary` en vez de `text-destructive`.
+
+**Arreglo:** los tres ahora piden confirmación con `window.confirm()` (mismo patrón ya usado en
+"Eliminar rutina" de `RutinasPage.jsx`, sin armar un modal aparte para una acción de lista) con un
+mensaje específico de qué se pierde en cada caso, y los dos íconos de tachito pasaron a
+`text-destructive`.
+
+### 09/09/2026 — Alta de alumnos por link/QR: la pantalla que faltaba (migración 0004)
+
+Mismo pedido de revisión: el backend de autorregistro (`gimnasios.codigo_invitacion`,
+`autorregistro_activo`, las RPC `join_gimnasio_por_codigo()`/`listar_planes_para_codigo()`/
+`regenerar_codigo_invitacion()`, la ruta pública `/unirse/:codigo`) **ya existía desde la
+migración 0004** (18/08/2026) -- pero, tal como quedó documentado en el propio archivo de esa
+migración como "pendiente, fuera de alcance", **nunca se construyó la pantalla** donde el profesor
+pudiera ver, copiar, compartir o regenerar ese link, ni prender/apagar el autorregistro. El estado
+"Pendiente" de un alumno ya mencionaba "se autorregistró por QR" en el texto de ayuda de
+`AlumnosPage.jsx`, pero no había ningún QR que mostrar.
+
+**Se construyó en `ConfiguracionPage.jsx`**, nueva tarjeta "Alta de alumnos por link":
+- Checkbox para `autorregistro_activo` (UPDATE directo sobre `gimnasios`, ya cubierto por la
+  policy `gimnasios_update_admin` de la migración 0001 -- no hizo falta ninguna función nueva).
+- El link (`{origin}/unirse/{codigo_invitacion}`) en una caja con botón de copiar
+  (`navigator.clipboard`).
+- El QR generado con la librería `qrcode` -- **ya estaba instalada en `package.json` desde antes,
+  sin usarse en ningún lado** (`QRCode.toDataURL()`, del lado del cliente, sin depender de ningún
+  servicio externo).
+- Botón "Regenerar código" con confirmación inline (mismo patrón "¿Seguro?" que "Archivo de
+  pagos"), porque invalida cualquier link o QR ya compartido/impreso.
+
+**Verificado sin crear ningún alumno de prueba real:** se armó el build de producción
+(`npx vite build`, limpio, bundle principal 830 → 862 KB por la librería QR) y se navegó
+directo a `https://.../unirse/{codigo real de "Full GYM NT"}` (sin sesión, tal como llegaría un
+alumno real escaneando el QR) -- la pantalla pública cargó bien, con los planes reales del
+gimnasio (Mensual, Trimestral) en el selector. No se envió el formulario a propósito, para no
+generar una fila de alumno falsa.
+
+De paso se encontró y se borró un gimnasio "Full GYM NT" duplicado y huérfano (sin ningún
+profesor asociado, sin alumnos) que había quedado de las pruebas del día anterior -- basura de
+prueba, no el que Nalux está usando.
+
+Pendiente para probar en vivo con Nalux (en su compu y en el celular, viendo la ficha del alumno
+en tiempo real): escanear el QR real / abrir el link, completar el autorregistro como un alumno
+de verdad, y confirmar que aparece como "Pendiente" en Alumnos.
 
 ### Por qué esta entrada existe
 
