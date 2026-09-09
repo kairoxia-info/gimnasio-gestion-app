@@ -1359,11 +1359,12 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const guardar = async (e) => {
         e.preventDefault();
         setError('');
-        // Pedido de Nalux (09/09/2026): al menos una mayúscula, también acá.
-        // Se valida del lado del cliente para el aviso inmediato, y también
-        // adentro de crear_acceso_alumno() (migración nueva) por si algún día
-        // se llama a la RPC directo, sin pasar por este formulario.
-        const errorContrasena = validarContrasena(contrasenaForm, 4);
+        // Pedido de Nalux (09/09/2026, ajustado el mismo día: mínimo 8, no
+        // 4): al menos una mayúscula, también acá. Se valida del lado del
+        // cliente para el aviso inmediato, y también adentro de
+        // crear_acceso_alumno() (migración) por si algún día se llama a la
+        // RPC directo, sin pasar por este formulario.
+        const errorContrasena = validarContrasena(contrasenaForm, 8);
         if (errorContrasena) {
             setError(errorContrasena);
             return;
@@ -1411,15 +1412,17 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     //
     // Sin caracteres ambiguos (l/1/I, 0/O) a propósito: esto se dicta o se
     // tipea a mano en el celular de alguien. La primera letra va en mayúscula
-    // para cumplir la regla nueva de Nalux (09/09/2026: "que al menos tenga
-    // una mayúscula") sin perder lo fácil de dictar -- "mayúscula, dos
-    // minúsculas, tres números" se explica en una frase.
+    // para cumplir la regla de Nalux (09/09/2026, ajustada el mismo día a
+    // mínimo 8 caracteres) sin perder lo fácil de dictar -- "mayúscula, tres
+    // minúsculas, cuatro números" (8 en total) se explica en una frase.
     const generarContrasena = () => {
         const letrasMayus = 'ABCDEFGHJKMNPQRSTUVWXYZ';
         const letrasMinus = 'abcdefghjkmnpqrstuvwxyz';
         const numeros = '23456789';
         const al = (set) => set[Math.floor(Math.random() * set.length)];
-        return `${al(letrasMayus)}${al(letrasMinus)}${al(letrasMinus)}${al(numeros)}${al(numeros)}${al(numeros)}`;
+        const minusculas = Array.from({ length: 3 }, () => al(letrasMinus)).join('');
+        const digitos = Array.from({ length: 4 }, () => al(numeros)).join('');
+        return `${al(letrasMayus)}${minusculas}${digitos}`;
     };
 
     const reenviarConContrasenaNueva = async () => {
@@ -1690,11 +1693,13 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             <Input
                                 value={contrasenaForm}
                                 onChange={(e) => setContrasenaForm(e.target.value)}
-                                placeholder="Mínimo 4 caracteres"
+                                placeholder="Mínimo 8 caracteres"
                                 required
-                                minLength={4}
+                                minLength={8}
                             />
-                            <span className="text-xs text-muted-foreground">Con al menos una mayúscula.</span>
+                            <span className="text-xs text-muted-foreground">
+                                Mínimo 8 caracteres, con al menos una mayúscula.
+                            </span>
                         </Field>
                     </div>
                     {error && <ErrorBox>{error}</ErrorBox>}

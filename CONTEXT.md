@@ -2917,6 +2917,25 @@ configurable desde el Dashboard (mismo lugar que "Confirm email"), que reforzar�
 lado del servidor para el signup del profesor. No se tocó porque la validación del cliente ya
 cubre el pedido; se puede sumar después si Nalux quiere ese refuerzo extra.
 
+### 09/09/2026 — Ajuste el mismo día: la contraseña del alumno pasa a mínimo 8
+
+Nalux, después de ver lo de arriba: *"que la contraseña del alumno sea mínimo 8 caracteres, con
+una mayúscula"* -- el mínimo específico del alumno (que había quedado en 4, el que ya tenía antes)
+sube a 8. La regla de la mayúscula no cambia, ya estaba.
+
+- `AlumnoPage.jsx`: `validarContrasena(contrasenaForm, 8)`, `minLength={8}` y el placeholder/pista
+  actualizados.
+- Migración 0040 (sobre la 0039 del mismo día): `crear_acceso_alumno()` ahora exige
+  `length >= 8` en vez de `>= 4`.
+- **Se corrigió también el generador automático** del botón "Enviar con contraseña nueva" (que ya
+  se había ajustado horas antes para tener mayúscula, pero seguía dando 6 caracteres): pasa a
+  1 mayúscula + 3 minúsculas + 4 números = 8, mismo criterio de "fácil de dictar" y sin caracteres
+  ambiguos.
+
+**Verificado:** dentro de una transacción con `ROLLBACK`, 7 caracteres con mayúscula rechazado por
+longitud, 9 caracteres aceptado con login correcto. El generador de contraseña, probado en el
+navegador: 8 caracteres, con mayúscula.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
