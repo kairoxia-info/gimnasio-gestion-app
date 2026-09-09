@@ -1335,6 +1335,8 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const [creado, setCreado] = useState(null);
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
     const [quitando, setQuitando] = useState(false);
+    const [confirmandoReenvio, setConfirmandoReenvio] = useState(false);
+    const [regenerando, setRegenerando] = useState(false);
     // QR/link fijo hacia /alumno (pedido de Nalux, 09/09/2026: "que el alumno
     // escanee... o el profe copie el link y se lo mande por WhatsApp"). Es el
     // MISMO QR para cualquier alumno del gimnasio -- no identifica a nadie,
@@ -1387,6 +1389,51 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
             setError('No se pudo quitar el acceso.');
         } finally {
             setQuitando(false);
+        }
+    };
+
+    // Reenviar el acceso YA CON la contraseña adentro del mensaje (pedido de
+    // Nalux, 09/09/2026: "en el mensaje le tiene que decir la contraseña").
+    // La vieja no se puede recuperar -- está hasheada con bcrypt, ni la app la
+    // sabe -- así que la única forma de que el mensaje la incluya es generar
+    // una nueva en el momento. Por eso esto pide confirmación: la anterior
+    // deja de funcionar.
+    //
+    // Sin caracteres ambiguos (l/1/I, 0/O) a propósito: esto se dicta o se
+    // tipea a mano en el celular de alguien.
+    const generarContrasena = () => {
+        const letras = 'abcdefghjkmnpqrstuvwxyz';
+        const numeros = '23456789';
+        const al = (set) => set[Math.floor(Math.random() * set.length)];
+        return `${al(letras)}${al(letras)}${al(letras)}${al(numeros)}${al(numeros)}${al(numeros)}`;
+    };
+
+    const reenviarConContrasenaNueva = async () => {
+        setRegenerando(true);
+        setError('');
+        try {
+            const nueva = generarContrasena();
+            const { error: err } = await supabase.rpc('crear_acceso_alumno', {
+                p_alumno_id: alumno.id,
+                p_usuario: alumno.usuario,
+                p_contrasena: nueva,
+            });
+            if (err) throw err;
+            // Se abre WhatsApp con el mensaje ya completo, y además queda en
+            // pantalla el recuadro con usuario y contraseña por si lo quiere
+            // pasar por otro lado.
+            const texto = `${saludo} Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${alumno.usuario} · Contraseña: ${nueva}`;
+            window.open(
+                `https://wa.me/?text=${encodeURIComponent(texto)}`,
+                '_blank',
+                'noopener,noreferrer',
+            );
+            setCreado({ usuario: alumno.usuario, contrasena: nueva });
+            setConfirmandoReenvio(false);
+        } catch (err) {
+            setError(err?.message || 'No se pudo generar la contraseña nueva.');
+        } finally {
+            setRegenerando(false);
         }
     };
 
@@ -1513,17 +1560,52 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                         Usuario actual: <span className="font-mono font-semibold">{alumno.usuario}</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
-                        {/* Reenviar sin contraseña: sirve para el caso "perdió el
-                            link" sin tener que cambiarle nada. Si además perdió la
-                            contraseña, ahí sí "Cambiar contraseña". */}
+                        {/* Dos formas de reenviar, según qué perdió el alumno:
+                            - Solo el link (sigue sabiendo su contraseña): va el
+                              mensaje sin tocar nada.
+                            - También la contraseña: se genera una nueva y el
+                              mensaje va completo, que es lo que pidió Nalux. */}
                         <Btn
                             type="button"
                             variant="ghost"
                             className="px-3 py-2 text-xs"
                             onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
                         >
-                            <MessageCircle className="h-3.5 w-3.5" /> Reenviar link
+                            <MessageCircle className="h-3.5 w-3.5" /> Reenviar solo el link
                         </Btn>
+                        {confirmandoReenvio ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">
+                                    Se le crea una contraseña nueva y la anterior deja de servir. ¿Seguir?
+                                </span>
+                                <Btn
+                                    type="button"
+                                    className="px-3 py-2 text-xs"
+                                    disabled={regenerando}
+                                    onClick={reenviarConContrasenaNueva}
+                                >
+                                    {regenerando ? 'Generando...' : 'Sí, enviar'}
+                                </Btn>
+                                <Btn
+                                    type="button"
+                                    variant="ghost"
+                                    className="px-3 py-2 text-xs"
+                                    disabled={regenerando}
+                                    onClick={() => setConfirmandoReenvio(false)}
+                                >
+                                    Cancelar
+                                </Btn>
+                            </div>
+                        ) : (
+                            <Btn
+                                type="button"
+                                variant="ghost"
+                                className="px-3 py-2 text-xs"
+                                onClick={() => setConfirmandoReenvio(true)}
+                            >
+                                <MessageCircle className="h-3.5 w-3.5" /> Enviar con contraseña nueva
+                            </Btn>
+                        )}
                         <Btn type="button" variant="ghost" className="px-3 py-2 text-xs" onClick={abrirForm}>
                             Cambiar contraseña
                         </Btn>
@@ -1560,8 +1642,8 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                         )}
                     </div>
                     <p className="w-full text-xs text-muted-foreground">
-                        Si el alumno perdió la contraseña, con &ldquo;Cambiar contraseña&rdquo; se le crea una
-                        nueva al instante y queda lista para reenviársela.
+                        Si el alumno perdió la contraseña, con &ldquo;Enviar con contraseña nueva&rdquo; se le
+                        genera una y el mensaje de WhatsApp ya sale con el usuario y la contraseña adentro.
                     </p>
                 </div>
             )}

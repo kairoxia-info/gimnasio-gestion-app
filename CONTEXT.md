@@ -2854,6 +2854,29 @@ la contraseña. Es la consecuencia esperada de mantenerlas cifradas (ver la entr
 el mensaje quedaba leyéndose como incompleto. Ahora aclara: *"La contraseña es la que te pasé
 cuando creamos el acceso; si no la tenés a mano, avisame y te paso una nueva"*.
 
+### 09/09/2026 — El mensaje de WhatsApp tiene que llevar la contraseña sí o sí
+
+Nalux, sobre el cambio anterior: *"lo mismo en el mensaje le tiene que decir la contraseña"*. No
+alcanzaba con explicar por qué no estaba -- tenía que estar.
+
+Como la contraseña vieja sigue sin ser recuperable (bcrypt, ver las dos entradas anteriores), la
+única forma de que el mensaje la lleve es **generar una nueva ahí mismo**. Se armó así:
+
+- Botón nuevo **"Enviar con contraseña nueva"** junto a "Reenviar solo el link" (ese se mantiene
+  para cuando el alumno solo perdió el link, no la contraseña -- no hace falta regenerar nada en
+  ese caso). Pide confirmación inline primero ("la anterior deja de servir"), porque cambia el
+  acceso de verdad.
+- Al confirmar: genera una contraseña de 6 caracteres (3 letras + 3 números, **sin l/1/I/0/O** --
+  se tipea a mano en el celular de alguien, o se dicta, así que se evitan los caracteres que se
+  confunden entre sí), llama a `crear_acceso_alumno()` con el usuario que ya tenía, y abre
+  WhatsApp con el mensaje completo: link + usuario + la contraseña nueva.
+- El recuadro verde de "Acceso guardado" con usuario/contraseña también queda visible en pantalla
+  después, por si se prefiere copiarlo y pasarlo por otro lado en vez de WhatsApp.
+
+**Verificado sin tocar ningún alumno real:** dentro de una transacción con `ROLLBACK`,
+`crear_acceso_alumno()` con una contraseña de ese mismo formato (`abc234`) seguido de
+`iniciar_sesion_alumno()` con esa contraseña -- login correcto. Nada persistió.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
