@@ -399,14 +399,20 @@ const AlumnosPage = () => {
                                     Editar
                                 </Btn>
                                 {estadoAlumno(a) === 'pendiente' && (
-                                    <Btn
-                                        className="px-3 py-2 text-xs"
-                                        onClick={() =>
-                                            updateRec('alumnos', a.id, { activo: true, pendiente: false }).then(cargar)
-                                        }
+                                    // Antes activaba acá mismo con solo activo=true --
+                                    // Nalux (09/09/2026): "cuando se apruebe ya el
+                                    // alumno tenga acceso a su plataforma", así que
+                                    // aprobar ahora también le crea usuario y
+                                    // contraseña, y hay que poder mostrárselos al
+                                    // profesor (con el botón de WhatsApp) -- eso ya
+                                    // vive en la ficha (tarjeta "Acceso del alumno"),
+                                    // no tiene sentido duplicarlo acá en la lista.
+                                    <Link
+                                        to={`/alumnos/${a.id}`}
+                                        className="inline-flex items-center rounded-xl border border-primary px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground"
                                     >
-                                        Activar
-                                    </Btn>
+                                        Revisar y activar
+                                    </Link>
                                 )}
                                 <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(a)}>
                                     Eliminar

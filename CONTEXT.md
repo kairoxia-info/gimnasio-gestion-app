@@ -2936,6 +2936,51 @@ sube a 8. La regla de la mayúscula no cambia, ya estaba.
 longitud, 9 caracteres aceptado con login correcto. El generador de contraseña, probado en el
 navegador: 8 caracteres, con mayúscula.
 
+### 09/09/2026 — Aprobar un alumno pendiente le crea el acceso de una
+
+Nalux, cerrando el círculo del autorregistro: *"quiero que cuando se apruebe ya el alumno tenga
+acceso a su plataforma... que el alumno con su nombre ponga el usuario y una contraseña que
+después la pueda ver el profe o se la pueda cambiar... sino no tiene sentido mandarle para que se
+registre y no tenga acceso al panel"*.
+
+Hasta ahora, "Activar" (tanto en la lista como si hubiera existido en la ficha) solo cambiaba
+`activo`/`pendiente` -- el alumno quedaba activo pero sin login, un paso manual aparte que nadie
+se acordaba de hacer.
+
+**Nuevo `lib/accesoAlumno.js`**, compartido:
+- `usuarioBaseDesdeNombre(nombre)`: primer nombre, sin acentos ni espacios, en minúsculas (mismo
+  estilo que ya usaba Nalux a mano, "nadia1"). Nombres muy cortos se completan para no chocar con
+  el mínimo de 3 caracteres de `crear_acceso_alumno()`. Probado con acentos, ñ, nombres de 2
+  letras y vacío.
+- `generarContrasenaAlumno()`: la misma lógica que ya tenía "Enviar con contraseña nueva"
+  (8 caracteres, con mayúscula, sin l/1/I/0/O), ahora en un solo lugar -- se sacó la copia
+  duplicada de `AlumnoPage.jsx`.
+- `crearAccesoAutomatico(alumno)`: llama a `crear_acceso_alumno()` con el usuario armado desde el
+  nombre; si choca con uno que ya existe (`unique_violation`, mismo mensaje que ya devolvía esa
+  función), reintenta agregando un número al final (`jose`, `jose2`, `jose3`...) hasta 20 intentos.
+
+**`AlumnoPage.jsx` (ficha, tarjeta "Acceso del alumno"):** cuando el alumno está "Pendiente" y
+todavía no tiene usuario, en vez del link genérico de "Crear usuario y contraseña" aparece un
+botón **"Aprobar y crear acceso"** que hace las tres cosas de una: genera usuario/contraseña,
+activa al alumno (`activo=true, pendiente=false`), y muestra el resultado en el mismo recuadro
+verde que ya existía (con el botón de enviar por WhatsApp, que automáticamente incluye la
+contraseña porque usa el mismo estado `creado`). El profesor lo puede cambiar después con
+"Cambiar contraseña" si quiere otro. El Badge de "Pendiente"/"Activo" de arriba de la ficha se
+actualiza solo, sin recargar -- `onCambiado` pasó de recibir solo el usuario a recibir un objeto
+parcial (`{ usuario, activo, pendiente }`) que el padre mezcla en su estado.
+
+**`AlumnosPage.jsx` (lista):** el botón "Activar" (que antes activaba ahí mismo sin crear acceso)
+ahora es un link **"Revisar y activar"** que lleva a la ficha -- mostrar las credenciales y el
+botón de WhatsApp en una fila de tabla no tiene sentido, y ya está resuelto en la ficha; mejor un
+solo lugar que duplicarlo.
+
+**Verificado sin tocar ningún alumno real**, con un alumno de prueba insertado y borrado en la
+misma sesión: la RPC real (`crear_acceso_alumno` + `UPDATE activo/pendiente`) deja al alumno
+"activo", con usuario armado bien desde el nombre ("José Prueba Aprobar" -> `jose`, sin acento) y
+login correcto. Colisión de usuario probada aparte con dos alumnos de nombre parecido: el segundo
+choca contra `crear_acceso_alumno()` con el mismo mensaje que ya usaba esa función, y el reintento
+con el número siguiente (`jose2`) funciona.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

@@ -11,6 +11,7 @@ import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 import { validarContrasena } from '@/lib/validacionPassword';
+import { crearAccesoAutomatico, generarContrasenaAlumno } from '@/lib/accesoAlumno';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
@@ -1338,6 +1339,11 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const [quitando, setQuitando] = useState(false);
     const [confirmandoReenvio, setConfirmandoReenvio] = useState(false);
     const [regenerando, setRegenerando] = useState(false);
+    // Aprobar un alumno autorregistrado y darle acceso en el mismo paso
+    // (pedido de Nalux, 09/09/2026: "cuando se apruebe ya el alumno tenga
+    // acceso a su plataforma... sino no tiene sentido mandarle para que se
+    // registre y no tenga acceso al panel").
+    const [aprobando, setAprobando] = useState(false);
     // QR/link fijo hacia /alumno (pedido de Nalux, 09/09/2026: "que el alumno
     // escanee... o el profe copie el link y se lo mande por WhatsApp"). Es el
     // MISMO QR para cualquier alumno del gimnasio -- no identifica a nadie,
@@ -1379,7 +1385,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
             if (err) throw err;
             setCreado({ usuario: usuarioForm.trim(), contrasena: contrasenaForm });
             setAbierto(false);
-            onCambiado(usuarioForm.trim());
+            onCambiado({ usuario: usuarioForm.trim() });
         } catch (err) {
             setError(err?.message || 'No se pudo guardar el acceso.');
         } finally {
@@ -1395,11 +1401,31 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
             if (err) throw err;
             setCreado(null);
             setConfirmandoQuitar(false);
-            onCambiado(null);
+            onCambiado({ usuario: null });
         } catch (_) {
             setError('No se pudo quitar el acceso.');
         } finally {
             setQuitando(false);
+        }
+    };
+
+    // Aprobar + crear acceso en un solo paso, para un alumno que se
+    // autorregistró (o cualquiera marcado "Pendiente" a mano) y todavía no
+    // tiene usuario/contraseña. Usuario a partir del nombre, contraseña al
+    // azar -- el profesor los ve acá mismo y los puede cambiar después con
+    // "Cambiar contraseña" si quiere otros.
+    const aprobarYCrearAcceso = async () => {
+        setAprobando(true);
+        setError('');
+        try {
+            const { usuario, contrasena } = await crearAccesoAutomatico(alumno);
+            await updateRec('alumnos', alumno.id, { activo: true, pendiente: false });
+            setCreado({ usuario, contrasena });
+            onCambiado({ usuario, activo: true, pendiente: false });
+        } catch (err) {
+            setError(err?.message || 'No se pudo aprobar al alumno.');
+        } finally {
+            setAprobando(false);
         }
     };
 
@@ -1409,27 +1435,11 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     // sabe -- así que la única forma de que el mensaje la incluya es generar
     // una nueva en el momento. Por eso esto pide confirmación: la anterior
     // deja de funcionar.
-    //
-    // Sin caracteres ambiguos (l/1/I, 0/O) a propósito: esto se dicta o se
-    // tipea a mano en el celular de alguien. La primera letra va en mayúscula
-    // para cumplir la regla de Nalux (09/09/2026, ajustada el mismo día a
-    // mínimo 8 caracteres) sin perder lo fácil de dictar -- "mayúscula, tres
-    // minúsculas, cuatro números" (8 en total) se explica en una frase.
-    const generarContrasena = () => {
-        const letrasMayus = 'ABCDEFGHJKMNPQRSTUVWXYZ';
-        const letrasMinus = 'abcdefghjkmnpqrstuvwxyz';
-        const numeros = '23456789';
-        const al = (set) => set[Math.floor(Math.random() * set.length)];
-        const minusculas = Array.from({ length: 3 }, () => al(letrasMinus)).join('');
-        const digitos = Array.from({ length: 4 }, () => al(numeros)).join('');
-        return `${al(letrasMayus)}${minusculas}${digitos}`;
-    };
-
     const reenviarConContrasenaNueva = async () => {
         setRegenerando(true);
         setError('');
         try {
-            const nueva = generarContrasena();
+            const nueva = generarContrasenaAlumno();
             const { error: err } = await supabase.rpc('crear_acceso_alumno', {
                 p_alumno_id: alumno.id,
                 p_usuario: alumno.usuario,
@@ -1665,16 +1675,38 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                 </div>
             )}
 
-            {!abierto && !alumno?.usuario && !creado && (
-                <div className="mt-4">
-                    <Empty>
-                        Este alumno todavía no tiene acceso.{' '}
-                        <button type="button" onClick={abrirForm} className="font-semibold text-primary">
-                            Crear usuario y contraseña
-                        </button>
-                        .
-                    </Empty>
+            {!abierto && !alumno?.usuario && !creado && alumno?.pendiente ? (
+                // Pendiente (autorregistrado o marcado a mano) y sin acceso
+                // todavía: un solo botón aprueba Y crea el usuario/contraseña
+                // de una -- Nalux (09/09/2026): "cuando se apruebe ya el
+                // alumno tenga acceso a su plataforma... sino no tiene
+                // sentido mandarle para que se registre y no tenga acceso al
+                // panel".
+                <div className="mt-4 space-y-3 rounded-xl border border-warn/40 bg-warn/10 p-4">
+                    <p className="text-sm">
+                        Este alumno está pendiente de aprobación. Al aprobarlo se le crea el acceso
+                        automáticamente (usuario a partir de su nombre, contraseña al azar) -- se puede
+                        cambiar después si se quiere otro.
+                    </p>
+                    {error && <ErrorBox>{error}</ErrorBox>}
+                    <Btn type="button" disabled={aprobando} onClick={aprobarYCrearAcceso}>
+                        {aprobando ? 'Aprobando...' : 'Aprobar y crear acceso'}
+                    </Btn>
                 </div>
+            ) : (
+                !abierto &&
+                !alumno?.usuario &&
+                !creado && (
+                    <div className="mt-4">
+                        <Empty>
+                            Este alumno todavía no tiene acceso.{' '}
+                            <button type="button" onClick={abrirForm} className="font-semibold text-primary">
+                                Crear usuario y contraseña
+                            </button>
+                            .
+                        </Empty>
+                    </div>
+                )
             )}
 
             {abierto && (
@@ -1910,9 +1942,11 @@ const AlumnoPage = () => {
 
                         <AccesoAlumno
                             alumno={alumno}
-                            onCambiado={(nuevoUsuario) =>
-                                setData((d) => ({ ...d, alumno: { ...d.alumno, usuario: nuevoUsuario } }))
-                            }
+                            // Recibe un objeto parcial (usuario, y a veces también
+                            // activo/pendiente cuando se aprueba desde acá) para que
+                            // el Badge de "Pendiente"/"Activo" de arriba se actualice
+                            // solo, sin recargar la página.
+                            onCambiado={(patch) => setData((d) => ({ ...d, alumno: { ...d.alumno, ...patch } }))}
                         />
 
                         <div className="mb-6 flex flex-wrap gap-2">
