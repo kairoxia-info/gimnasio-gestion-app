@@ -661,7 +661,7 @@ const MiPlanPage = () => {
             {!loading && !error && plan && (
                 <>
                     <header className="border-b border-border bg-card px-4 py-5 sm:px-6">
-                        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
+                        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 lg:max-w-5xl">
                             <div className="flex min-w-0 items-center gap-3">
                                 <LogoGimnasio
                                     nombre={plan.gimnasio_nombre}
@@ -697,7 +697,11 @@ const MiPlanPage = () => {
                         </p>
                     )}
 
-                    <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6">
+                    {/* lg:max-w-5xl (09/09/2026, pedido de Nalux: "desde la
+                        computadora quiero que se vea bien... ponelo bien a lo
+                        ancho"). En el celular sigue igual: max-w-2xl no llega a
+                        aplicarse nunca abajo de 672px de ancho. */}
+                    <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6 lg:max-w-5xl">
                         {/* Recordatorio automático de cuota (migración 0015). A
                             diferencia del aviso manual de arriba, este NO tiene botón
                             "Entendido" ni se guarda en notificaciones_leidas: no existe
@@ -769,11 +773,19 @@ const MiPlanPage = () => {
                             </p>
                         </section>
 
+                        {/* Banda de encabezado con color propio por sección
+                            (09/09/2026, pedido de Nalux: "el plan de ejercicio está
+                            en la misma que a donde está el plan de alimentación y
+                            cuando bajo no distingo que después está el otro plan").
+                            Rutina va con el color del gimnasio (--primary) y
+                            alimentación con el verde de --ok: al scrollear, el
+                            cambio de color marca dónde empieza cada una. --ok
+                            existe en los dos temas, no es un color inventado. */}
                         <section aria-labelledby="mp-rutina-titulo" className="mp-seccion-rutina space-y-5">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
                                 <h2
                                     id="mp-rutina-titulo"
-                                    className="font-display text-2xl font-extrabold uppercase"
+                                    className="font-display text-2xl font-extrabold uppercase text-primary"
                                 >
                                     Tu rutina
                                 </h2>
@@ -798,7 +810,7 @@ const MiPlanPage = () => {
                                 </EstadoVacio>
                             ) : (
                                 <>
-                                    <div className="rounded-2xl border border-border bg-card p-5">
+                                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
                                         <p className="text-2xl font-bold">{plan.rutina_nombre}</p>
                                         {plan.rutina_descripcion && (
                                             <p className="mt-2 text-lg text-muted-foreground">
@@ -855,14 +867,21 @@ const MiPlanPage = () => {
                                                                         return (
                                                                             <article
                                                                                 key={it.key}
-                                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-5"
+                                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-4 sm:p-5"
                                                                             >
                                                                                 {it.esCombo ? (
                                                                                     <>
                                                                                         <p className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
                                                                                             Superserie
                                                                                         </p>
-                                                                                        <div className="flex flex-col items-stretch gap-1.5 sm:flex-row">
+                                                                                        {/* En una sola fila también en el celular
+                                                                                            (09/09/2026, pedido de Nalux: "quisiera que
+                                                                                            las superseries se vean en una línea así como
+                                                                                            en la computadora"). Antes era flex-col abajo
+                                                                                            de 640px y los ejercicios del combo quedaban
+                                                                                            uno debajo del otro, que se lee como si fueran
+                                                                                            ejercicios sueltos, no una superserie. */}
+                                                                                        <div className="flex flex-row items-stretch gap-1.5">
                                                                                             {it.comboItems.map(
                                                                                                 (sub, i) => (
                                                                                                     <React.Fragment
@@ -879,20 +898,25 @@ const MiPlanPage = () => {
                                                                                                                 +
                                                                                                             </span>
                                                                                                         )}
-                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2">
-                                                                                                            <p className="text-sm font-bold leading-tight sm:truncate sm:text-base">
+                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2.5">
+                                                                                                            {/* Sin truncar en el celular: con
+                                                                                                                dos al lado el nombre entra en
+                                                                                                                dos renglones, pero completo --
+                                                                                                                cortarlo dejaría al alumno sin
+                                                                                                                saber qué ejercicio es. */}
+                                                                                                            <p className="text-base font-bold leading-tight">
                                                                                                                 {
                                                                                                                     sub.nombre
                                                                                                                 }
                                                                                                             </p>
                                                                                                             {sub.grupo && (
-                                                                                                                <p className="text-xs text-muted-foreground sm:truncate">
+                                                                                                                <p className="text-sm text-muted-foreground">
                                                                                                                     {
                                                                                                                         sub.grupo
                                                                                                                     }
                                                                                                                 </p>
                                                                                                             )}
-                                                                                                            <div className="mt-2 space-y-0.5 text-sm">
+                                                                                                            <div className="mt-2 space-y-0.5 text-base">
                                                                                                                 <p>
                                                                                                                     <span className="text-muted-foreground">
                                                                                                                         Series{' '}
@@ -1067,10 +1091,10 @@ const MiPlanPage = () => {
                             aria-labelledby="mp-alimentacion-titulo"
                             className="mp-seccion-alimentacion space-y-5"
                         >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-ok bg-ok/10 px-4 py-3">
                                 <h2
                                     id="mp-alimentacion-titulo"
-                                    className="font-display text-2xl font-extrabold uppercase"
+                                    className="font-display text-2xl font-extrabold uppercase text-ok"
                                 >
                                     Tu plan de alimentación
                                 </h2>
@@ -1079,7 +1103,7 @@ const MiPlanPage = () => {
                                         type="button"
                                         onClick={() => descargarSeccion('alimentacion')}
                                         disabled={imprimiendoSeccion === 'alimentacion'}
-                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-base font-bold text-primary transition active:scale-[0.98] disabled:opacity-60"
+                                        className="mp-no-imprimir inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ok px-4 py-2.5 text-base font-bold text-ok transition active:scale-[0.98] disabled:opacity-60"
                                     >
                                         <Download className="h-5 w-5" aria-hidden="true" />{' '}
                                         {imprimiendoSeccion === 'alimentacion' ? 'Generando...' : 'Descargar en PDF'}
@@ -1095,7 +1119,7 @@ const MiPlanPage = () => {
                                 </EstadoVacio>
                             ) : (
                                 <>
-                                    <div className="rounded-2xl border border-border bg-card p-5">
+                                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
                                         <p className="text-2xl font-bold">{plan.plan_nombre}</p>
                                     </div>
 
@@ -1109,10 +1133,10 @@ const MiPlanPage = () => {
                                                 key={comidaPlan.key || i}
                                                 className="mp-evitar-corte space-y-3"
                                             >
-                                                <h3 className="font-display text-xl font-bold uppercase text-primary">
+                                                <h3 className="font-display text-xl font-bold uppercase text-ok">
                                                     {comidaPlan.nombre || `Comida N.º ${i + 1}`}
                                                 </h3>
-                                                <p className="rounded-2xl border border-border bg-card p-5 text-lg">
+                                                <p className="rounded-2xl border border-border bg-card p-4 text-base sm:p-5 sm:text-lg">
                                                     {armarTextoAlimentos(comidaPlan.alimentos)}
                                                 </p>
                                             </div>
@@ -1121,13 +1145,13 @@ const MiPlanPage = () => {
 
                                     {observacionesPlan.length > 0 && (
                                         <div className="mp-evitar-corte space-y-3">
-                                            <h3 className="font-display text-xl font-bold uppercase text-primary">
+                                            <h3 className="font-display text-xl font-bold uppercase text-ok">
                                                 Observaciones generales
                                             </h3>
-                                            <ul className="space-y-2 rounded-2xl border border-border bg-card p-5">
+                                            <ul className="space-y-2 rounded-2xl border border-border bg-card p-4 sm:p-5">
                                                 {observacionesPlan.map((linea, i) => (
-                                                    <li key={i} className="flex gap-3 text-lg">
-                                                        <span className="text-primary" aria-hidden="true">
+                                                    <li key={i} className="flex gap-3 text-base sm:text-lg">
+                                                        <span className="text-ok" aria-hidden="true">
                                                             •
                                                         </span>
                                                         <span>{linea}</span>

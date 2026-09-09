@@ -1416,7 +1416,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const saludo = `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}!`;
     const textoWhatsapp = creado
         ? `${saludo} Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`
-        : `${saludo} Para ver la rutina y el plan de alimentación, entrar en ${urlIngreso}. Usuario: ${alumno?.usuario}`;
+        : `${saludo} Para ver la rutina y el plan de alimentación, entrar en ${urlIngreso}. Usuario: ${alumno?.usuario} · La contraseña es la que te pasé cuando creamos el acceso; si no la tenés a mano, avisame y te paso una nueva.`;
     const linkWhatsapp = `https://wa.me/?text=${encodeURIComponent(textoWhatsapp)}`;
 
     return (

@@ -2812,6 +2812,48 @@ GYM NT", su gimnasio de pruebas -- nunca contra "Mi GYM FIT"):
    - Aprobado + con acceso creado -> **entra bien**.
 5. Se borró el alumno de prueba al terminar; no quedó nada en la base.
 
+### 09/09/2026 — Rediseño de la pantalla del alumno (MiPlanPage), sobre feedback de uso real
+
+Nalux revisó la pantalla que ve el alumno en la compu y en el celular, y pasó cinco cosas
+concretas. Todas resueltas:
+
+**1. Ancho en computadora.** El contenido estaba clavado en `max-w-2xl` (672px), o sea una columna
+angosta en el medio de una pantalla grande. Se agregó `lg:max-w-5xl` al `<main>` y al header:
+medido en el navegador, el contenido pasa de 672px a **1024px** a partir de 1024px de viewport,
+centrado y sin scroll horizontal. En el celular no cambia nada (nunca se llega a `lg`).
+
+**2. No se distinguía dónde terminaba la rutina y empezaba la alimentación.** Las dos secciones
+usaban exactamente el mismo tratamiento visual, así que al scrollear se leían como una sola lista
+larga. Ahora cada una tiene **banda de encabezado con color propio**: rutina con el color del
+gimnasio (`--primary`) y alimentación con el verde de `--ok`, incluidos los subtítulos (cada
+comida, "Observaciones generales") y el botón de PDF de esa sección. `--ok` ya existe en los dos
+temas -- no es un color inventado ni pisa el color de marca que eligió cada gimnasio.
+
+**3. Cajas muy grandes en el celular.** El `p-5` estaba fijo para todos los tamaños. Pasó a
+`p-4 sm:p-5` en las tarjetas de la rutina y de las comidas, y los textos largos de comidas y
+observaciones a `text-base sm:text-lg`.
+
+**4. Superseries en una sola línea, también en el celular.** Era
+`flex-col ... sm:flex-row`: abajo de 640px los ejercicios del combo quedaban uno debajo del otro y
+se leían como ejercicios sueltos, perdiendo justamente lo que hace que sea una superserie. Ahora
+es `flex-row` siempre.
+
+**5. Que se pueda leer.** Pedido explícito: *"que tampoco se vea chico... porque hay personas
+grandes que tienen que leer también"*. Al poner los dos ejercicios lado a lado había lugar para
+achicar la letra, y se hizo lo contrario: el nombre subió de `text-sm` a `text-base`, el grupo
+muscular de `text-xs` a `text-sm`, y series/reps/peso de `text-sm` a `text-base`. Además se sacó
+el `truncate`: con dos al lado el nombre entra en dos renglones pero **completo**, en vez de
+cortarse con puntos suspensivos.
+
+**Verificado en el navegador**, a 375px (celular) y a 1440px (computadora), con el plan real de un
+alumno de "Mi GYM FIT": superserie en una línea y legible, bandas de color separando bien las dos
+secciones, y el ancho de la computadora medido por consola.
+
+**Aparte, sobre el mensaje de WhatsApp:** Nalux notó que al reenviar el link va el usuario pero no
+la contraseña. Es la consecuencia esperada de mantenerlas cifradas (ver la entrada anterior), pero
+el mensaje quedaba leyéndose como incompleto. Ahora aclara: *"La contraseña es la que te pasé
+cuando creamos el acceso; si no la tenés a mano, avisame y te paso una nueva"*.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
