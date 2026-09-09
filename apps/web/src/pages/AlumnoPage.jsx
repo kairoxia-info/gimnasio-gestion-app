@@ -1232,32 +1232,48 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
 // elegido (reusa ahí todo lo bueno, comprobante incluido) y acá queda una
 // vista de estado + historial en modo lectura, con el mismo cálculo que el
 // resto de la app.
-const PagosAlumno = ({ alumnoId, pagos, config, onChange }) => {
+// Sacada de PagosAlumno y movida afuera de las pestañas (pedido de Nalux,
+// 09/09/2026: "en la ficha del alumno cuando se ve que tiene una cuota
+// vencida... el botón cobrar que también esté ahí") -- antes solo se veía
+// entrando a la pestaña "Pagos"; ahora está siempre visible, sin importar en
+// qué pestaña esté el profesor, igual que "Acceso del alumno". Con borde de
+// color cuando la cuota está vencida o con deuda, para que se note a simple
+// vista sin tener que leer el texto.
+const EstadoCuotaAlumno = ({ alumnoId, pagos, config }) => {
     const navigate = useNavigate();
     const ultimo = pagos[0];
     const estado = estadoCuota(ultimo, config);
+    const atencion = estado === 'vencido' || estado === 'con_deuda';
 
     return (
-        <div className="space-y-5">
-            <Card>
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Estado de cuota
-                        </p>
-                        <p className="mt-2 font-display text-2xl font-extrabold">{ESTADOS_PAGO[estado].label}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {ultimo
-                                ? `Último pago ${fmtFecha(ultimo.fecha_pago)} · cubre hasta ${fmtFecha(ultimo.periodo_hasta)}`
-                                : 'Sin pagos registrados'}
-                        </p>
-                    </div>
-                    <Btn onClick={() => navigate(`/pagos?alumno=${alumnoId}`)}>
-                        <Plus className="h-4 w-4" /> Registrar pago
-                    </Btn>
+        <Card className={`mb-6 ${atencion ? 'border-2 border-destructive/60' : ''}`}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Estado de cuota
+                    </p>
+                    <p
+                        className={`mt-2 font-display text-2xl font-extrabold ${atencion ? 'text-destructive' : ''}`}
+                    >
+                        {ESTADOS_PAGO[estado].label}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        {ultimo
+                            ? `Último pago ${fmtFecha(ultimo.fecha_pago)} · cubre hasta ${fmtFecha(ultimo.periodo_hasta)}`
+                            : 'Sin pagos registrados'}
+                    </p>
                 </div>
-            </Card>
+                <Btn onClick={() => navigate(`/pagos?alumno=${alumnoId}`)}>
+                    <Plus className="h-4 w-4" /> Cobrar
+                </Btn>
+            </div>
+        </Card>
+    );
+};
 
+const PagosAlumno = ({ pagos, config, onChange }) => {
+    return (
+        <div className="space-y-5">
             <Card>
                 <h3 className="mb-3 font-display text-lg font-bold">Historial de pagos</h3>
                 {pagos.length === 0 ? (
@@ -1949,6 +1965,8 @@ const AlumnoPage = () => {
                             onCambiado={(patch) => setData((d) => ({ ...d, alumno: { ...d.alumno, ...patch } }))}
                         />
 
+                        <EstadoCuotaAlumno alumnoId={id} pagos={data.pagos} config={data.config} />
+
                         <div className="mb-6 flex flex-wrap gap-2">
                             {TABS.map(([key, label]) => (
                                 <button
@@ -1990,7 +2008,7 @@ const AlumnoPage = () => {
                             <AsistenciaAlumno alumnoId={id} asistencias={data.asistencias} onChange={cargar} />
                         )}
                         {tab === 'pagos' && (
-                            <PagosAlumno alumnoId={id} pagos={data.pagos} config={data.config} onChange={cargar} />
+                            <PagosAlumno pagos={data.pagos} config={data.config} onChange={cargar} />
                         )}
                     </>
                 )

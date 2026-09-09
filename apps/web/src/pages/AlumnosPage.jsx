@@ -59,6 +59,14 @@ const AlumnosPage = () => {
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
+    // Confirmación inline por fila para "Eliminar" (09/09/2026, reportado por
+    // Nalux: "cuando quiero eliminar un alumno no se elimina"). Antes usaba
+    // window.confirm() -- el único lugar de esta pantalla con ese cartel
+    // nativo en vez del patrón "¿Seguro?" que ya usa el resto de la app, y
+    // sin manejo de error si el borrado fallaba (quedaba mudo, sin avisar
+    // nada). Se unifica con el mismo patrón, y ahora si falla se ve.
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [borrando, setBorrando] = useState(false);
 
     // Archivo de foto elegido para subir a Storage (mismo criterio que
     // logoFile en ConfiguracionPage.jsx). fotoPreview es el object URL local
@@ -198,21 +206,18 @@ const AlumnosPage = () => {
         }
     };
 
-    // Sin confirmación era un clic y se perdía TODO el historial del alumno
-    // en cascada (pagos, asistencias, rutina y plan asignados, medidas) --
-    // bug real encontrado en revisión (09/09/2026). Mismo patrón que ya usa
-    // "Eliminar rutina" en RutinasPage.jsx: window.confirm(), sin armar un
-    // modal aparte para una acción de una lista.
-    const borrar = async (a) => {
-        if (
-            !window.confirm(
-                `¿Eliminar a ${a.nombre} para siempre? Se borra también todo su historial: pagos, asistencias, rutina y plan de alimentación asignados, y las medidas cargadas. No se puede deshacer.`,
-            )
-        ) {
-            return;
+    const borrar = async (id) => {
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('alumnos', id);
+            setConfirmandoBorrarId(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el alumno. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
         }
-        await removeRec('alumnos', a.id);
-        cargar();
     };
 
     const filtrados = alumnos.filter((a) => {
@@ -414,9 +419,37 @@ const AlumnosPage = () => {
                                         Revisar y activar
                                     </Link>
                                 )}
-                                <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(a)}>
-                                    Eliminar
-                                </Btn>
+                                {confirmandoBorrarId === a.id ? (
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground">
+                                            ¿Eliminar para siempre? Se borra también su historial.
+                                        </span>
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-2 text-xs"
+                                            disabled={borrando}
+                                            onClick={() => borrar(a.id)}
+                                        >
+                                            {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                        </Btn>
+                                        <Btn
+                                            variant="ghost"
+                                            className="px-3 py-2 text-xs"
+                                            disabled={borrando}
+                                            onClick={() => setConfirmandoBorrarId(null)}
+                                        >
+                                            Cancelar
+                                        </Btn>
+                                    </div>
+                                ) : (
+                                    <Btn
+                                        variant="danger"
+                                        className="px-3 py-2 text-xs"
+                                        onClick={() => setConfirmandoBorrarId(a.id)}
+                                    >
+                                        Eliminar
+                                    </Btn>
+                                )}
                             </div>
                         </div>
                     ))}

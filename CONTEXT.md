@@ -2981,6 +2981,63 @@ login correcto. Colisión de usuario probada aparte con dos alumnos de nombre pa
 choca contra `crear_acceso_alumno()` con el mismo mensaje que ya usaba esa función, y el reintento
 con el número siguiente (`jose2`) funciona.
 
+### 09/09/2026 — "Eliminar alumno no se elimina", pre-cargar el cobro y foto/video invisible para los alumnos
+
+Tanda grande, cuatro pedidos/bugs en un mismo mensaje de Nalux.
+
+**1. "Cuando quiero eliminar un alumno no se elimina".** El DELETE en sí funciona perfecto a nivel
+de base -- probado dentro de una transacción con `ROLLBACK`, simulando la sesión real de un
+profesor, con pagos y asistencias reales colgando del alumno (cascada completa, `ROLLBACK`
+después, nada tocado de verdad). El problema estaba en el cliente: el `window.confirm()` agregado
+horas antes (ver la entrada de la revisión de Alumnos) era el único cartel de confirmación **nativo
+del navegador** de toda esta pantalla -- el resto de la app usa el patrón "¿Seguro? / Sí /
+Cancelar" inline -- y encima no tenía manejo de error: si algo fallaba, quedaba mudo, sin avisar
+nada. Se unificó con el mismo patrón inline que ya usa el resto de la app (confirmación por fila,
+con `confirmandoBorrarId`), y ahora si el borrado falla de verdad se ve en un `ErrorBox`.
+
+**2. Pre-cargar el cobro con el plan que el alumno ya tiene asignado.** *"cada vez que abro algún
+modal para cobrarle tengo que rellenar todo de nuevo... ya tienen que quedar asentado el plan,
+cubre desde y cubre hasta"*. Ya existía `aplicarPlan()` (se dispara al elegir un plan a mano en el
+modal), pero `abrirCobro()` nunca lo llamaba solo -- el profesor tenía que re-elegir el plan cada
+vez, aunque el alumno ya lo tuviera guardado desde que se lo dio de alta. Ahora `abrirCobro()`:
+- Si el alumno tiene `plan_precio_nombre`, llama a `aplicarPlan()` de una, precargando monto,
+  descuento, interés y el período que cubre.
+- **"Cubre desde" ya no es siempre hoy**: si hay un pago anterior, arranca al día siguiente de
+  donde terminó ese pago (`periodo_hasta + 1 día`), para que dos cuotas seguidas no se pisen ni
+  dejen un hueco sin cubrir. `aplicarPlan()` se ajustó para aceptar esa fecha explícita en vez de
+  leerla siempre de `form.periodo_desde` -- llamarla en el mismo tick que `setForm()` hubiera leído
+  el valor viejo, porque React no actualiza el estado en el medio del mismo evento.
+- Como la ficha del alumno y el módulo de Pagos ya comparten el mismo modal (`?alumno=id`), el
+  arreglo cubre los dos casos de una -- no hizo falta tocar nada aparte para "ya sea si cobro desde
+  la ficha del alumno o en el módulo de pagos y caja".
+- Verificado con una simulación en Node de la misma lógica (plan real + un pago anterior): el
+  período, el monto y los porcentajes salen exactamente como debe.
+
+**3. El botón "Cobrar" junto al estado de cuota, visible sin importar la pestaña.** Antes "Estado
+de cuota" (con el botón, que pasó de decir "Registrar pago" a "Cobrar") vivía adentro de la
+pestaña "Pagos" de la ficha -- si el profesor llegaba por otro lado (por ejemplo desde la lista de
+Alumnos) no lo veía sin entrar a esa pestaña. Se sacó a un componente aparte
+(`EstadoCuotaAlumno`), montado siempre arriba de las pestañas, igual que "Acceso del alumno". Con
+borde y letra en rojo cuando la cuota está vencida o con deuda, para que se note a simple vista.
+
+**4. "A los alumnos no se ve la imagen o video del ejercicio" -- bug crítico, migración 0041.**
+`ver_plan_por_codigo()` (la RPC que arma el plan del alumno) buscaba la foto/video de cada
+ejercicio con `WHERE e.gimnasio_id = v_gimnasio_id` -- **nunca matcheaba un ejercicio de la
+biblioteca base** (`gimnasio_id IS NULL`, compartida entre todos los gimnasios). Contado antes del
+fix: **500 ejercicios de la biblioteca base tienen media cargada, contra apenas 4 propios por
+gimnasio** -- para casi cualquier rutina armada con la biblioteca, el alumno recibía `mediaUrl`
+vacío aunque el profesor lo viera perfecto al armar la rutina (esa pantalla no tiene este filtro).
+Arreglo: el `WHERE` acepta el ejercicio propio del gimnasio O uno de la biblioteca base, mismo
+criterio que ya usan las pantallas normales de Ejercicios/Rutinas. **Verificado con datos reales,
+antes y después, sobre la misma rutina real de un alumno: de 2 sobre 18 ejercicios con media, a 18
+sobre 18** -- y confirmado además visualmente en el navegador (`/mi-plan/:codigo`, sin sesión):
+los botones "Ver ... / Ver cómo se hace" que antes no aparecían ahora están en los 18 ejercicios.
+
+Build de producción limpio (871 KB el bundle principal). Nada de esto tocó ningún alumno ni pago
+real -- las pruebas de la 1 y la 2 fueron simulaciones (transacción con `ROLLBACK` o cálculo en
+Node); la de la 4 se verificó contra datos reales de gimnasios reales, pero solo leyendo (ninguna
+escritura).
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

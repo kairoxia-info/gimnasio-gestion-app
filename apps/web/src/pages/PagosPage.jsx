@@ -315,10 +315,35 @@ const PagosPage = () => {
     const comprobantesEmitidos = useMemo(() => pagos.filter((p) => Number(p.monto || 0) > 0), [pagos]);
     const activacionesSinCobrar = useMemo(() => pagos.filter((p) => Number(p.monto || 0) <= 0), [pagos]);
 
+    // Pedido de Nalux (09/09/2026): "cada vez que abro algún modal para
+    // cobrarle tengo que rellenar todo de nuevo" -- si el alumno ya tiene un
+    // plan asignado (desde que se lo dio de alta, en Alumnos), se precarga
+    // solo: plan, monto y el período que cubre, sin tener que elegirlo cada
+    // vez. Sigue siendo editable a mano después, como cualquier campo del
+    // formulario.
     const abrirCobro = (alumnoId = '') => {
-        setForm({ ...vacioPago, alumno_id: alumnoId });
+        const alumno = alumnos.find((a) => a.id === alumnoId);
+
+        // "Cubre desde" continúa donde terminó el último pago (no siempre
+        // hoy), para que dos cuotas seguidas no se pisen ni dejen un hueco
+        // sin cubrir en el medio.
+        const ultimoPago = pagos
+            .filter((p) => p.alumno_id === alumnoId && p.periodo_hasta)
+            .sort((a, b) => String(b.periodo_hasta).localeCompare(String(a.periodo_hasta)))[0];
+        let periodoDesde = hoy();
+        if (ultimoPago) {
+            const siguiente = new Date(`${ultimoPago.periodo_hasta}T00:00:00`);
+            siguiente.setDate(siguiente.getDate() + 1);
+            periodoDesde = siguiente.toISOString().slice(0, 10);
+        }
+
+        setForm({ ...vacioPago, alumno_id: alumnoId, periodo_desde: periodoDesde });
         setSinCobrar(false);
         setOpen(true);
+
+        if (alumno?.plan_precio_nombre) {
+            aplicarPlan(alumno.plan_precio_nombre, periodoDesde);
+        }
     };
 
     // Llegar con "?alumno=<id>" (ej. desde el botón "Registrar pago" de la
@@ -352,7 +377,12 @@ const PagosPage = () => {
     // texto libre, p. ej. los "Mensual"/"Trimestral" de ejemplo que siembra
     // create_gimnasio() en minúscula), cae a 30 días como piso razonable en
     // vez de romper el cálculo.
-    const aplicarPlan = (nombrePlan) => {
+    // periodoDesdeBase: por defecto usa form.periodo_desde (elegir el plan a
+    // mano en el modal, con la fecha que ya está cargada), pero abrirCobro()
+    // necesita pasarla explícita -- llama a setForm() y a esta función en el
+    // mismo tick, y form.periodo_desde todavía tendría el valor viejo (el
+    // estado de React no se actualiza en el medio del mismo evento).
+    const aplicarPlan = (nombrePlan, periodoDesdeBase) => {
         const p = planes.find((x) => x.nombre === nombrePlan);
         if (!p) {
             setForm((f) => ({ ...f, plan: nombrePlan }));
@@ -360,7 +390,7 @@ const PagosPage = () => {
         }
         const periodo = periodos.find((x) => x.nombre === p.periodo);
         const dias = Number(periodo?.dias) || 30;
-        const hasta = new Date(`${form.periodo_desde || hoy()}T00:00:00`);
+        const hasta = new Date(`${periodoDesdeBase || form.periodo_desde || hoy()}T00:00:00`);
         hasta.setDate(hasta.getDate() + dias);
 
         setForm((f) => ({
