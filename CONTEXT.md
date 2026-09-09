@@ -3077,6 +3077,39 @@ vigente -> "al_dia" (el cambio pedido); deuda + ya vencido -> "con_deuda"; deuda
 gracia -> "con_deuda"; sin deuda + vigente -> "al_dia" (sin cambios); sin deuda + vencido ->
 "vencido" (sin cambios). Build de producción limpio.
 
+### 09/09/2026 — "Abrí un ejercicio y no tiene para volver atrás" (dos bugs en uno)
+
+Reportado por Nalux probando la pantalla del alumno. Resultaron ser **dos problemas distintos**
+apilados:
+
+**1. La causa de fondo: una copia vieja y duplicada de `tipoDePreview()`.** `MiPlanPage.jsx` tenía
+su PROPIA versión inline de esa función (y de `esArchivoPropio`/`extensionDe`/`EXTENSIONES_*`),
+más estricta que la compartida: exigía que el archivo fuera de nuestro bucket para CUALQUIER
+preview. Como las fotos de la biblioteca base son externas
+(`raw.githubusercontent.com` -- 500 de los 504 ejercicios con media, ver migración 0041), nunca
+calificaban: el botón caía al link externo y abría una **pestaña nueva del navegador**, que en el
+celular es justamente donde "no hay vuelta atrás". Lo llamativo: **este mismo síntoma ya se había
+corregido el 03/09** en `lib/mediaEjercicio.js` (el comentario ahí lo dice textual: *"que halla una
+vuelta atras para volver a la app"*), permitiendo que cualquier imagen se muestre en el modal sin
+importar el host -- pero esa corrección **nunca llegó a la pantalla del alumno**, porque esta no
+importaba el archivo compartido, tenía su propia copia. Ahora importa `tipoDePreview` de
+`lib/mediaEjercicio.js` y se borró la copia local.
+
+**2. El modal en sí tampoco tenía salida confiable.** La "X" existía, pero el modal se centraba
+con `flex items-center` sin `overflow`: con una foto alta (la mayoría de las fotos de ejercicio son
+verticales) el conjunto superaba el alto de la pantalla y el centrado empujaba el encabezado --
+con la "X" -- por ARRIBA del borde visible, sin forma de scrollear hasta ahí. Se le pusieron
+**tres salidas** en vez de una: overlay con `items-start` + `overflow-y-auto` (mismo patrón que el
+`Modal` de `ui-kit.jsx`), clic afuera de la tarjeta (acá no hay formulario que perder, a diferencia
+del Modal general), y tecla Escape. El alto máximo de la foto/video bajó de 70vh a 60vh para que
+entre cómodo con el encabezado.
+
+**Verificado en el navegador** (pantalla pública, sin sesión, en tamaño celular 375x812) sobre la
+rutina real de un alumno: el botón pasó de ser un `link` externo a un `button` que abre el modal;
+la "X" queda visible a 57px del borde superior; y las cuatro conductas medidas por DOM -- cierra
+con la X, cierra al tocar afuera, cierra con Escape, y **no** se cierra al tocar la propia foto
+(para no cerrarlo sin querer mientras se la mira).
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

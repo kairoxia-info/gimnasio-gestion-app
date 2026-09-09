@@ -23,6 +23,7 @@ import { aplicarColorGimnasio } from '@/lib/colorTema';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
+import { tipoDePreview } from '@/lib/mediaEjercicio';
 
 // El campo "descanso" de cada ejercicio es texto libre que escribe el profe
 // ("90 s", "1:30", "2 min", "60"...), no un número — así que hay que
@@ -59,32 +60,19 @@ const formatearMmSs = (segundos) => {
     return `${m}:${String(s).padStart(2, '0')}`;
 };
 
-// "Ver cómo se hace" abría el archivo en otra pestaña — en el celular, sin
-// una barra de pestañas visible, el alumno no encontraba cómo volver a la
-// app (reportado por Nalux). Para un archivo propio (subido al bucket
-// ejercicios-media, mismo criterio que EjerciciosPage.jsx) alcanza con
-// mostrarlo adentro en un modal — nunca hay pestaña de la que volver. Un
-// link externo (YouTube, Vimeo...) sigue abriendo aparte, porque no hay
-// forma simple y confiable de embeberlo acá.
-const EXTENSIONES_VIDEO = ['mp4', 'webm', 'mov'];
-const EXTENSIONES_IMAGEN = ['png', 'jpg', 'jpeg', 'webp'];
-
-const esArchivoPropio = (url) => (url || '').includes('/object/public/ejercicios-media/');
-
-const extensionDe = (url) => {
-    const limpio = (url || '').split('?')[0].split('#')[0];
-    const m = limpio.match(/\.([a-z0-9]+)$/i);
-    return m ? m[1].toLowerCase() : null;
-};
-
-// null = no hay preview posible acá (el botón usa el link externo tal cual).
-const tipoDePreview = (mediaUrl) => {
-    if (!esArchivoPropio(mediaUrl)) return null;
-    const ext = extensionDe(mediaUrl);
-    if (EXTENSIONES_VIDEO.includes(ext)) return 'video';
-    if (EXTENSIONES_IMAGEN.includes(ext)) return 'imagen';
-    return null;
-};
+// Bug reportado por Nalux (09/09/2026): "abrí un ejercicio para verlo y no
+// tiene para sacarlo o volver atrás". Esta pantalla tenía su PROPIA copia,
+// vieja, de tipoDePreview() -- exigía que el archivo fuera de nuestro bucket
+// para cualquier preview (imagen o video), así que una foto de la biblioteca
+// base (media_url externa, raw.githubusercontent.com -- son 500 de los 504
+// ejercicios con media, ver migración 0041) nunca calificaba y el botón caía
+// al link externo de siempre, abriendo una pestaña nueva sin vuelta atrás
+// visible en el celular. Esto YA se había corregido en `lib/mediaEjercicio.js`
+// (03/09/2026, mismo síntoma, "que haya una vuelta atrás para volver a la
+// app") -- cualquier imagen entra al modal sin importar el host, solo el
+// video sigue exigiendo ser archivo propio -- pero la corrección nunca
+// llegó acá porque esta pantalla no importaba ese archivo compartido, tenía
+// su propia copia desactualizada. Se reemplaza por el import.
 
 // Beep sintetizado con Web Audio API en vez de un archivo de audio: cero
 // peso extra, cero request, y funciona igual sin conexión. Envuelto en
@@ -239,43 +227,67 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
 // en proporción a ese ancho fijo. Así el navegador elige el tamaño que
 // entra a la vez en el ancho de la tarjeta Y en el alto de la pantalla,
 // tanto en celular como en computadora — funciona igual para fotos.
-const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => (
-    <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Demostración de ${nombre}`}
-        className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-    >
-        <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between gap-3 px-1">
-                <p className="truncate text-lg font-bold">{nombre}</p>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Cerrar demostración"
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border"
-                >
-                    <X className="h-5 w-5" aria-hidden="true" />
-                </button>
+// Bug reportado por Nalux (09/09/2026): "abrí un ejercicio para verlo y no
+// tiene para sacarlo o volver atrás". La "X" sí existía, pero este modal se
+// centraba con flex sin overflow -- con una foto de ejercicio alta (algo muy
+// común, la mayoría son fotos verticales) más el encabezado, el conjunto
+// superaba el alto de la pantalla y el centrado por flex empujaba el
+// encabezado (con la "X") por ARRIBA del borde visible, sin ninguna forma de
+// scrollear para alcanzarlo. Se agregan tres salidas, no solo una: overflow
+// vertical en el fondo (si no entra, se puede scrollear hasta el encabezado),
+// clic afuera de la tarjeta (acá no hay ningún formulario que perder, a
+// diferencia del Modal de ui-kit.jsx) y la tecla Escape.
+const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => {
+    useEffect(() => {
+        const alPresionar = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', alPresionar);
+        return () => window.removeEventListener('keydown', alPresionar);
+    }, [onClose]);
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Demostración de ${nombre}`}
+            onClick={onClose}
+            className="mp-no-imprimir fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10"
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg rounded-3xl border border-border bg-card p-4 shadow-xl"
+            >
+                <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                    <p className="truncate text-lg font-bold">{nombre}</p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Cerrar demostración"
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border"
+                    >
+                        <X className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                </div>
+                {tipo === 'video' ? (
+                    <video
+                        src={url}
+                        controls
+                        autoPlay
+                        playsInline
+                        className="mx-auto h-auto max-h-[60vh] w-auto max-w-full rounded-2xl bg-black"
+                    />
+                ) : (
+                    <img
+                        src={url}
+                        alt={`Demostración de ${nombre}`}
+                        className="mx-auto h-auto max-h-[60vh] w-auto max-w-full rounded-2xl"
+                    />
+                )}
             </div>
-            {tipo === 'video' ? (
-                <video
-                    src={url}
-                    controls
-                    autoPlay
-                    playsInline
-                    className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-2xl bg-black"
-                />
-            ) : (
-                <img
-                    src={url}
-                    alt={`Demostración de ${nombre}`}
-                    className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-2xl"
-                />
-            )}
         </div>
-    </div>
-);
+    );
+};
 
 // Mensajes literales que devuelve la RPC ver_plan_por_codigo (migración
 // 0006_acceso_alumno_por_codigo.sql). Comparamos con una regex laxa en vez
