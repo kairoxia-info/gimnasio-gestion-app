@@ -1,18 +1,40 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
-import { Btn, ErrorBox, Field, Input, Select } from '@/components/ui-kit';
-import { money } from '@/lib/format';
+import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
 
+// Alcance definido por Nalux (09/09/2026): el alumno carga SOLO sus datos
+// personales. El plan, el objetivo, las observaciones de salud y la foto los
+// completa el profesor al darlo de alta -- por eso acá no hay selector de
+// plan (lo había antes) ni subida de foto (exigiría abrir una puerta de
+// escritura pública al Storage; se decidió que la suba el profesor).
 const vacio = {
     nombre: '',
+    apellido: '',
+    dni: '',
     contacto: '',
     email: '',
-    plan: '',
+    fecha_nacimiento: '',
+    contacto_emergencia: '',
+};
+
+// La edad no se guarda como campo aparte: se calcula desde la fecha de
+// nacimiento (tener las dos cosas guardadas invita a que se contradigan).
+// Acá se muestra al tipear, solo como confirmación visual de que la fecha
+// cargada es la correcta.
+const edadDesde = (fecha) => {
+    if (!fecha) return null;
+    const nac = new Date(`${fecha}T00:00:00`);
+    if (Number.isNaN(nac.getTime())) return null;
+    const hoyFecha = new Date();
+    let edad = hoyFecha.getFullYear() - nac.getFullYear();
+    const mes = hoyFecha.getMonth() - nac.getMonth();
+    if (mes < 0 || (mes === 0 && hoyFecha.getDate() < nac.getDate())) edad -= 1;
+    return edad >= 0 && edad < 120 ? edad : null;
 };
 
 const UnirsePage = () => {
@@ -20,31 +42,29 @@ const UnirsePage = () => {
     const [searchParams] = useSearchParams();
     const nombreGimnasio = searchParams.get('g') || '';
 
-    const [planes, setPlanes] = useState([]);
     const [form, setForm] = useState(vacio);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [enviado, setEnviado] = useState(false);
 
-    useEffect(() => {
-        if (!codigo) return;
-        supabase
-            .rpc('listar_planes_para_codigo', { p_codigo: codigo })
-            .then(({ data }) => setPlanes(data || []))
-            .catch(() => setPlanes([]));
-    }, [codigo]);
+    const edad = edadDesde(form.fecha_nacimiento);
 
     const onSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         try {
+            // nombre y apellido van juntos a alumnos.nombre: la tabla tiene una
+            // sola columna para el nombre completo, y así se ve igual que un
+            // alumno cargado a mano por el profesor.
             const { error: err } = await supabase.rpc('join_gimnasio_por_codigo', {
                 p_codigo: codigo,
-                p_nombre: form.nombre.trim(),
+                p_nombre: `${form.nombre.trim()} ${form.apellido.trim()}`.trim(),
                 p_contacto: form.contacto.trim() || null,
                 p_email: form.email.trim() || null,
-                p_plan_precio_nombre: form.plan || null,
+                p_dni: form.dni.trim() || null,
+                p_fecha_nacimiento: form.fecha_nacimiento || null,
+                p_contacto_emergencia: form.contacto_emergencia.trim() || null,
             });
             if (err) throw err;
             setEnviado(true);
@@ -115,26 +135,39 @@ const UnirsePage = () => {
                     </div>
                 ) : (
                     <form onSubmit={onSubmit} className="space-y-4">
-                        <Field label="Nombre y apellido">
-                            <Input
-                                value={form.nombre}
-                                onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                                placeholder="Juan Pérez"
-                                required
-                                autoComplete="name"
-                            />
-                        </Field>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Field label="Nombre">
+                                <Input
+                                    value={form.nombre}
+                                    onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                                    placeholder="Juan"
+                                    required
+                                    autoComplete="given-name"
+                                />
+                            </Field>
 
-                        <Field label="Teléfono / contacto">
+                            <Field label="Apellido">
+                                <Input
+                                    value={form.apellido}
+                                    onChange={(e) => setForm({ ...form, apellido: e.target.value })}
+                                    placeholder="Pérez"
+                                    required
+                                    autoComplete="family-name"
+                                />
+                            </Field>
+                        </div>
+
+                        <Field label="Teléfono">
                             <Input
                                 value={form.contacto}
                                 onChange={(e) => setForm({ ...form, contacto: e.target.value })}
                                 placeholder="11 2345-6789"
+                                required
                                 autoComplete="tel"
                             />
                         </Field>
 
-                        <Field label="Correo">
+                        <Field label="Correo (opcional)">
                             <Input
                                 type="email"
                                 value={form.email}
@@ -144,15 +177,33 @@ const UnirsePage = () => {
                             />
                         </Field>
 
-                        <Field label="Plan que te interesa">
-                            <Select value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })}>
-                                <option value="">Sin preferencia</option>
-                                {planes.map((p) => (
-                                    <option key={p.nombre} value={p.nombre}>
-                                        {p.nombre} — {money(p.precio)} / {p.periodo}
-                                    </option>
-                                ))}
-                            </Select>
+                        <Field label="DNI (opcional)">
+                            <Input
+                                value={form.dni}
+                                onChange={(e) => setForm({ ...form, dni: e.target.value })}
+                                placeholder="30111222"
+                                inputMode="numeric"
+                            />
+                        </Field>
+
+                        <Field label="Fecha de nacimiento (opcional)">
+                            <Input
+                                type="date"
+                                value={form.fecha_nacimiento}
+                                onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })}
+                                autoComplete="bday"
+                            />
+                            {edad !== null && (
+                                <span className="text-xs text-muted-foreground">{edad} años</span>
+                            )}
+                        </Field>
+
+                        <Field label="Contacto de emergencia (opcional)">
+                            <Input
+                                value={form.contacto_emergencia}
+                                onChange={(e) => setForm({ ...form, contacto_emergencia: e.target.value })}
+                                placeholder="Nombre y teléfono"
+                            />
                         </Field>
 
                         {error && <ErrorBox>{error}</ErrorBox>}

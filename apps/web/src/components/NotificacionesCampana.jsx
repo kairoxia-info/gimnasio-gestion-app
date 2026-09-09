@@ -29,6 +29,12 @@ const NotificacionesCampana = () => {
     const [abierto, setAbierto] = useState(false);
     const [alumnos, setAlumnos] = useState([]);
     const [pagos, setPagos] = useState([]);
+    // Alumnos que se anotaron solos por el link/QR y todavía están sin
+    // completar (migración 0038, pedido de Nalux 09/09/2026: "avisar al
+    // profesor cuando se da de alta el alumno que tiene que llenar lo que
+    // falta"). Van arriba de todo en la campanita: son lo único que llega
+    // "nuevo" desde afuera, el resto son estados que el profesor ya conoce.
+    const [nuevos, setNuevos] = useState([]);
     const [config, setConfig] = useState(null);
     const cajaRef = useRef(null);
 
@@ -36,10 +42,15 @@ const NotificacionesCampana = () => {
         Promise.all([
             listAll('alumnos', { filters: { activo: true }, sort: 'nombre' }),
             listAll('pagos'),
+            listAll('alumnos', {
+                filters: { activo: false, pendiente: true, origen: 'autorregistro' },
+                sort: 'nombre',
+            }),
         ])
-            .then(([a, p]) => {
+            .then(([a, p, n]) => {
                 setAlumnos(a);
                 setPagos(p);
+                setNuevos(n);
             })
             .catch(() => {
                 // Silencioso a propósito: la campanita es un plus, no algo
@@ -102,23 +113,30 @@ const NotificacionesCampana = () => {
         navigate(`/alumnos/${alumnoId}?tab=pagos`);
     };
 
+    // A la ficha sin pestaña puntual: lo que hay que hacer con un alumno
+    // recién anotado es completarle los datos, no cobrarle.
+    const irACompletar = (alumnoId) => {
+        setAbierto(false);
+        navigate(`/alumnos/${alumnoId}`);
+    };
+
+    const total = nuevos.length + items.length;
+
     return (
         <div ref={cajaRef} className="relative">
             <button
                 type="button"
                 onClick={() => setAbierto((v) => !v)}
                 aria-label={
-                    items.length > 0
-                        ? `Notificaciones: ${items.length} alumno(s) necesitan atención`
-                        : 'Notificaciones'
+                    total > 0 ? `Notificaciones: ${total} alumno(s) necesitan atención` : 'Notificaciones'
                 }
                 aria-expanded={abierto}
                 className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground transition hover:border-primary active:scale-[0.96]"
             >
                 <Bell className="h-5 w-5" strokeWidth={1.8} />
-                {items.length > 0 && (
+                {total > 0 && (
                     <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-primary-foreground">
-                        {items.length > 9 ? '9+' : items.length}
+                        {total > 9 ? '9+' : total}
                     </span>
                 )}
             </button>
@@ -137,17 +155,39 @@ const NotificacionesCampana = () => {
                         <p className="font-display text-sm font-bold uppercase tracking-wide">
                             Necesitan atención
                         </p>
-                        {items.length > 0 && (
-                            <span className="text-xs font-semibold text-muted-foreground">{items.length}</span>
+                        {total > 0 && (
+                            <span className="text-xs font-semibold text-muted-foreground">{total}</span>
                         )}
                     </div>
 
-                    {items.length === 0 ? (
+                    {total === 0 ? (
                         <p className="px-4 py-6 text-center text-sm text-muted-foreground">
                             Todos los alumnos activos están al día. Buen trabajo.
                         </p>
                     ) : (
                         <ul className="max-h-80 divide-y divide-border overflow-y-auto">
+                            {nuevos.map((alumno) => (
+                                <li key={alumno.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => irACompletar(alumno.id)}
+                                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-secondary"
+                                    >
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-sm font-semibold">
+                                                {alumno.nombre}
+                                            </span>
+                                            <span className="block text-xs text-muted-foreground">
+                                                Se anotó solo -- faltan sus datos
+                                            </span>
+                                        </span>
+                                        <span className="shrink-0 rounded-full border border-current px-2.5 py-1 text-xs font-semibold text-warn">
+                                            Nuevo
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+
                             {items.slice(0, 8).map(({ alumno, estado }) => (
                                 <li key={alumno.id}>
                                     <button

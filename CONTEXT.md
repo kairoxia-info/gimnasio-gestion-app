@@ -2698,6 +2698,58 @@ queda como una opción que se prende a propósito desde Configuración, no como 
 defecto. **La tarjeta "Alta de alumnos por link" se mantiene** -- funciona y está probada, solo
 que ahora apagada salvo que alguien la quiera.
 
+### 09/09/2026 — Autorregistro con alcance acotado + aviso al profesor (migración 0038)
+
+Tercera vuelta sobre el mismo tema, y la definitiva. Después de haber pedido sacar la tarjeta de
+autorregistro, Nalux cerró el alcance real: **sí** quiere que los alumnos se anoten solos con el
+link/QR que les pasa el profesor, pero cargando **solo sus datos personales** -- "al resto lo carga
+después el profesor si lo da de alta" -- y con un **aviso al profesor** de que hay alguien nuevo
+esperando que le completen los datos.
+
+**Decisiones tomadas con ella antes de escribir código:**
+- **Foto en el autorregistro: no.** Subir archivos sin sesión exigiría abrir una puerta de
+  escritura pública al Storage (riesgo real: alguien con el link llenando el bucket de basura). La
+  sube el profesor después desde la ficha, que ya funciona. Eligió esta opción sobre habilitarla.
+- **Plan: se saca del formulario público.** Lo asigna el profesor al dar de alta.
+- **Edad: no es un campo.** Se calcula desde la fecha de nacimiento y se muestra al tipear;
+  guardar las dos cosas invita a que se contradigan.
+- Se le aclaró un malentendido: el alumno **no se loguea con correo**, entra con el
+  usuario/contraseña que le crea el profesor. El correo es un dato de contacto más.
+
+**Migración 0038** -- `join_gimnasio_por_codigo()` recreada (DROP + CREATE, no REPLACE: cambia la
+firma, y una sobrecarga conviviendo dejaría a PostgREST sin saber cuál llamar; ojo que el DROP se
+lleva los GRANT, se re-otorgan al final). Ahora recibe DNI, fecha de nacimiento y contacto de
+emergencia, y ya no recibe plan. Se mantuvieron intactas todas las defensas de la 0004 (topes de
+largo, rate-limit por gimnasio, `activo=false` siempre, gimnasio_id resuelto solo por el código,
+error genérico). Incluye además:
+
+- **Arreglo de un bug latente:** un alumno autorregistrado quedaba con `activo=false` **y
+  `pendiente=false`** (la función nunca seteaba `pendiente`, que tiene DEFAULT false). Como
+  `estadoAlumno()` lee `activo ? activo : pendiente ? pendiente : inactivo`, ese alumno aparecía
+  como **"Inactivo"** -- el balde de los que se dieron de baja -- y **no salía en el filtro
+  "Pendientes"** que usa el profesor. Ahora entra con `pendiente = true`.
+- **Revierte la migración 0037**, que había apagado el autorregistro partiendo de que no se iba a
+  usar. Vuelve a `DEFAULT true` y se reactiva en los gimnasios existentes.
+
+**Frontend:**
+- `UnirsePage.jsx`: formulario nuevo -- Nombre y Apellido (separados, se unen en `alumnos.nombre`,
+  que es una sola columna), Teléfono, y como opcionales Correo, DNI, Fecha de nacimiento (con la
+  edad calculada al lado) y Contacto de emergencia. Sin selector de plan.
+- `NotificacionesCampana.jsx`: la campanita ahora también trae los alumnos con
+  `activo=false, pendiente=true, origen='autorregistro'` y los muestra **arriba de todo**, con
+  badge "Nuevo" y el texto "Se anotó solo -- faltan sus datos", llevando a la ficha (sin pestaña,
+  porque lo que hay que hacer ahí es completar datos, no cobrar). El contador de la campana suma
+  los dos grupos.
+
+**Verificado:** la RPC probada con `SET LOCAL role = 'anon'` dentro de una transacción con
+`ROLLBACK` (nada quedó en la base) -- todos los campos guardan bien y el estado visible calculado
+da `pendiente`, no `inactivo`. El formulario probado en el navegador en `localhost:3001` con el
+código real de "Full GYM NT": rinde los 7 campos, sin plan, y la edad se calcula sola (31 años
+para 18/04/1995). Build de producción limpio.
+
+**Falta probar en vivo con Nalux:** anotarse de verdad desde el celular con el QR y confirmar que
+aparece la notificación en la campanita del profesor.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
