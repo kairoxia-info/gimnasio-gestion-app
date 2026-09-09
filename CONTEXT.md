@@ -3038,6 +3038,45 @@ real -- las pruebas de la 1 y la 2 fueron simulaciones (transacción con `ROLLBA
 Node); la de la 4 se verificó contra datos reales de gimnasios reales, pero solo leyendo (ninguna
 escritura).
 
+### 09/09/2026 — "Con deuda" pasa a depender de la fecha, no solo del saldo
+
+Nalux, probando en vivo la tanda anterior: "Alumno 1 Nadia" (Mi GYM FIT) aparecía "Con deuda"
+aunque su período pagado cubre hasta el 04/10 -- un mes después de la fecha de hoy. Su duda:
+*"tendría que ser pasada esa fecha, si no paga se le asigna con deuda"*.
+
+**Investigado antes de cambiar nada:** el pago en cuestión era del 04/09, método "Sin cobrar",
+$0 cobrados, $30.000 marcados como adeudados, cubriendo hasta el 04/10 -- la opción de
+"activación sin cobrar" del modal de Pagos. Confirmado con Nalux que era una prueba vieja, no una
+alumna real debiendo plata; se borró ese pago (tenía comprobante N.º 2 asignado -- queda un salto
+en la numeración, esperable al borrar algo que nunca debió tener número).
+
+**La regla en sí también se confirmó que había que cambiarla.** `estadoCuota()`
+(`lib/format.js`) hacía ganar "Con deuda" sobre cualquier otra cosa apenas hubiera
+`monto_adeudado > 0`, sin mirar si el período seguía vigente -- a propósito, según el comentario
+viejo ("alguien puede tener el período al día y aun así deber plata"). Nalux prefirió que, mientras
+el período pagado en parte siga vigente, se vea igual que cualquier otro ("Al día"/"Próximo") -- la
+deuda recién pasa a ser el ESTADO mostrado una vez que ya venció `periodo_hasta` (esté o no todavía
+en el plazo de gracia) y sigue sin saldarse. El monto en sí (`monto_adeudado`) sigue visible aparte
+en el "Debe $X" de cada fila, en Pagos y en la ficha, sin importar el estado -- no se esconde nada,
+solo cambió cuál badge gana.
+
+**Efecto secundario real, encontrado al revisar quién más usa `estadoCuota()`:** la baja
+automática de alumnos (`AppLayout.jsx`, política "dar de baja", migración 0020) da de baja a
+cualquiera en estado `vencido` **o** `con_deuda` -- con la regla vieja, una alumna cubierta hasta
+el mes que viene pero con saldo cargado se daba de baja igual, de una, sin haber llegado siquiera
+a la fecha de vencimiento. Con el arreglo, eso ya no pasa: recién se la da de baja si de verdad
+venció y sigue debiendo.
+
+**A propósito NO se tocó** `segmentoNotificacion()` (audiencia de Avisos) ni el `v_segmento` de
+`ver_plan_por_codigo()` en SQL -- están documentadas como deliberadamente distintas de
+`estadoCuota()`, espejadas entre sí para que el contador "X/Y leyeron" no mienta. Cambiar
+`estadoCuota()` no las afecta.
+
+**Verificado con una simulación en Node** de la función completa, los 5 casos: deuda + período
+vigente -> "al_dia" (el cambio pedido); deuda + ya vencido -> "con_deuda"; deuda + vencido pero en
+gracia -> "con_deuda"; sin deuda + vigente -> "al_dia" (sin cambios); sin deuda + vencido ->
+"vencido" (sin cambios). Build de producción limpio.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

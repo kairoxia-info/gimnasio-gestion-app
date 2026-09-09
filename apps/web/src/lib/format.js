@@ -163,13 +163,24 @@ export const estadoDesdeVencimiento = (hasta) => {
 //   pago   = último pago del alumno (el de periodo_hasta más alto), o nada.
 //   config = { dias_gracia_cuota, dias_aviso_vencimiento } del gimnasio.
 //
-// El orden importa: "con deuda" gana sobre las fechas, porque alguien puede
-// tener el período al día y aun así deber plata (pagó una parte, o se lo
-// activó sin cobrar).
+// "Con deuda" pasó a depender de la fecha (pedido de Nalux, 09/09/2026, con
+// un caso real: una alumna con saldo pendiente pero cubierta hasta un mes
+// después aparecía "Con deuda" ya mismo -- "tendría que ser pasada esa
+// fecha, si no paga se le asigna con deuda"). Antes ganaba siempre que
+// hubiera monto_adeudado, sin mirar el período. Ahora: mientras el período
+// sigue vigente (al día / próximo), se ve igual que cualquier otro aunque
+// tenga un saldo cargado -- la deuda (el monto en sí) sigue visible aparte,
+// en el "Debe $X" de cada fila; recién se convierte en el ESTADO "Con deuda"
+// una vez que ya pasó periodo_hasta (venció, esté o no todavía en el plazo
+// de gracia) y ese saldo sigue sin saldarse.
 export const estadoCuota = (pago, config) => {
     if (!pago) return 'sin_cuota';
-    if (Number(pago.monto_adeudado || 0) > 0) return 'con_deuda';
-    if (!pago.periodo_hasta) return 'vencido';
+
+    if (!pago.periodo_hasta) {
+        // Sin fecha de cobertura no hay con qué comparar -- la deuda (si la
+        // hay) es la única señal posible.
+        return Number(pago.monto_adeudado || 0) > 0 ? 'con_deuda' : 'vencido';
+    }
 
     const gracia = Number(config?.dias_gracia_cuota || 0);
     const aviso = Number(config?.dias_aviso_vencimiento ?? 7);
@@ -178,8 +189,10 @@ export const estadoCuota = (pago, config) => {
     const inicio = new Date(`${hoy()}T00:00:00`).getTime();
     const dias = Math.round((fin - inicio) / 86400000);
 
-    if (dias < -gracia) return 'vencido';
-    if (dias < 0) return 'en_gracia'; // venció pero todavía está en el plazo extra
+    const debe = Number(pago.monto_adeudado || 0) > 0;
+
+    if (dias < -gracia) return debe ? 'con_deuda' : 'vencido';
+    if (dias < 0) return debe ? 'con_deuda' : 'en_gracia'; // ya venció (en gracia o no) y sigue sin saldarse
     if (dias <= aviso) return 'proximo';
     return 'al_dia';
 };
