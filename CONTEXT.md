@@ -2750,6 +2750,30 @@ para 18/04/1995). Build de producción limpio.
 **Falta probar en vivo con Nalux:** anotarse de verdad desde el celular con el QR y confirmar que
 aparece la notificación en la campanita del profesor.
 
+### 09/09/2026 — El botón de copiar el link fallaba en silencio
+
+Reportado por Nalux probando el QR en la ficha del alumno: "aprieto pero no se copia, ni me dice
+nada".
+
+**Causa, diagnosticada en vivo (no adivinada):** se armó un botón de prueba temporal en la página
+pública y se lo hizo clic con un clic real del navegador, midiendo los dos caminos por separado.
+Resultado: `navigator.clipboard.writeText()` devuelve **NotAllowedError** en el navegador embebido
+donde Nalux estaba probando (el panel del propio Claude Code), incluso con un clic legítimo de por
+medio -- ese contexto bloquea la API moderna por política de permisos. Y el código original tenía
+esa llamada adentro de un `try/catch` que se tragaba el error sin hacer nada: ni copiaba, ni
+avisaba. En un Chrome normal probablemente funcionaba, por eso no se había notado.
+
+**Arreglo** -- nuevo `lib/copiar.js` con `copiarAlPortapapeles()`, usado por los dos botones (la
+ficha del alumno y la tarjeta de Configuración):
+- Intenta la API moderna y, si falla o no existe, cae al método viejo (textarea temporal +
+  `document.execCommand('copy')`), que no pide permisos. **Verificado en el mismo navegador donde
+  fallaba: el respaldo devuelve ok.**
+- Devuelve true/false para que quien llama pueda avisar en pantalla.
+- El botón ahora dice **"Copiar" / "Copiado"** con texto, no solo un ícono que cambiaba 2 segundos
+  (parte del "ni me dice nada" era eso), y si los dos caminos fallan muestra un aviso explícito.
+- El link pasó de `<span>` a un `<input readOnly>` que se autoselecciona al tocarlo, para poder
+  copiarlo a mano como último recurso.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

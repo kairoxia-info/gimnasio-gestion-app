@@ -9,6 +9,7 @@ import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
+import { copiarAlPortapapeles } from '@/lib/copiar';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
@@ -1340,7 +1341,9 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     // solo abre la pantalla de login. Cada alumno igual necesita su propio
     // usuario/contraseña (arriba) para entrar una vez ahí.
     const [qrDataUrl, setQrDataUrl] = useState('');
-    const [linkCopiado, setLinkCopiado] = useState(false);
+    // '' | 'ok' | 'error' -- el aviso se muestra en pantalla, no solo como un
+    // cambio de ícono: Nalux reportó que apretaba y "no me dice nada".
+    const [linkCopiado, setLinkCopiado] = useState('');
 
     const abrirForm = () => {
         setUsuarioForm(alumno?.usuario || '');
@@ -1397,14 +1400,9 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     }, []);
 
     const copiarLink = async () => {
-        try {
-            await navigator.clipboard.writeText(urlIngreso);
-            setLinkCopiado(true);
-            setTimeout(() => setLinkCopiado(false), 2000);
-        } catch (_) {
-            // Sin fallback: el link también queda visible como texto para
-            // seleccionar a mano si el navegador bloquea el clipboard.
-        }
+        const ok = await copiarAlPortapapeles(urlIngreso);
+        setLinkCopiado(ok ? 'ok' : 'error');
+        setTimeout(() => setLinkCopiado(''), 2500);
     };
 
     const linkWhatsapp = creado
@@ -1440,18 +1438,36 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             Para que el alumno escanee y entre directo
                         </p>
                         <div className="mt-2 flex items-center gap-2">
-                            <span className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs">
-                                {urlIngreso}
-                            </span>
-                            <button
+                            <input
+                                readOnly
+                                value={urlIngreso}
+                                onFocus={(e) => e.target.select()}
+                                aria-label="Link para entrar"
+                                className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-primary"
+                            />
+                            <Btn
                                 type="button"
+                                variant="ghost"
+                                className="shrink-0 px-3 py-1.5 text-xs"
                                 onClick={copiarLink}
-                                aria-label="Copiar link"
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary hover:text-primary"
                             >
-                                {linkCopiado ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
-                            </button>
+                                {linkCopiado === 'ok' ? (
+                                    <>
+                                        <Check className="h-3.5 w-3.5 text-ok" /> Copiado
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-3.5 w-3.5" /> Copiar
+                                    </>
+                                )}
+                            </Btn>
                         </div>
+                        {linkCopiado === 'error' && (
+                            <p className="mt-2 text-xs text-warn">
+                                El navegador no dejó copiar. Tocar el link de arriba (se selecciona solo) y
+                                copiarlo a mano.
+                            </p>
+                        )}
                     </div>
                 </div>
             )}

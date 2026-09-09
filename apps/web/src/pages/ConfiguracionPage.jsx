@@ -5,6 +5,7 @@ import { AlertTriangle, Check, CheckCircle2, Copy, ImagePlus, RefreshCw } from '
 import AppLayout from '@/components/AppLayout';
 import { Btn, Card, ErrorBox, Field, Input, Loading, Modal, PasswordInput, Textarea } from '@/components/ui-kit';
 import { updateRec } from '@/lib/data';
+import { copiarAlPortapapeles } from '@/lib/copiar';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
@@ -122,7 +123,8 @@ const ConfiguracionPage = () => {
     const [autorregistroSaving, setAutorregistroSaving] = useState(false);
     const [autorregistroError, setAutorregistroError] = useState('');
     const [qrDataUrl, setQrDataUrl] = useState('');
-    const [linkCopiado, setLinkCopiado] = useState(false);
+    // '' | 'ok' | 'error' -- ver lib/copiar.js: antes fallaba mudo.
+    const [linkCopiado, setLinkCopiado] = useState('');
     const [confirmandoRegenerar, setConfirmandoRegenerar] = useState(false);
     const [regenerando, setRegenerando] = useState(false);
     const [regenerarError, setRegenerarError] = useState('');
@@ -154,13 +156,9 @@ const ConfiguracionPage = () => {
     }, [linkAutorregistro]);
 
     const copiarLinkAutorregistro = async () => {
-        try {
-            await navigator.clipboard.writeText(linkAutorregistro);
-            setLinkCopiado(true);
-            setTimeout(() => setLinkCopiado(false), 2000);
-        } catch (_) {
-            setAutorregistroError('No se pudo copiar. Se puede seleccionar el link a mano.');
-        }
+        const ok = await copiarAlPortapapeles(linkAutorregistro);
+        setLinkCopiado(ok ? 'ok' : 'error');
+        setTimeout(() => setLinkCopiado(''), 2500);
     };
 
     const toggleAutorregistro = async () => {
@@ -600,23 +598,37 @@ const ConfiguracionPage = () => {
                                 />
                             )}
                             <div className="min-w-0 flex-1 space-y-3">
-                                <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-3 py-2.5">
-                                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-                                        {linkAutorregistro}
-                                    </span>
-                                    <button
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        readOnly
+                                        value={linkAutorregistro}
+                                        onFocus={(e) => e.target.select()}
+                                        aria-label="Link para anotarse"
+                                        className="min-w-0 flex-1 truncate rounded-xl border border-border bg-secondary px-3 py-2.5 font-mono text-xs text-foreground outline-none focus:border-primary"
+                                    />
+                                    <Btn
                                         type="button"
+                                        variant="ghost"
+                                        className="shrink-0 px-3 py-2 text-xs"
                                         onClick={copiarLinkAutorregistro}
-                                        aria-label="Copiar link"
-                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary hover:text-primary"
                                     >
-                                        {linkCopiado ? (
-                                            <Check className="h-4 w-4 text-ok" />
+                                        {linkCopiado === 'ok' ? (
+                                            <>
+                                                <Check className="h-3.5 w-3.5 text-ok" /> Copiado
+                                            </>
                                         ) : (
-                                            <Copy className="h-4 w-4" />
+                                            <>
+                                                <Copy className="h-3.5 w-3.5" /> Copiar
+                                            </>
                                         )}
-                                    </button>
+                                    </Btn>
                                 </div>
+                                {linkCopiado === 'error' && (
+                                    <p className="text-xs text-warn">
+                                        El navegador no dejó copiar. Tocar el link de arriba (se selecciona
+                                        solo) y copiarlo a mano.
+                                    </p>
+                                )}
                                 <p className="text-xs text-muted-foreground">
                                     Se puede compartir por WhatsApp o imprimir el QR. Al escanearlo o abrirlo, el
                                     alumno completa su nombre y queda pendiente de aprobación -- no hace falta
