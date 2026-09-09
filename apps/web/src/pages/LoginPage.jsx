@@ -8,6 +8,7 @@ import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 import AuthBackdrop from '@/components/AuthBackdrop';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
+import { validarContrasena } from '@/lib/validacionPassword';
 
 const traducirError = (err, modo) => {
     const msg = err?.message || '';
@@ -36,9 +37,19 @@ const LoginPage = () => {
 
     const onSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
         setError('');
         setInfo('');
+        // Pedido de Nalux (09/09/2026): al menos una mayúscula. Solo se exige
+        // al REGISTRARSE, no al iniciar sesión -- una cuenta ya creada antes
+        // de esta regla no tiene por qué dejar de poder entrar.
+        if (!isLogin) {
+            const errorContrasena = validarContrasena(password, 6);
+            if (errorContrasena) {
+                setError(errorContrasena);
+                return;
+            }
+        }
+        setLoading(true);
         try {
             if (isLogin) {
                 const { error: err } = await signIn(email.trim(), password);
@@ -166,6 +177,11 @@ const LoginPage = () => {
                                 className="pl-9"
                             />
                         </div>
+                        {!isLogin && (
+                            <span className="text-xs text-muted-foreground">
+                                Mínimo 6 caracteres, con al menos una mayúscula.
+                            </span>
+                        )}
                     </Field>
 
                     {isLogin && (

@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, PasswordInput } from '@/components/ui-kit';
 import AuthBackdrop from '@/components/AuthBackdrop';
+import { validarContrasena } from '@/lib/validacionPassword';
 
 const ResetPasswordPage = () => {
     const { user, loading: authLoading, updatePassword, signOut } = useAuth();
@@ -26,8 +27,9 @@ const ResetPasswordPage = () => {
     const onSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        if (password.length < 6) {
-            setError('La contraseña debe tener al menos 6 caracteres.');
+        const errorContrasena = validarContrasena(password, 6);
+        if (errorContrasena) {
+            setError(errorContrasena);
             return;
         }
         if (password !== confirm) {
@@ -111,6 +113,9 @@ const ResetPasswordPage = () => {
                                     className="pl-9"
                                 />
                             </div>
+                            <span className="text-xs text-muted-foreground">
+                                Mínimo 6 caracteres, con al menos una mayúscula.
+                            </span>
                         </Field>
                         <Field label="Confirmar contraseña">
                             <div className="relative">

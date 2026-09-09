@@ -10,6 +10,7 @@ import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/Ruti
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { copiarAlPortapapeles } from '@/lib/copiar';
+import { validarContrasena } from '@/lib/validacionPassword';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
@@ -1357,8 +1358,17 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
 
     const guardar = async (e) => {
         e.preventDefault();
-        setGuardando(true);
         setError('');
+        // Pedido de Nalux (09/09/2026): al menos una mayúscula, también acá.
+        // Se valida del lado del cliente para el aviso inmediato, y también
+        // adentro de crear_acceso_alumno() (migración nueva) por si algún día
+        // se llama a la RPC directo, sin pasar por este formulario.
+        const errorContrasena = validarContrasena(contrasenaForm, 4);
+        if (errorContrasena) {
+            setError(errorContrasena);
+            return;
+        }
+        setGuardando(true);
         try {
             const { error: err } = await supabase.rpc('crear_acceso_alumno', {
                 p_alumno_id: alumno.id,
@@ -1400,12 +1410,16 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     // deja de funcionar.
     //
     // Sin caracteres ambiguos (l/1/I, 0/O) a propósito: esto se dicta o se
-    // tipea a mano en el celular de alguien.
+    // tipea a mano en el celular de alguien. La primera letra va en mayúscula
+    // para cumplir la regla nueva de Nalux (09/09/2026: "que al menos tenga
+    // una mayúscula") sin perder lo fácil de dictar -- "mayúscula, dos
+    // minúsculas, tres números" se explica en una frase.
     const generarContrasena = () => {
-        const letras = 'abcdefghjkmnpqrstuvwxyz';
+        const letrasMayus = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+        const letrasMinus = 'abcdefghjkmnpqrstuvwxyz';
         const numeros = '23456789';
         const al = (set) => set[Math.floor(Math.random() * set.length)];
-        return `${al(letras)}${al(letras)}${al(letras)}${al(numeros)}${al(numeros)}${al(numeros)}`;
+        return `${al(letrasMayus)}${al(letrasMinus)}${al(letrasMinus)}${al(numeros)}${al(numeros)}${al(numeros)}`;
     };
 
     const reenviarConContrasenaNueva = async () => {
@@ -1680,6 +1694,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                                 required
                                 minLength={4}
                             />
+                            <span className="text-xs text-muted-foreground">Con al menos una mayúscula.</span>
                         </Field>
                     </div>
                     {error && <ErrorBox>{error}</ErrorBox>}

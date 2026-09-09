@@ -2877,6 +2877,46 @@ Como la contraseña vieja sigue sin ser recuperable (bcrypt, ver las dos entrada
 `crear_acceso_alumno()` con una contraseña de ese mismo formato (`abc234`) seguido de
 `iniciar_sesion_alumno()` con esa contraseña -- login correcto. Nada persistió.
 
+### 09/09/2026 — Contraseñas: exigir al menos una mayúscula (profesor y alumno)
+
+Pedido de Nalux: *"hay que exigir la profe la contraseña, que al menos tenga una mayúscula cuando
+cree el login de los alumnos, tanto el profe cuando cree la cuenta"*.
+
+Nuevo helper compartido `lib/validacionPassword.js` (`validarContrasena(contrasena, minLength)`,
+`tieneMayuscula()`), para no repetir la regla y el mensaje en cada formulario. Se mantiene el
+mínimo de caracteres que ya tenía cada uno (6 profesor, 4 alumno) y se le suma la mayúscula.
+
+**Aplicado en 3 lugares del lado del cliente**, cada uno con una leyenda debajo del campo
+("Mínimo X caracteres, con al menos una mayúscula") para que se sepa la regla antes de
+equivocarse, no recién al enviar:
+- `LoginPage.jsx`: solo al **registrarse**, no al iniciar sesión -- una cuenta creada antes de esta
+  regla no tiene por qué dejar de poder entrar.
+- `ResetPasswordPage.jsx`: al definir una contraseña nueva.
+- `AlumnoPage.jsx` (`AccesoAlumno`): al crear o cambiar el usuario/contraseña de un alumno.
+
+**Reforzado también del lado de la base** (migración 0039): `crear_acceso_alumno()` ahora rechaza
+con `RAISE EXCEPTION` una contraseña sin mayúscula, además de la validación del cliente -- es una
+función llamable por RPC directo por cualquier profesor autenticado (RLS ya la limita a su propio
+gimnasio; no es `SECURITY DEFINER`), así que la validación del formulario sola no alcanzaba como
+única barrera.
+
+**Se encontró de paso un problema real:** el generador automático de contraseñas del botón "Enviar
+con contraseña nueva" (agregado en la entrada anterior) armaba 3 minúsculas + 3 números -- **sin
+ninguna mayúscula**, así que hubiera chocado con esta regla nueva. Se corrigió para que la primera
+letra salga en mayúscula (sigue siendo fácil de dictar: "mayúscula, dos minúsculas, tres números").
+
+**Verificado:**
+- La UI de registro, en el navegador: sin mayúscula muestra el error y no llega a crear la cuenta;
+  con mayúscula, `validarContrasena()` devuelve `''` (válida).
+- La RPC, dentro de una transacción con `ROLLBACK`: sin mayúscula rechazada
+  (`crear_acceso_alumno()` lanza la excepción), con mayúscula acepta y el login del alumno
+  funciona. Nada persistió.
+
+Pendiente, sin urgencia: Supabase Auth tiene su propia política de fuerza de contraseña
+configurable desde el Dashboard (mismo lugar que "Confirm email"), que reforzaría esto también del
+lado del servidor para el signup del profesor. No se tocó porque la validación del cliente ya
+cubre el pedido; se puede sumar después si Nalux quiere ese refuerzo extra.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
