@@ -2669,9 +2669,34 @@ De paso se encontró y se borró un gimnasio "Full GYM NT" duplicado y huérfano
 profesor asociado, sin alumnos) que había quedado de las pruebas del día anterior -- basura de
 prueba, no el que Nalux está usando.
 
-Pendiente para probar en vivo con Nalux (en su compu y en el celular, viendo la ficha del alumno
-en tiempo real): escanear el QR real / abrir el link, completar el autorregistro como un alumno
-de verdad, y confirmar que aparece como "Pendiente" en Alumnos.
+### 09/09/2026 — Corrección: el QR que Nalux pedía era otro (login del alumno, no autorregistro)
+
+Al ir a probar en vivo lo de arriba, Nalux frenó: **"el profesor se tiene que encargar de
+registrarlos"**. Resultó que su pedido original ("un link y un QR en donde el alumno escanee... y
+lo mande al login de alumno **ya creado su perfil** (el profe ya le tuvo que haber creado el
+login)") no era el autorregistro público -- era otra cosa, y se había construido la función
+equivocada.
+
+**Lo que efectivamente quería:** el profesor sigue creando cada alumno y su usuario/contraseña a
+mano (como ya se hacía, vía `crear_acceso_alumno()`, migración 0028); lo que faltaba era
+simplemente **un QR/link fijo a la pantalla de login del alumno (`/alumno`)**, para no tener que
+dictar la URL: o se lo escanea en el momento con el celular del alumno, o se copia y se manda por
+WhatsApp.
+
+**Implementado en `AlumnoPage.jsx`**, dentro de la tarjeta "Acceso del alumno" que ya existía: un
+QR de `{origin}/alumno` + el link con botón de copiar, visibles solo cuando ese alumno ya tiene
+usuario creado (si no, no habría con qué entrar del otro lado). Es el **mismo QR para todos los
+alumnos del gimnasio** -- no identifica a nadie, solo abre el login; cada alumno igual necesita su
+propio usuario/contraseña. Convive con el botón "Enviar por WhatsApp" que ya estaba (ese sí es por
+alumno, porque incluye la contraseña recién creada en texto plano, la única vez que se puede ver).
+
+**Migración 0037, consecuencia de la misma charla:** `gimnasios.autorregistro_activo` tenía
+`DEFAULT true` desde la migración 0004, así que todo gimnasio nuevo nacía con el autorregistro
+público prendido sin que ningún profesor lo hubiera elegido (nunca se había notado porque hasta hoy
+no existía la pantalla para verlo). Pasó a `DEFAULT false` y se apagó en los gimnasios existentes:
+queda como una opción que se prende a propósito desde Configuración, no como el comportamiento por
+defecto. **La tarjeta "Alta de alumnos por link" se mantiene** -- funciona y está probada, solo
+que ahora apagada salvo que alguien la quiera.
 
 ### Por qué esta entrada existe
 

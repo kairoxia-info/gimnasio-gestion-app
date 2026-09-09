@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
+import QRCode from 'qrcode';
+import { ArrowLeft, Check, Copy, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -1333,6 +1334,13 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const [creado, setCreado] = useState(null);
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
     const [quitando, setQuitando] = useState(false);
+    // QR/link fijo hacia /alumno (pedido de Nalux, 09/09/2026: "que el alumno
+    // escanee... o el profe copie el link y se lo mande por WhatsApp"). Es el
+    // MISMO QR para cualquier alumno del gimnasio -- no identifica a nadie,
+    // solo abre la pantalla de login. Cada alumno igual necesita su propio
+    // usuario/contraseña (arriba) para entrar una vez ahí.
+    const [qrDataUrl, setQrDataUrl] = useState('');
+    const [linkCopiado, setLinkCopiado] = useState(false);
 
     const abrirForm = () => {
         setUsuarioForm(alumno?.usuario || '');
@@ -1380,6 +1388,25 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     };
 
     const urlIngreso = `${window.location.origin}/alumno`;
+
+    useEffect(() => {
+        QRCode.toDataURL(urlIngreso, { width: 160, margin: 1 })
+            .then(setQrDataUrl)
+            .catch(() => setQrDataUrl(''));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const copiarLink = async () => {
+        try {
+            await navigator.clipboard.writeText(urlIngreso);
+            setLinkCopiado(true);
+            setTimeout(() => setLinkCopiado(false), 2000);
+        } catch (_) {
+            // Sin fallback: el link también queda visible como texto para
+            // seleccionar a mano si el navegador bloquea el clipboard.
+        }
+    };
+
     const linkWhatsapp = creado
         ? `https://wa.me/?text=${encodeURIComponent(
               `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}! Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`,
@@ -1393,6 +1420,41 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                 Usuario y contraseña para que entre a ver su rutina y su plan desde el celular, en{' '}
                 <span className="font-mono">{urlIngreso}</span>.
             </p>
+
+            {/* QR/link fijo hacia la pantalla de login (mismo para cualquier
+                alumno del gimnasio): para escanear en el momento con el
+                celular del alumno, o copiarlo y mandarlo aparte -- solo
+                tiene sentido mostrarlo si ya hay un usuario/contraseña
+                creado para entrar del otro lado. */}
+            {(alumno?.usuario || creado) && (
+                <div className="mt-4 flex items-center gap-4 rounded-xl border border-border bg-secondary p-4">
+                    {qrDataUrl && (
+                        <img
+                            src={qrDataUrl}
+                            alt="Código QR para entrar"
+                            className="h-24 w-24 shrink-0 rounded-lg border border-border bg-white p-1.5"
+                        />
+                    )}
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-foreground">
+                            Para que el alumno escanee y entre directo
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs">
+                                {urlIngreso}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={copiarLink}
+                                aria-label="Copiar link"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary hover:text-primary"
+                            >
+                                {linkCopiado ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {creado && (
                 <div className="mt-4 space-y-3 rounded-xl border border-ok bg-ok/10 p-4">
