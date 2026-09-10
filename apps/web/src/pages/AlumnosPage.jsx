@@ -40,7 +40,7 @@ const AYUDA_ESTADOS = [
     ['activo', 'Está entrenando. Cuenta en las estadísticas y aparece en pagos/asistencia.'],
     [
         'pendiente',
-        'Cargado pero todavía no arrancó — se autorregistró por QR y falta aprobarlo, o lo marcaste así a propósito (ej. "se anotó pero no vino todavía").',
+        'Cargado pero todavía no arrancó — se anotó solo con el link de invitación y falta aprobarlo, o lo marcaste así a propósito (ej. "se anotó pero no vino todavía").',
     ],
     ['inactivo', 'Dado de baja, no entrena más por ahora.'],
 ];
@@ -630,8 +630,9 @@ const AlumnosPage = () => {
                             })}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                            &ldquo;Pendiente&rdquo; sirve tanto para alguien que se autorregistró por QR (falta
-                            aprobarlo) como para alguien cargado manualmente que todavía no arrancó.
+                            &ldquo;Pendiente&rdquo; sirve tanto para alguien que se anotó solo con el link de
+                            invitación (falta aprobarlo) como para alguien cargado manualmente que todavía no
+                            arrancó.
                         </span>
                     </Field>
                     <div className="flex justify-end gap-2 pt-2">

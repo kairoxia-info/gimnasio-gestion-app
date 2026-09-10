@@ -3195,6 +3195,25 @@ se pidió. El contenido pasa a ocupar todo el ancho (hasta `max-w-[110rem]`), co
 (`lg:px-10`). Lint y build de producción limpios; no se pudo probar en el navegador (está detrás
 de login) -- queda para que Nalux lo confirme.
 
+### 10/09/2026 — Dos pulidas: texto viejo de "QR" y el ojito que faltaba
+
+De la lista de cosas menores que quedaban:
+
+- **AvisosPage.jsx**: decía "El alumno queda como 'leído' cuando abre su link del QR y toca
+  Entendido" -- de cuando el alumno entraba a ver su plan por un link/QR sin login. Ahora entra
+  con usuario y contraseña (migración 0028); el texto pasa a "cuando entra a ver su plan y toca
+  Entendido".
+- **AlumnosPage.jsx** (ayuda del estado "Pendiente", en la lista y en el modal): "se autorregistró
+  por QR" -> "se anotó solo con el link de invitación" -- más preciso (se puede por link o por QR)
+  y consistente con cómo lo dice la campanita ("Se anotó solo"). Mismo ajuste en un comentario de
+  DashboardPage.jsx.
+- **AlumnoPage.jsx** (`AccesoAlumno`, formulario "Crear usuario y contraseña"): el campo de
+  contraseña era un `<Input>` de texto plano -- la única caja de contraseña de la app sin ocultar.
+  Pasó a `PasswordInput` (con ojito), con la leyenda "El ojito la muestra para dictarla" para el
+  caso de uso real (el profesor la dicta al alumno).
+
+Lint y build limpios.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

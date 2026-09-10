@@ -300,7 +300,7 @@ const AvisosPage = () => {
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    El alumno queda como &quot;leído&quot; cuando abre su link del QR y toca
+                                    El alumno queda como &quot;leído&quot; cuando entra a ver su plan y toca
                                     &quot;Entendido&quot;.
                                 </p>
                             </div>

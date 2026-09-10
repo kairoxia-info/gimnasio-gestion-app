@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Check, Copy, MessageCircle, Pencil, Plus, Printer, Trash2, UserRound } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
+import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, PasswordInput, Select, Textarea } from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
@@ -1738,15 +1738,17 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             />
                         </Field>
                         <Field label="Contraseña">
-                            <Input
+                            <PasswordInput
                                 value={contrasenaForm}
                                 onChange={(e) => setContrasenaForm(e.target.value)}
                                 placeholder="Mínimo 8 caracteres"
                                 required
                                 minLength={8}
+                                autoComplete="new-password"
                             />
                             <span className="text-xs text-muted-foreground">
-                                Mínimo 8 caracteres, con al menos una mayúscula.
+                                Mínimo 8 caracteres, con al menos una mayúscula. El ojito la muestra para
+                                dictarla.
                             </span>
                         </Field>
                     </div>

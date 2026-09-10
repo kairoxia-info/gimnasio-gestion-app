@@ -139,8 +139,9 @@ const DashboardPage = () => {
         });
 
         // Mismo criterio que AlumnosPage/AlumnoPage (estadoAlumno() en
-        // format.js): "Pendiente" es tanto autorregistro por QR sin aprobar
-        // como alguien que el profesor marcó pendiente a mano.
+        // format.js): "Pendiente" es tanto el que se anotó solo con el link
+        // de invitación sin aprobar como alguien que el profesor marcó
+        // pendiente a mano.
         const pendientes = alumnos.filter((a) => estadoAlumno(a) === 'pendiente');
 
         // Vencimiento de rutina y plan de comida, mismo criterio de 7 días
