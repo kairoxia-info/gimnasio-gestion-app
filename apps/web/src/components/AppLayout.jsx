@@ -309,6 +309,17 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
     const navigate = useNavigate();
     const { sinConexion, pendientes } = useEstadoOffline();
 
+    // Cerrar el menú con Escape, además de la X / tocar afuera / elegir una
+    // opción -- mismo criterio que el Modal de ui-kit.jsx.
+    useEffect(() => {
+        if (!open) return undefined;
+        const alPresionar = (e) => {
+            if (e.key === 'Escape') setOpen(false);
+        };
+        window.addEventListener('keydown', alPresionar);
+        return () => window.removeEventListener('keydown', alPresionar);
+    }, [open]);
+
     const salir = async () => {
         // Cerrar sesión limpia la cola de sincronización de este celular
         // (AuthContext.jsx) -- si todavía hay algo sin mandar, se perdería.
@@ -398,62 +409,17 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
         };
     }, [profile?.gimnasio_id]);
 
-    const links = (
-        <nav className="flex flex-col gap-1">
-            {NAV.map(({ to, label, icon: Icon }) => (
-                <NavLink
-                    key={to}
-                    to={to}
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                            isActive
-                                ? 'bg-primary text-primary-foreground'
-                                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                        }`
-                    }
-                >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                    {label}
-                </NavLink>
-            ))}
-        </nav>
-    );
-
     return (
         <div className="min-h-screen bg-background">
+            {/* Pedido de Nalux (10/09/2026): "en pantalla grande el menú está
+                fijo y no desplegable, quiero que sea desplegable". Antes la
+                computadora tenía un <aside> permanente que ocupaba espacio
+                siempre; ahora el menú es el mismo cajón desplegable en todos
+                los tamaños -- se abre con el botón de menú, se cierra al
+                elegir una opción, tocar afuera o con la X. Un solo menú en
+                vez de dos, y sin el parpadeo que tendría un sidebar animado
+                (AppLayout se remonta en cada navegación). */}
             <div className="mx-auto flex w-full max-w-[110rem]">
-                {/* Reportado por Nalux (07/09/2026): en la computadora, con la ventana
-                    poco alta (zoom del navegador, laptop de resolución baja, ventana
-                    sin maximizar), no se veían ni el botón "Cerrar sesión" ni la marca
-                    "Gestión GYM Kairox IA". Causa: todo el sidebar era un solo bloque
-                    de alto fijo (h-screen) sin scroll propio -- si el menú de 11 ítems
-                    más el pie no entraban en el alto disponible, lo que sobraba se
-                    cortaba por debajo del borde, sin ninguna forma de llegar ahí (ni la
-                    página scrollea, porque el aside es sticky y queda fijo en la
-                    ventana). Ahora solo el menú del medio tiene scroll propio si hace
-                    falta; el logo arriba y el pie (correo, Cerrar sesión, marca) quedan
-                    siempre fijos y visibles, sin importar cuán baja sea la ventana. */}
-                <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border py-6 lg:flex">
-                    <div className="shrink-0 px-4">
-                        <Link to="/panel" className="mb-8 block px-1">
-                            <GimnasioMark className="h-12" />
-                        </Link>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4">{links}</div>
-                    <div className="shrink-0 space-y-3 px-4 pt-3">
-                        <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-                        <button
-                            type="button"
-                            onClick={salir}
-                            className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                        >
-                            <LogOut className="h-4 w-4" strokeWidth={1.9} /> Cerrar sesión
-                        </button>
-                        <KairoxFooterMark />
-                    </div>
-                </aside>
-
                 <main className="min-w-0 flex-1">
                     <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
                         <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
@@ -461,13 +427,13 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                 type="button"
                                 onClick={() => setOpen(true)}
                                 aria-label="Abrir menú"
-                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border lg:hidden"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border transition hover:border-primary"
                             >
                                 <Menu className="h-5 w-5" />
                             </button>
-                            <div className="min-w-0 lg:hidden">
+                            <Link to="/panel" className="min-w-0">
                                 <GimnasioMark className="h-9" />
-                            </div>
+                            </Link>
                             <div className="ml-auto flex shrink-0 items-center gap-2">
                                 <NotificacionesCampana />
                                 {/* El botón de acción de cada pantalla ("Nuevo alumno",
@@ -526,7 +492,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                 abajo, en vez de un corte seco al lado de una animación nueva. */}
             <AnimatePresence>
                 {open && (
-                    <div className="fixed inset-0 z-50 lg:hidden">
+                    <div className="fixed inset-0 z-50">
                         <motion.div
                             className="absolute inset-0 bg-black/70"
                             onClick={() => setOpen(false)}
@@ -536,14 +502,18 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.2 }}
                         />
+                        {/* Header fijo / menú con scroll propio / pie fijo -- mismo
+                            criterio que tenía el <aside> viejo, para que con la
+                            ventana poco alta no se corten "Cerrar sesión" ni la
+                            marca por debajo del borde. */}
                         <motion.div
-                            className="absolute inset-y-0 left-0 w-72 border-r border-border bg-background px-4 py-6"
+                            className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-border bg-background py-6"
                             initial={{ x: '-100%' }}
                             animate={{ x: 0 }}
                             exit={{ x: '-100%' }}
                             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         >
-                            <div className="mb-6 flex items-center justify-between gap-3">
+                            <div className="mb-6 flex shrink-0 items-center justify-between gap-3 px-4">
                                 <GimnasioMark className="h-10" />
                                 <button
                                     type="button"
@@ -554,15 +524,18 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                            <NavLinksAnimados nav={NAV} onNavegar={() => setOpen(false)} />
-                            <button
-                                type="button"
-                                onClick={salir}
-                                className="mt-6 flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium"
-                            >
-                                <LogOut className="h-4 w-4" /> Cerrar sesión
-                            </button>
-                            <div className="mt-3">
+                            <div className="min-h-0 flex-1 overflow-y-auto px-4">
+                                <NavLinksAnimados nav={NAV} onNavegar={() => setOpen(false)} />
+                            </div>
+                            <div className="shrink-0 space-y-3 px-4 pt-4">
+                                <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                                <button
+                                    type="button"
+                                    onClick={salir}
+                                    className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                >
+                                    <LogOut className="h-4 w-4" /> Cerrar sesión
+                                </button>
                                 <KairoxFooterMark />
                             </div>
                         </motion.div>

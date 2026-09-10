@@ -3172,6 +3172,29 @@ Contra: al guardar el cambio, el profesor queda en la lista, no de vuelta en la 
 -- es lo mismo que pasa al editar desde la lista normalmente, y desde ahí se vuelve a la ficha con
 un click. Build limpio.
 
+### 10/09/2026 — El menú de la computadora ahora es desplegable
+
+Pedido de Nalux: "en pantalla grande el menú está fijo y no desplegable, quiero que sea
+desplegable".
+
+La computadora tenía un `<aside>` permanente (256px, siempre visible); el celular ya tenía un
+cajón desplegable animado (`NavLinksAnimados`, el del brillo que recorre cada botón). Se unificó:
+**el cajón desplegable es ahora el único menú, en todos los tamaños**. Se sacó el `<aside>`, el
+botón de menú (hamburguesa) y la marca del gimnasio dejan de estar ocultos en `lg` y se ven
+siempre en el encabezado, y al cajón se le agregó el header/scroll/pie fijo que tenía el `<aside>`
+(para que con la ventana poco alta no se corten "Cerrar sesión" ni la marca), más el correo del
+profesor y cierre con Escape.
+
+Por qué un cajón y no un sidebar colapsable con transición de ancho: `AppLayout` se remonta en
+cada navegación (cada pantalla lo envuelve, no hay layout persistente a nivel de rutas), así que
+animar el ancho del sidebar se vería como un parpadeo en cada click. El cajón, cerrado por
+defecto, no tiene ese problema -- solo anima cuando el profesor lo abre a propósito.
+
+Contra: en la computadora el menú ahora es un click en vez de estar siempre a la vista. Es lo que
+se pidió. El contenido pasa a ocupar todo el ancho (hasta `max-w-[110rem]`), con más aire lateral
+(`lg:px-10`). Lint y build de producción limpios; no se pudo probar en el navegador (está detrás
+de login) -- queda para que Nalux lo confirme.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
