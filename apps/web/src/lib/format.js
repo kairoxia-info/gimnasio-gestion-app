@@ -142,23 +142,16 @@ export const ESTADOS_ALUMNO = {
 
 export const estadoAlumno = (a) => (a.activo ? 'activo' : a.pendiente ? 'pendiente' : 'inactivo');
 
-export const estadoDesdeVencimiento = (hasta) => {
-    if (!hasta) return 'vencido';
-    const fin = new Date(String(hasta).slice(0, 10) + 'T00:00:00').getTime();
-    const dias = Math.round((fin - Date.now()) / 86400000);
-    if (dias < 0) return 'vencido';
-    if (dias <= 7) return 'proximo';
-    return 'al_dia';
-};
-
 // Estado de cuota completo, con la configuración de vencimientos del gimnasio
-// (migración 0013). Reemplaza a estadoDesdeVencimiento() en Pagos, Dashboard y
-// la ficha del alumno.
+// (migración 0013). Es la fuente de verdad de "¿quién debe?" en TODAS las
+// pantallas del profesor: Pagos, Dashboard, la ficha del alumno y la
+// campanita. (Antes DashboardPage usaba una función aparte de 3 estados que
+// ignoraba la gracia y los saldos pendientes -- mostraba el mismo alumno
+// distinto que el resto; se unificó el 09/09/2026).
 //
-// NO se toca estadoDesdeVencimiento() ni segmentoNotificacion(): la segunda
-// está espejada en SQL (ver_plan_por_codigo) y desincronizarlas haría mentir
-// al contador de audiencia de los avisos. Esta función es para la parte
-// operativa (¿quién debe?), no para segmentar avisos.
+// NO se usa para segmentar avisos: segmentoNotificacion() (más abajo) está
+// espejada en SQL (ver_plan_por_codigo) y desincronizarlas haría mentir al
+// contador de audiencia de los avisos.
 //
 //   pago   = último pago del alumno (el de periodo_hasta más alto), o nada.
 //   config = { dias_gracia_cuota, dias_aviso_vencimiento } del gimnasio.
@@ -236,12 +229,11 @@ export const SEGMENTOS_NOTIFICACION = {
 // contador que ve el profesor ("X/Y leyeron") o el selector de audiencia al
 // crear un aviso van a mentir sobre a quién le llega de verdad.
 //
-// A propósito NO es lo mismo que estadoDesdeVencimiento() (arriba): esa
-// función es la lógica vieja de DashboardPage/PagosPage, que mete
-// "sin pagos" y "con deuda" dentro de 'vencido' sin distinguirlos -- acá hace
-// falta la distinción fina porque son segmentos de audiencia reales
-// ("mandale un aviso de bienvenida a quien nunca cargó una cuota" no es lo
-// mismo que "recordale a un atrasado").
+// A propósito NO es lo mismo que estadoCuota() (arriba): esta distingue
+// "sin cuota" (nunca pagó) de "vencido"/"con deuda" porque son segmentos de
+// audiencia reales ("mandale un aviso de bienvenida a quien nunca cargó una
+// cuota" no es lo mismo que "recordale a un atrasado"), y además usa el
+// "<= 7" hardcodeado en vez de la config, para no desincronizarse del SQL.
 // Último pago de un alumno, mismo criterio que usa el SQL de
 // ver_plan_por_codigo() (ORDER BY periodo_hasta DESC NULLS LAST, created_at
 // DESC LIMIT 1): el de periodo_hasta más reciente, y ante empate el creado
@@ -275,9 +267,7 @@ export const segmentoNotificacion = (alumno, pagos) => {
     // Días de calendario (fecha contra fecha, sin componente de hora) -- igual
     // que el SQL (periodo_hasta - CURRENT_DATE, ambos DATE). Se usa hoy()
     // (arriba, basado en toISOString) en vez de Date.now() a propósito: acá
-    // importa el día calendario, no el instante exacto -- Date.now() es lo
-    // que usa estadoDesdeVencimiento() y es justo la fuente de la pequeña
-    // discrepancia documentada en la migración SQL.
+    // importa el día calendario, no el instante exacto.
     const fin = new Date(String(pago.periodo_hasta).slice(0, 10) + 'T00:00:00').getTime();
     const inicio = new Date(`${hoy()}T00:00:00`).getTime();
     const dias = Math.round((fin - inicio) / 86400000);

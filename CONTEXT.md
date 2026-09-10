@@ -3132,6 +3132,29 @@ haya terminado) antes de abrir el modal. Se agregó `loading` a su array de depe
 una vez al montar (no hace nada, `loading` está en `true`) y otra vez cuando la carga termina,
 esta vez con los datos ya poblados y el `?alumno=` todavía en la URL. Build de producción limpio.
 
+### 10/09/2026 — El Panel ahora usa el mismo estado de cuota que el resto de la app
+
+De la lista de pendientes que quedó al cerrar la tanda de ayer: `DashboardPage.jsx` era la última
+pantalla que calculaba el estado de cuota con `estadoDesdeVencimiento()` -- una función de 3
+estados (`al_dia`/`proximo`/`vencido`) que **ignora los días de gracia del gimnasio y los saldos
+pendientes**. Pagos, la ficha del alumno y la campanita ya usaban `estadoCuota()` (con la config).
+El mismo alumno podía verse "Vencido" en el Panel y "En gracia" o "Con deuda" en Pagos -- y con el
+cambio de ayer ("Con deuda" por fecha) la diferencia se notaba más.
+
+**Cambios:**
+- `DashboardPage.jsx`: pide la fila de `gimnasios` (días de gracia / aviso), igual que
+  Pagos/ConfiguracionPage, y pasa a `estadoCuota(pago, config)` en los tres lugares donde usaba la
+  función vieja (contadores al día / por vencer / atrasados, lista "Atención requerida", y el label
+  por fila). `estadoCuota()` tolera `pago` undefined (devuelve `sin_cuota`) -- antes el Panel
+  metía al que no tenía ningún pago dentro de `vencido`; ahora se ve "Sin cuota", igual que en
+  Pagos. Verificado con los 6 alumnos activos reales de "Mi GYM FIT": los contadores dan igual
+  (3 al día / 0 por vencer / 3 sin cuota), y los 3 sin pago pasan de decir "Vencido" a decir
+  "Sin cuota" en la lista -- que es lo que ya mostraba el resto de la app.
+- `estadoDesdeVencimiento()` quedó sin usar en ningún lado (era su único llamador) -- se borró de
+  `lib/format.js` y se limpiaron los comentarios que la mencionaban. `segmentoNotificacion()` (la
+  otra función de estado, para segmentar avisos) NO se tocó: sigue espejada con el SQL de
+  `ver_plan_por_codigo()` a propósito.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

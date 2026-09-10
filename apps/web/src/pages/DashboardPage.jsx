@@ -6,7 +6,8 @@ import AppLayout from '@/components/AppLayout';
 import { Card, Empty, Loading } from '@/components/ui-kit';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
-import { ESTADOS_PAGO, estadoAlumno, estadoDesdeVencimiento, fmtFecha, fmtMes, money } from '@/lib/format';
+import { useAuth } from '@/contexts/AuthContext';
+import { ESTADOS_PAGO, estadoAlumno, estadoCuota, fmtFecha, fmtMes, money } from '@/lib/format';
 
 // Carga diferida: saca recharts (~100 KB) del bundle principal. El gráfico
 // está más abajo de lo que se ve al entrar al panel, así que no tiene por
@@ -26,6 +27,7 @@ const cargarIngresosMensuales = () =>
         });
 
 const DashboardPage = () => {
+    const { profile } = useAuth();
     const [state, setState] = useState({
         loading: true,
         alumnos: [],
@@ -35,6 +37,24 @@ const DashboardPage = () => {
         planesAlimentacion: [],
         ingresosMensuales: [],
     });
+    // Config de vencimientos (días de gracia / de aviso) -- vive en gimnasios
+    // y useAuth().gimnasio solo trae nombre/logo/color. Se pide la fila entera,
+    // igual que Pagos/ConfiguracionPage. Sin esto, el Panel usaba
+    // estadoDesdeVencimiento() (3 estados, ignora la gracia y los saldos
+    // pendientes) y mostraba el MISMO alumno distinto que Pagos/la ficha
+    // -- reportado por Nalux (09/09/2026).
+    const [config, setConfig] = useState(null);
+
+    useEffect(() => {
+        if (!profile?.gimnasio_id) return;
+        supabase
+            .from('gimnasios')
+            .select('*')
+            .eq('id', profile.gimnasio_id)
+            .single()
+            .then(({ data }) => setConfig(data || null))
+            .catch(() => setConfig(null));
+    }, [profile?.gimnasio_id]);
 
     useEffect(() => {
         let alive = true;
@@ -87,8 +107,12 @@ const DashboardPage = () => {
         let proximos = 0;
         let deudores = 0;
         activos.forEach((a) => {
-            const p = ultimoPorAlumno.get(a.id);
-            const estado = p ? estadoDesdeVencimiento(p.periodo_hasta) : 'vencido';
+            // estadoCuota() tolera pago undefined (devuelve 'sin_cuota') y usa
+            // la config del gimnasio -- misma fuente de verdad que Pagos y la
+            // ficha. 'sin_cuota'/'en_gracia'/'vencido'/'con_deuda' cuentan como
+            // deudores, igual que antes contaba el 'vencido' (que incluía al
+            // que no tenía ningún pago).
+            const estado = estadoCuota(ultimoPorAlumno.get(a.id), config);
             if (estado === 'al_dia') alDia += 1;
             else if (estado === 'proximo') proximos += 1;
             else deudores += 1;
@@ -101,7 +125,7 @@ const DashboardPage = () => {
 
         const morosos = activos
             .map((a) => ({ alumno: a, pago: ultimoPorAlumno.get(a.id) }))
-            .filter(({ pago }) => (pago ? estadoDesdeVencimiento(pago.periodo_hasta) !== 'al_dia' : true));
+            .filter(({ pago }) => estadoCuota(pago, config) !== 'al_dia');
 
         // Cumpleaños de hoy: compara mes+día contra la fecha de hoy, ignora el
         // año (fecha_nacimiento es opcional, la mayoría de los alumnos no la
@@ -120,10 +144,9 @@ const DashboardPage = () => {
         const pendientes = alumnos.filter((a) => estadoAlumno(a) === 'pendiente');
 
         // Vencimiento de rutina y plan de comida, mismo criterio de 7 días
-        // que ya usa el estado de cuotas (estadoDesdeVencimiento) — pero acá
-        // NO hay estado por default: sin fecha_fin cargada, ese plan
-        // simplemente no entra en la cuenta (no se inventa un vencimiento
-        // para algo al que nunca se le puso fecha).
+        // que usa el aviso de cuota — pero acá NO hay estado por default: sin
+        // fecha_fin cargada, ese plan simplemente no entra en la cuenta (no
+        // se inventa un vencimiento para algo al que nunca se le puso fecha).
         const hoyMedianoche = new Date();
         hoyMedianoche.setHours(0, 0, 0, 0);
         const diasHasta = (fecha) => {
@@ -216,7 +239,7 @@ const DashboardPage = () => {
             planesPorVencer,
             dejaronDeVenir,
         };
-    }, [alumnos, pagos, asistencias, rutinasAsignadas, planesAlimentacion, ingresosMensuales]);
+    }, [alumnos, pagos, asistencias, rutinasAsignadas, planesAlimentacion, ingresosMensuales, config]);
 
     const stats = [
         { label: 'Alumnos activos', value: resumen.activos, icon: Users, to: '/alumnos' },
@@ -327,7 +350,7 @@ const DashboardPage = () => {
                             ) : (
                                 <ul className="divide-y divide-border">
                                     {resumen.morosos.slice(0, 6).map(({ alumno, pago }) => {
-                                        const estado = pago ? estadoDesdeVencimiento(pago.periodo_hasta) : 'vencido';
+                                        const estado = estadoCuota(pago, config);
                                         return (
                                             <li key={alumno.id} className="flex items-center justify-between gap-3 py-3">
                                                 <Link

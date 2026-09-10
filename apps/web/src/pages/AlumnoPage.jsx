@@ -1222,11 +1222,11 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
 // incompleto: sin pago parcial (monto_adeudado), sin "activar sin cobrar",
 // sin comprobante numerado, adivinaba la duración del período comparando
 // contra 4 strings fijos en vez de usar configuracion_periodos, y calculaba
-// el estado de cuota con estadoDesdeVencimiento() (3 estados, sin la config
-// de días de gracia/aviso del gimnasio) en vez de estadoCuota() (6 estados,
-// la misma que ya usan Pagos/Dashboard/la campanita de notificaciones). Podía
-// mostrar "Atrasado" ACÁ y "Con deuda" en Pagos para el MISMO alumno al mismo
-// tiempo -- inconsistencia real, no cosmética.
+// el estado de cuota con una función aparte de 3 estados (sin la config de
+// días de gracia/aviso del gimnasio) en vez de estadoCuota(), la misma que
+// ya usan Pagos/Dashboard/la campanita. Podía mostrar "Atrasado" ACÁ y
+// "Con deuda" en Pagos para el MISMO alumno al mismo tiempo -- inconsistencia
+// real, no cosmética.
 //
 // Se saca la duplicación: "Registrar pago" manda a Pagos con el alumno ya
 // elegido (reusa ahí todo lo bueno, comprobante incluido) y acá queda una
