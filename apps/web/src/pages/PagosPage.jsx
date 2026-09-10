@@ -346,13 +346,24 @@ const PagosPage = () => {
         }
     };
 
-    // Llegar con "?alumno=<id>" (ej. desde el botón "Registrar pago" de la
-    // ficha del alumno, o desde la campanita de notificaciones) abre el
-    // modal de cobro con ese alumno ya elegido, en vez de obligar a
-    // buscarlo de nuevo en el selector. Se limpia el parámetro apenas se
-    // usa (replace, sin agregar entrada al historial) para que "Cancelar" o
-    // cerrar el modal no lo vuelva a abrir solo si se recarga la página.
+    // Llegar con "?alumno=<id>" (ej. desde el botón "Cobrar" de la ficha del
+    // alumno, o desde la campanita de notificaciones) abre el modal de cobro
+    // con ese alumno ya elegido, en vez de obligar a buscarlo de nuevo en el
+    // selector. Se limpia el parámetro apenas se usa (replace, sin agregar
+    // entrada al historial) para que "Cancelar" o cerrar el modal no lo
+    // vuelva a abrir solo si se recarga la página.
+    //
+    // BUG real encontrado (09/09/2026, reportado por Nalux: "me abre el
+    // modal para que rellene todo de nuevo"): este efecto corre en el mismo
+    // instante que el de arriba dispara cargar() -- pero cargar() es
+    // asíncrono, así que abrirCobro() se ejecutaba con alumnos/pagos/planes/
+    // periodos TODAVÍA vacíos (el array inicial), antes de que la respuesta
+    // del servidor llegara. La precarga del plan (que necesita justo esos
+    // datos) no tenía con qué completarse -- el modal abría en blanco. Ahora
+    // este efecto espera a que `loading` esté en false (cargar() ya
+    // terminó) antes de abrir el modal.
     useEffect(() => {
+        if (loading) return;
         const alumnoId = searchParams.get('alumno');
         if (!alumnoId) return;
         abrirCobro(alumnoId);
@@ -362,7 +373,7 @@ const PagosPage = () => {
             return siguiente;
         }, { replace: true });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+    }, [searchParams, loading]);
 
     // Al elegir un plan se completan precio, descuento, recargo y el período
     // que cubre. Todo sigue siendo editable a mano después.

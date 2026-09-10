@@ -3110,6 +3110,28 @@ la "X" queda visible a 57px del borde superior; y las cuatro conductas medidas p
 con la X, cierra al tocar afuera, cierra con Escape, y **no** se cierra al tocar la propia foto
 (para no cerrarlo sin querer mientras se la mira).
 
+### 09/09/2026 — La precarga del cobro no funcionaba entrando desde la ficha (carrera de carga)
+
+Nalux, probando: "el alumno 4 tiene una deuda y cuando le doy a cobrar me abre el modal para que
+rellene todo de nuevo, ya hablamos de eso". Se revisaron los datos primero -- "Alumno 4" tiene
+plan "Mensual" asignado, y ese plan existe en `configuracion_precios` ($30000) y el período
+"Mensual" (30 días) existe en `configuracion_periodos`. O sea: los datos estaban bien, el bug
+estaba en el código.
+
+**Causa:** el botón "Cobrar" de la ficha navega a `/pagos?alumno=<id>`. En `PagosPage.jsx` hay
+dos `useEffect` de montaje: uno dispara `cargar()` (asíncrono -- trae alumnos/pagos/planes/
+periodos del servidor), el otro lee `?alumno=` y llama a `abrirCobro()`. Los dos corren en el
+mismo instante, pero `cargar()` no bloquea -- así que `abrirCobro()` se ejecutaba con
+`alumnos`/`planes`/`periodos` **todavía en su array vacío inicial**. `alumnos.find(...)` devolvía
+`undefined`, `alumno?.plan_precio_nombre` era `undefined`, y toda la precarga se salteaba en
+silencio -> modal en blanco. Abrir el modal desde adentro de Pagos (con la página ya cargada) sí
+funcionaba, porque ahí los datos ya estaban -- por eso el bug parecía intermitente.
+
+**Arreglo:** el efecto de `?alumno=` ahora espera a que `loading` esté en `false` (que `cargar()`
+haya terminado) antes de abrir el modal. Se agregó `loading` a su array de dependencias; corre
+una vez al montar (no hace nada, `loading` está en `true`) y otra vez cuando la carga termina,
+esta vez con los datos ya poblados y el `?alumno=` todavía en la URL. Build de producción limpio.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba
