@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Info, Plus, Search, UserRound, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -47,6 +47,7 @@ const AYUDA_ESTADOS = [
 
 const AlumnosPage = () => {
     const { profile } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [alumnos, setAlumnos] = useState([]);
     const [planes, setPlanes] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -90,6 +91,28 @@ const AlumnosPage = () => {
     };
 
     useEffect(cargar, []);
+
+    // Llegar con "?editar=<id>" (desde el botón "Editar datos" de la ficha del
+    // alumno, o de la campanita "faltan sus datos") abre directo el modal de
+    // edición de ese alumno -- la ficha no tiene su propio formulario, reusa
+    // este. Espera a que `alumnos` esté cargado; después limpia el parámetro
+    // (replace) para que cerrar el modal no lo reabra al recargar.
+    useEffect(() => {
+        if (loading) return;
+        const editarId = searchParams.get('editar');
+        if (!editarId) return;
+        const alumno = alumnos.find((a) => a.id === editarId);
+        if (alumno) abrirEditar(alumno);
+        setSearchParams(
+            (prev) => {
+                const siguiente = new URLSearchParams(prev);
+                siguiente.delete('editar');
+                return siguiente;
+            },
+            { replace: true },
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, loading, alumnos]);
 
     const limpiarFoto = () => {
         setFotoFile(null);

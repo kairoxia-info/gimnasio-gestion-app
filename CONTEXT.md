@@ -3155,6 +3155,23 @@ cambio de ayer ("Con deuda" por fecha) la diferencia se notaba más.
   otra función de estado, para segmentar avisos) NO se tocó: sigue espejada con el SQL de
   `ver_plan_por_codigo()` a propósito.
 
+### 10/09/2026 — "Editar datos" en la ficha del alumno
+
+Segunda de las dos pendientes: la campanita manda a la ficha del alumno diciendo "faltan sus
+datos", pero la ficha no tenía ningún formulario para cargarlos -- había que volver a la lista y
+usar "Editar" desde ahí.
+
+No se duplicó el formulario (es grande: subida de foto a Storage, validación de plan obligatorio,
+pills de estado). En vez de eso, `AlumnosPage.jsx` ahora abre su modal de edición directo si llega
+con `?editar=<id>` en la URL -- mismo patrón que ya usa Pagos con `?alumno=`, incluyendo la espera
+a que `alumnos` esté cargado antes de abrir (si no, `alumnos.find()` daría undefined). La ficha
+(`AlumnoPage.jsx`) suma un botón "Editar datos" en el encabezado, al lado del badge de estado, que
+linkea a `/alumnos?editar=<id>`.
+
+Contra: al guardar el cambio, el profesor queda en la lista, no de vuelta en la ficha. Aceptable
+-- es lo mismo que pasa al editar desde la lista normalmente, y desde ahí se vuelve a la ficha con
+un click. Build limpio.
+
 ### Por qué esta entrada existe
 
 Al ir a implementar el seguimiento físico con medidas de pierna y cadera, **resultó que ya estaba

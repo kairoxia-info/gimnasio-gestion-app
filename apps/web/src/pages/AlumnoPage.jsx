@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { ArrowLeft, Check, Copy, MessageCircle, Plus, Printer, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, Check, Copy, MessageCircle, Pencil, Plus, Printer, Trash2, UserRound } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
@@ -1896,9 +1896,22 @@ const AlumnoPage = () => {
                                     {alumno.contacto ? ` · ${alumno.contacto}` : ''}
                                 </p>
                             </div>
-                            <Badge className={`ml-auto ${ESTADOS_ALUMNO[estadoAlumno(alumno)].className}`}>
-                                {ESTADOS_ALUMNO[estadoAlumno(alumno)].label}
-                            </Badge>
+                            <div className="ml-auto flex flex-col items-end gap-2">
+                                <Badge className={ESTADOS_ALUMNO[estadoAlumno(alumno)].className}>
+                                    {ESTADOS_ALUMNO[estadoAlumno(alumno)].label}
+                                </Badge>
+                                {/* La ficha no tiene su propio formulario -- "Editar
+                                    datos" abre el mismo modal de la lista (pedido de
+                                    Nalux, 10/09/2026: la campanita manda acá diciendo
+                                    "faltan sus datos" pero no había cómo cargarlos sin
+                                    volver a la lista). */}
+                                <Link
+                                    to={`/alumnos?editar=${id}`}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+                                >
+                                    <Pencil className="h-3.5 w-3.5" /> Editar datos
+                                </Link>
+                            </div>
                         </div>
 
                         {alumno.observaciones_salud && (
