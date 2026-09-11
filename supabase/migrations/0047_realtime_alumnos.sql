@@ -1,0 +1,23 @@
+-- 0047: la campanita del profesor se entera al instante de un autorregistro.
+--
+-- Reportado por Nalux (11/09/2026): "cuando el alumno se registra al profe le
+-- tiene que llegar la notificacion ahi nomas sin recargar la pagina, me paso
+-- ayer que tuve que recargar para que apareciera".
+--
+-- Causa: NotificacionesCampana.jsx carga los datos en un useEffect con [], o
+-- sea una sola vez al montarse. Como cada ruta monta su propio AppLayout, al
+-- navegar entre pantallas se refresca sola -- pero si el profesor se queda
+-- parado en una pantalla, no hay nada que vuelva a preguntar. Y el caso real
+-- es justamente ese: el alumno se anota con el QR parado al lado del profe.
+--
+-- Se agrega `alumnos` a la publicacion de Realtime para que Supabase avise por
+-- websocket cuando entra una fila nueva. RLS sigue aplicando sobre el canal:
+-- la policy alumnos_tenant_isolation (gimnasio_id = get_mi_gimnasio_id()) hace
+-- que cada profesor reciba solo los de SU gimnasio, igual que en una consulta
+-- normal. No hace falta REPLICA IDENTITY FULL: para INSERT alcanza con la
+-- identidad por clave primaria, que es la de fabrica.
+--
+-- La CSP de vercel.json ya contempla `wss://<proyecto>.supabase.co` en
+-- connect-src, asi que el websocket no queda bloqueado en produccion.
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.alumnos;

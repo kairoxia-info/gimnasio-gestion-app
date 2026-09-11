@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { listAll } from '@/lib/data';
@@ -38,7 +38,7 @@ const NotificacionesCampana = () => {
     const [config, setConfig] = useState(null);
     const cajaRef = useRef(null);
 
-    useEffect(() => {
+    const cargar = useCallback(() => {
         Promise.all([
             listAll('alumnos', { filters: { activo: true }, sort: 'nombre' }),
             listAll('pagos'),
@@ -58,6 +58,53 @@ const NotificacionesCampana = () => {
                 // tapar la pantalla real con un ErrorBox por esto.
             });
     }, []);
+
+    useEffect(cargar, [cargar]);
+
+    // Aviso instantáneo de un autorregistro (11/09/2026, reportado por Nalux:
+    // "me pasó ayer que tuve que recargar la página para que apareciera la
+    // notificación"). Navegar entre pantallas ya recargaba la campanita
+    // -- cada ruta monta su propio AppLayout -- pero quedándose quieto en una
+    // pantalla no había nada que volviera a preguntar, y ese es justo el caso
+    // real: el alumno se anota con el QR parado al lado del profesor.
+    //
+    // Se vuelve a pedir todo en vez de insertar la fila que trae el evento:
+    // así el dato mostrado sale siempre de una consulta con RLS, sin depender
+    // de qué venga en el payload. Son dos consultas livianas y esto pasa una
+    // vez cada tanto, no en bucle.
+    //
+    // RLS aplica al canal igual que a una consulta, así que cada profesor
+    // recibe solo los alumnos de SU gimnasio (migración 0047).
+    useEffect(() => {
+        if (!profile?.gimnasio_id) return undefined;
+        const canal = supabase
+            .channel('campana-alumnos')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'alumnos' },
+                cargar,
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(canal);
+        };
+    }, [profile?.gimnasio_id, cargar]);
+
+    // Red de seguridad para cuando el websocket se cortó sin avisar (el wifi
+    // del gimnasio, el celular que se durmió): al volver a la pestaña se
+    // vuelve a preguntar. Sin temporizadores y sin consultas mientras nadie
+    // está mirando.
+    useEffect(() => {
+        const alVolver = () => {
+            if (document.visibilityState === 'visible') cargar();
+        };
+        document.addEventListener('visibilitychange', alVolver);
+        window.addEventListener('focus', alVolver);
+        return () => {
+            document.removeEventListener('visibilitychange', alVolver);
+            window.removeEventListener('focus', alVolver);
+        };
+    }, [cargar]);
 
     // dias_gracia_cuota / dias_aviso_vencimiento viven en gimnasios, pero
     // useAuth().gimnasio solo trae nombre/logo_url/color_principal (ver

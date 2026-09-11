@@ -3798,3 +3798,36 @@ Aplica solo a las cuentas de PROFESOR (las de Supabase Auth). El login del alumn
 Nalux confirmo que el primer intento de guardado **fallo con error** porque tenia tildado el de
 contraseñas filtradas, y que lo destildo para poder guardar. O sea que los valores de arriba son
 los del guardado que SI paso.
+
+### La campanita avisa al instante de un autorregistro (11/09/2026)
+
+Reportado por Nalux: *"cuando el alumno se registra al profe le tiene que llegar la notificacion
+ahi nomas sin recargar la pagina, me paso ayer que tuve que recargar para que apareciera"*.
+
+**Causa:** `NotificacionesCampana.jsx` cargaba los datos en un `useEffect` con `[]`, o sea una
+sola vez al montarse. Aclaracion importante, porque en la conversacion se dijo mal primero:
+navegar entre pantallas **si** la refrescaba (cada ruta monta su propio `AppLayout`, asi que el
+componente se desmonta y se vuelve a montar). Lo que no funcionaba era quedarse quieto en una
+pantalla -- y ese es justo el caso real: el alumno se anota con el QR parado al lado del profesor.
+
+**Solucion, en tres partes:**
+
+1. Migracion `0047`: se agrega `alumnos` a la publicacion de Realtime. RLS sigue aplicando sobre
+   el canal igual que en una consulta, asi que cada profesor recibe solo los de SU gimnasio. No
+   hace falta `REPLICA IDENTITY FULL`: para INSERT alcanza con la identidad por clave primaria.
+2. La campanita se suscribe a los INSERT de `alumnos` y, cuando llega uno, **vuelve a pedir los
+   datos** en vez de insertar lo que trae el payload. Asi lo mostrado sale siempre de una consulta
+   con permisos aplicados, sin depender de que venga en el evento.
+3. Red de seguridad por `visibilitychange` + `focus`: si el websocket se corto sin avisar (wifi
+   del gimnasio, celular dormido), al volver a la pestaña se vuelve a preguntar. Sin
+   temporizadores y sin consultar mientras nadie mira.
+
+La CSP de `vercel.json` ya contemplaba `wss://<proyecto>.supabase.co` en `connect-src` -- se
+habia dejado a proposito al armarla esa misma tarde. Sin eso, esto andaria en local y se romperia
+en produccion.
+
+**Probado en vivo, y la forma de probarlo importa:** con el panel abierto y quieto se creo un
+autorregistro y la campanita paso a 1 sola. Para descartar que lo hubiera disparado el foco de la
+pestaña (que tambien dispara una recarga), se creo un segundo y se verifico **solo con una
+captura de pantalla**, sin ejecutar nada en la pagina ni darle foco: ya marcaba 2. Los dos
+registros de prueba se borraron despues; quedaron los 8 alumnos de siempre.
