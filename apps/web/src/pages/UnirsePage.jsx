@@ -46,11 +46,24 @@ const UnirsePage = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [enviado, setEnviado] = useState(false);
+    // Conformidad para el tratamiento de los datos (11/09/2026). Esta pantalla
+    // es pública: la abre alguien de afuera, sin cuenta, y le pide nombre,
+    // teléfono, DNI, fecha de nacimiento y un contacto de emergencia. Pedirle
+    // todo eso sin decirle para qué es ni que preste conformidad es
+    // exactamente lo que la Ley 25.326 no admite. No se guarda como columna
+    // (la conformidad es de este momento y de este formulario); lo que hace es
+    // que no se pueda enviar sin haberla leído y marcado.
+    const [conforme, setConforme] = useState(false);
 
     const edad = edadDesde(form.fecha_nacimiento);
+    const esMenor = edad !== null && edad < 18;
 
     const onSubmit = async (e) => {
         e.preventDefault();
+        if (!conforme) {
+            setError('Para enviar la solicitud hay que aceptar el uso de los datos.');
+            return;
+        }
         setLoading(true);
         setError('');
         try {
@@ -206,9 +219,47 @@ const UnirsePage = () => {
                             />
                         </Field>
 
+                        {/* Aviso de menores: se muestra solo si la fecha cargada da menos
+                            de 18. No bloquea el envío a propósito -- bloquear solo lograría
+                            que pongan una fecha falsa, y ahí el gimnasio se quedaría sin
+                            saber que el alumno es menor, que es justo el dato que necesita
+                            para pedir la autorización del adulto. */}
+                        {esMenor && (
+                            <div className="rounded-2xl border border-warn/40 bg-warn/5 p-3 text-xs text-muted-foreground">
+                                Según la fecha cargada sos menor de 18 años. Esta solicitud la tiene
+                                que hacer o autorizar tu madre, padre o tutor, y el profesor se lo va
+                                a pedir antes de activar la cuenta.
+                            </div>
+                        )}
+
+                        <div className="rounded-2xl border border-border bg-secondary/40 p-3">
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                                Estos datos los recibe{' '}
+                                <span className="font-semibold text-foreground">
+                                    {nombreGimnasio || 'el gimnasio'}
+                                </span>{' '}
+                                para armar tu ficha, contactarte y administrar tu cuota. No se
+                                comparten con nadie más ni se usan para publicidad. Para ver,
+                                corregir o borrar tus datos en cualquier momento, alcanza con
+                                pedírselo al profesor.
+                            </p>
+                            <label className="mt-3 flex items-start gap-3 text-xs">
+                                <input
+                                    type="checkbox"
+                                    checked={conforme}
+                                    onChange={(e) => {
+                                        setConforme(e.target.checked);
+                                        if (e.target.checked) setError('');
+                                    }}
+                                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                />
+                                <span>Leí lo de arriba y estoy de acuerdo con que se usen mis datos.</span>
+                            </label>
+                        </div>
+
                         {error && <ErrorBox>{error}</ErrorBox>}
 
-                        <Btn type="submit" disabled={loading} className="w-full py-3">
+                        <Btn type="submit" disabled={loading || !conforme} className="w-full py-3">
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar solicitud'}
                         </Btn>
                     </form>

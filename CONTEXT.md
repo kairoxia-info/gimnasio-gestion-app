@@ -3628,3 +3628,61 @@ Lo que **sí** hay que hacer a mano, en el orden en que conviene:
    lado sin HTTPS (por ejemplo una landing), va a dejar de abrir hasta que tenga certificado.
 5. **Mirar la consola en el primer deploy con el dominio nuevo** buscando errores
    `Refused to load/connect`, por si aparece algún origen que la CSP no contemple.
+
+### Consentimiento de datos en el autorregistro + 43 clases de color que no pintaban (11/09/2026)
+
+**El problema:** `/unirse/:codigo` es una pantalla pública. La abre alguien de afuera, sin cuenta,
+y le pide nombre, apellido, teléfono, correo, DNI, fecha de nacimiento y un contacto de
+emergencia — sin decirle para qué son, sin pedirle conformidad, y sin hacer nada distinto si la
+persona resulta ser menor de edad. Es lo que marcó la auditoría de privacidad como el hueco más
+claro frente a la Ley 25.326.
+
+**Lo que se agregó** (`apps/web/src/pages/UnirsePage.jsx`):
+
+1. **Un texto corto antes de enviar**, que dice quién recibe los datos (nombra al gimnasio con su
+   nombre real, que ya venía por la URL), para qué se usan, que no se comparten ni se usan para
+   publicidad, y cómo pedir verlos, corregirlos o borrarlos (pedírselo al profesor, que es el
+   camino práctico real).
+2. **Una casilla obligatoria.** Sin tildarla el botón "Enviar solicitud" queda deshabilitado, y si
+   igual se intenta enviar, avisa. La conformidad NO se guarda como columna: es de este momento y
+   de este formulario, y guardarla daría una falsa sensación de registro legal.
+3. **Aviso de menores**, que aparece solo si la fecha de nacimiento cargada da menos de 18.
+   **A propósito no bloquea el envío:** bloquear solo lograría que pongan una fecha falsa, y ahí
+   el gimnasio se quedaría sin saber que el alumno es menor — que es justo el dato que necesita
+   para pedirle la autorización al adulto. El texto dice que la solicitud la tiene que hacer o
+   autorizar la madre, el padre o el tutor, y que el profesor se lo va a pedir antes de activar.
+
+Probado en vivo: con fecha 10/05/2012 muestra "14 años" y el aviso; el botón arranca
+deshabilitado y se habilita al tildar. No se envió ninguna solicitud de prueba.
+
+**Hallazgo aparte, encontrado armando el recuadro de aviso: 43 usos de clases de color que no
+generaban nada.**
+
+`--ok` y `--warn` estaban definidas en `index.css`, y `.text-ok` / `.text-warn` funcionaban
+porque están escritas a mano ahí. Pero **nunca se declararon como colores en
+`tailwind.config.js`**, y Tailwind solo genera clases de los colores que conoce. Resultado:
+`bg-warn/10`, `border-warn/30`, `bg-ok`, `border-ok` y compañía **no existían en el CSS
+compilado** (verificado: 0 coincidencias), repartidas en 20 + 18 + 2 + 3 = 43 usos. Todos esos
+recuadros de aviso salían sin fondo ni borde, y el puntito naranja de "faltan datos" en la lista
+de Alumnos (`AlumnosPage.jsx:316`, un `bg-warn` sin texto) era directamente invisible.
+
+Se agregaron `ok` y `warn` a `extend.colors`. Confirmado después de compilar: las cuatro clases
+ahora sí existen en el CSS, y en el navegador el recuadro del aviso de menores pinta
+`rgba(249, 133, 31, 0.05)` con borde `rgba(249, 133, 31, 0.4)`, donde antes era transparente.
+Revisadas Alumnos y Asistencia después del cambio: nada se ve raro, solo aparecen los fondos que
+siempre debieron estar.
+
+**Ojo al verificar cosas en `dist/`:** quedan archivos CSS viejos de compilaciones anteriores en
+`dist/apps/web/assets/`, así que un `ls | head -1` puede agarrar el equivocado y hacer creer que
+un cambio no se aplicó (pasó justo con esto). Hay que mirar cuál referencia el `index.html`.
+
+**Lo que sigue pendiente de privacidad, y no se hizo:**
+
+- El mismo texto y casilla en el alta manual que hace el profesor (`AlumnosPage.jsx`), donde
+  también se cargan DNI y datos de salud.
+- Una pantalla de aviso de privacidad enlazada desde el login y desde `/unirse`.
+- Definir formalmente quién es el responsable del tratamiento — si Kairox o cada gimnasio
+  cliente. Eso cambia cómo se redacta un aviso formal y **es una decisión que necesita un
+  abogado**, no algo que se resuelva escribiendo texto en la app. Lo que se agregó ahora es lo
+  mínimo honesto para no estar pidiendo DNI a desconocidos sin decir nada; no reemplaza una
+  política de privacidad hecha en serio.

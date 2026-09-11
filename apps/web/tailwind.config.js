@@ -34,6 +34,17 @@ module.exports = {
 					DEFAULT: 'hsl(var(--destructive))',
 					foreground: 'hsl(var(--destructive-foreground))',
 				},
+				// --ok y --warn ya existían en index.css, pero nunca se habían
+				// declarado acá (11/09/2026). Como Tailwind solo genera las clases
+				// de los colores que conoce, `text-ok` y `text-warn` funcionaban
+				// únicamente porque están escritas a mano en index.css -- pero
+				// `bg-warn/10`, `border-warn/30`, `bg-ok` y compañía NO existían en
+				// el CSS compilado (verificado: 0 coincidencias). O sea que los 43
+				// usos repartidos por la app pintaban fondo y borde transparentes:
+				// los recuadros de aviso salían sin fondo, y el puntito naranja de
+				// "faltan datos" en Alumnos era directamente invisible.
+				ok: 'hsl(var(--ok))',
+				warn: 'hsl(var(--warn))',
 				muted: {
 					DEFAULT: 'hsl(var(--muted))',
 					foreground: 'hsl(var(--muted-foreground))',
