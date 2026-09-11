@@ -14,6 +14,15 @@ import { readFileSync } from 'node:fs';
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const allDeps = Object.keys(pkg.dependencies || {});
 
+// OJO: esto NO sirve para distinguir dev de build (11/09/2026). Vite no
+// exporta NODE_ENV al proceso que evalúa este archivo, así que durante
+// `npm run build` queda `undefined` y por lo tanto isDev da TRUE -- comprobado
+// imprimiéndolo. O sea que todos los plugins del editor de Hostinger Horizons
+// se estaban metiendo también en el build de producción.
+//
+// La forma confiable es el `command` que Vite le pasa a la config: vale
+// 'serve' cuando se levanta el dev server y 'build' cuando se compila. Se usa
+// más abajo, en defineConfig(({ command }) => ...).
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Only the Horizons editor may read this dev server cross-origin. `cors: true`
@@ -367,15 +376,31 @@ logger.error = (msg, options) => {
 	loggerError(msg, options);
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
 	optimizeDeps: {
 		include: allDeps,
 	},
 	customLogger: logger,
 	plugins: [
-		...(isDev ? [inlineEditPlugin(), editModeDevPlugin(), selectionModePlugin(), iframeRouteRestorationPlugin(), sitePagesPlugin(), pocketbaseAuthPlugin(), sessionJournalPlugin()] : []),
+		// `command === 'serve'` es el dev server; 'build' es la compilación. Se usa
+		// esto en vez de isDev porque isDev daba true también al compilar (ver el
+		// comentario donde se define).
+		...(command === 'serve'
+			? [inlineEditPlugin(), editModeDevPlugin(), selectionModePlugin(), iframeRouteRestorationPlugin(), sitePagesPlugin(), pocketbaseAuthPlugin(), sessionJournalPlugin()]
+			: []),
 		react(),
-		addTransformIndexHtml
+		// Solo en el dev server (11/09/2026). Era el único plugin de la plantilla
+		// de Hostinger Horizons que ni siquiera intentaba limitarse a desarrollo,
+		// así que el build de producción se llevaba 5 scripts inline que: parchean
+		// window.fetch para TODA la app, pisan console.error y console.warn,
+		// vigilan el overlay de errores de Vite (que en producción no existe) y
+		// mandan postMessage a una ventana padre que tampoco existe. Es
+		// instrumentación del editor visual de Horizons: no la usa nada nuestro.
+		//
+		// Sacarla de producción además es lo que permite poner
+		// `script-src 'self'` en la CSP (vercel.json) sin habilitar scripts
+		// inline, que es justo el agujero por el que entra un XSS.
+		...(command === 'serve' ? [addTransformIndexHtml] : []),
 	],
 	server: {
 		port: 3001,
@@ -414,4 +439,4 @@ export default defineConfig({
 			}
 		}
 	}
-});
+}));

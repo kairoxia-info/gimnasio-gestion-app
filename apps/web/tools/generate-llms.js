@@ -171,9 +171,19 @@ function main() {
 			.filter(Boolean);
 	}
 
+	// Antes esto hacía process.exit(1), y el script de build lo tapaba con un
+	// `|| true`. Ese `|| true` es sintaxis de sh: en Windows, npm corre los
+	// scripts con cmd.exe, donde `true` no existe -- y el `&& vite build` que
+	// venía después NUNCA se ejecutaba. Resultado: `npm run build` en la
+	// computadora de Nalux no compilaba nada y salía con código 0, o sea que
+	// parecía haber andado (11/09/2026).
+	//
+	// La tolerancia ahora vive acá adentro, que funciona igual en los dos lados:
+	// si no hay páginas, se avisa y se sigue sin generar llms.txt, que es
+	// exactamente lo que hacía el `|| true`.
 	if (pages.length === 0) {
-		console.error('❌ No pages with Helmet components found!');
-		process.exit(1);
+		console.warn('⚠️  No se encontró ninguna página con Helmet: no se genera llms.txt.');
+		return;
 	}
 
 

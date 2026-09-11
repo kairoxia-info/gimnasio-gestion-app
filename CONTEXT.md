@@ -3463,3 +3463,168 @@ no le va a encontrar el precio.
 **Lo único que quedó sin probar:** el aviso de "hay cambios sin mandar" al cerrar sesión (haría
 falta cortar la conexión a propósito para llenar la cola offline), y la foto del alumno (no hay
 ninguna cargada en la base todavía).
+
+### Decisión de Nalux: Supabase queda en plan Free (11/09/2026)
+
+La auditoría marcó que en plan Free **no hay backups restaurables**: si se borra algo por error,
+hay una corrupción, o se pierde el acceso a la cuenta, no hay de dónde recuperar. Hoy hay pagos y
+datos reales de dos gimnasios en esa base.
+
+**Nalux decidió dejarlo en Free igual, hasta que ella diga.** No se cambia el plan ni se toca la
+configuración de billing sin que lo pida explícitamente.
+
+Lo que conviene tener presente mientras siga así:
+- Un `pg_dump` (o un export desde el SQL Editor de Supabase) guardado fuera de Supabase corta la
+  pérdida total, aunque no reemplaza un backup real. Es gratis y son cinco minutos.
+- El riesgo crece con cada alumno y cada pago nuevo que se carga, no es constante.
+- Cuando Nalux levante la restricción, el plan Pro (USD 25/mes) ya incluye backups diarios de 7
+  días; PITR es un add-on aparte que a este tamaño no hace falta.
+
+### Headers de seguridad en Vercel + dos cosas que aparecieron en el camino (11/09/2026)
+
+`apps/web/vercel.json` no tenía ningún header: sin CSP, sin HSTS, sin X-Frame-Options. Ahora
+tiene CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy y Permissions-Policy.
+
+**La CSP se armó mirando qué carga la app de verdad, no copiando una plantilla:**
+
+- `img-src 'self' data: blob: https:` — a propósito permisivo con las imágenes. En Ejercicios el
+  profesor puede PEGAR un link de cualquier lado ("Pegar un link de YouTube, Vimeo, etc."), y de
+  hecho 500 de los 503 ejercicios con media apuntan a `raw.githubusercontent.com` (la biblioteca
+  base importada). Restringir esto rompería la demostración de casi todos los ejercicios. El
+  valor real de la CSP acá lo aporta `script-src`, no `img-src`.
+- `media-src` sí restringido a Supabase: `tipoDePreview()` solo embebe VIDEO cuando el archivo es
+  de nuestro propio bucket (un link externo de video se abre en pestaña, no se embebe).
+- `frame-src 'none'` + `frame-ancestors 'none'`: se verificó que la app **no usa ningún iframe**.
+- `style-src` lleva `'unsafe-inline'` porque Tailwind/Radix/framer-motion inyectan estilos
+  inline; sacarlo requeriría un trabajo aparte y no cambia mucho el riesgo real.
+- HSTS sin `preload` a propósito: `preload` es un compromiso difícil de revertir y complicaría un
+  dominio propio a futuro si algún subdominio no fuera HTTPS.
+
+**Hallazgo 1: producción se llevaba 5 scripts inline de la plantilla de Hostinger Horizons.**
+`addTransformIndexHtml` era el único plugin de Horizons que ni siquiera intentaba limitarse a
+desarrollo. Esos scripts parchean `window.fetch` para toda la app, pisan `console.error` y
+`console.warn`, vigilan el overlay de errores de Vite (que en producción no existe) y mandan
+`postMessage` a una ventana padre que tampoco existe. Nada nuestro los usa. Sacarlos es lo que
+permite poner `script-src 'self'` sin habilitar scripts inline — que es justo el agujero por el
+que entra un XSS. De paso, `index.html` bajó de 9.549 a 2.262 bytes.
+
+**Hallazgo 2: el chequeo de "estoy en desarrollo" estaba mal, y `npm run build` no compilaba
+nada en Windows.**
+
+- `isDev = process.env.NODE_ENV !== 'production'` daba **true también al compilar**: Vite no
+  exporta NODE_ENV al proceso que evalúa `vite.config.js` (comprobado imprimiéndolo). O sea que
+  TODOS los plugins del editor visual de Horizons se estaban metiendo en el build. Se cambió a
+  `defineConfig(({ command }) => ...)` y `command === 'serve'`, que es el dato confiable.
+- El script era `node tools/generate-llms.js || true && vite build`. El `|| true` es sintaxis de
+  sh: en Windows npm usa cmd.exe, donde `true` no existe, y el `&& vite build` **nunca corría**.
+  `npm run build` terminaba con código 0 sin haber compilado — parecía que había andado. En
+  Vercel (Linux) siempre funcionó bien, por eso no se notó. Se separó en `prebuild` + `build`, y
+  la tolerancia que daba el `|| true` ahora vive dentro de `generate-llms.js` (avisa y sigue en
+  vez de `process.exit(1)`).
+- Nota al margen: `generate-llms.js` nunca corrió en Windows igual, porque su chequeo de "módulo
+  principal" (`import.meta.url === 'file://' + process.argv[1]`) no matchea con rutas de Windows.
+  En Vercel sí corre. No se tocó, pero queda anotado.
+
+**Cómo se probó la CSP** (los headers de Vercel no aplican en el dev server): se compiló, se
+inyectó la CSP como `<meta http-equiv>` en el `index.html` del build, y se sirvió con
+`vite preview` en el puerto 3000. Resultados, todos con **cero violaciones en consola**:
+
+| Qué | Resultado |
+|---|---|
+| La app carga y renderiza el login | ✅ |
+| Fuentes de Google (Inter, Poppins) | ✅ hoja cargada y 4 fuentes en estado `loaded` |
+| Llamada a Supabase (login de alumno) | ✅ responde y muestra "Usuario o contraseña incorrectos" |
+| Imagen de `raw.githubusercontent.com` | ✅ carga (750px) |
+| Imagen `data:` (los QR que genera la app) | ✅ carga |
+| Imagen del bucket de Supabase | ✅ carga (1080px) |
+| Video del bucket de Supabase | ✅ carga (576px) |
+
+Después se recompiló limpio para que el `index.html` que se despliega NO tenga el meta de prueba
+(la CSP la manda Vercel como header, que es lo correcto: así también cubre `frame-ancestors`,
+que en `<meta>` se ignora).
+
+**Lo que queda para cuando se despliegue:** mirar la consola del navegador en el primer deploy
+buscando errores `Refused to load/connect`. Si aparece alguno, es un origen que no contemplamos y
+se agrega a la directiva que corresponda. La barra de Vercel en los deploys de *preview* puede
+tirar avisos de CSP propios que en producción no van a estar.
+
+### Dependencias vulnerables: de 4 altas a 0 en producción (11/09/2026)
+
+`npm audit --omit=dev` daba 4 altas con arreglo disponible. Las tres eran versiones dentro de los
+rangos ya declarados en `package.json`, así que fue una actualización de parche, sin tocar
+ninguna versión mayor:
+
+| Paquete | Antes | Ahora | Por qué |
+|---|---|---|---|
+| `react-router-dom` / `react-router` | 7.18.0 | 7.18.3 | [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) — bypass de CSRF. Aplica al "RSC Mode", que esta app no usa, así que la exposición real era baja; igual actualizar salía gratis |
+| `postcss` | 8.5.15 | 8.5.28 | path traversal leyendo archivos `.map` arbitrarios; solo afecta el build, no el navegador del alumno |
+| `nanoid` | 3.3.12 | 3.3.19 | DoS por loop infinito; llega arrastrado por postcss, no se usa para nada nuestro (los códigos los genera Postgres con `gen_random_bytes`) |
+
+**`npm audit --omit=dev` ahora da 0 vulnerabilidades.**
+
+Verificado que no rompió nada: `eslint src/` y `npm run build` limpios, y en el navegador se probó
+lo que toca react-router, que es lo único con riesgo real de romperse — el panel carga, una ruta
+con parámetro y query (`/alumnos/:id?tab=pagos`) abre en la pestaña correcta, y la navegación por
+clic (sin recargar) funciona.
+
+**Queda una vulnerabilidad baja sin arreglar, a propósito:** `esbuild` 0.27.7
+([GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr), lectura de archivos
+arbitrarios corriendo el dev server **en Windows**). No se puede arreglar con `npm audit fix`: la
+versión corregida es 0.28.1+, pero Vite 7.3.5 pide `esbuild ^0.27.0`, así que haría falta saltar
+a Vite 8 — un cambio mayor que no corresponde meter justo antes de un deploy.
+
+Importa un poco más de lo que sugiere su severidad, porque el script de dev es
+`vite --host :: --port 3001`: ese `--host ::` **expone el dev server a toda la red local**, no
+solo a localhost. Alguien en el mismo wifi podría leer archivos de la computadora mientras se
+desarrolla. Dos salidas, para decidir con Nalux:
+
+1. Sacar el `--host ::` del script `dev` — gratis e inmediato, pero se pierde poder abrir la app
+   desde el celular por wifi para probar (que en una app tan de celular puede hacer falta).
+2. Subir a Vite 8 — lo arregla de raíz, pero es una versión mayor y hay que reprobar todo.
+
+Mientras tanto, la mitigación práctica es no levantar el dev server en una red que no sea de
+confianza. En producción no aplica: esbuild es solo de desarrollo (`devDependencies`) y lo único
+que lo importa es un plugin del editor de Horizons que ya quedó limitado a `command === 'serve'`.
+
+### El dev server ya no se expone a la red + qué mirar al cambiar de dominio (11/09/2026)
+
+**Contexto que dio Nalux:** en local solo prueba y corrige; al celular lo prueba **con la URL
+real**, no con la dirección de red de la computadora; cuando sube a Vercel prueba desde ahí. Al
+salir al mercado va a haber gente real usando una URL, probablemente un dominio propio, pero
+siempre alojado en Vercel.
+
+**Se sacó el `--host ::` del script `dev`** (`vite --host :: --port 3001` → `vite --port 3001`).
+Ese flag hacía que Vite publicara también una dirección de red (`http://192.168.x.x:3001`), o sea
+que el dev server quedaba abierto a cualquiera en el mismo wifi. Como el celular se prueba con la
+URL real, no aportaba nada y solo sumaba la exposición de la falla de esbuild
+(GHSA-g7r4-m6w7-qqqr, lectura de archivos arbitrarios en el dev server en Windows), que no se
+puede arreglar sin saltar a Vite 8. Confirmado en el arranque: donde antes salía la dirección de
+red, ahora dice `Network: use --host to expose`. Si alguna vez hace falta abrir la app desde otro
+dispositivo de la red, se agrega `--host` a mano en ese momento, sabiendo en qué red se está.
+
+**Al cambiar a un dominio propio — qué se adapta solo y qué no.**
+
+Se verificó que **no hay ningún dominio escrito a mano en todo el código**: el link del
+autorregistro (`ConfiguracionPage.jsx:133`), el del acceso del alumno (`AlumnoPage.jsx:1563`), el
+canonical de SEO y los redirects de registro y de recuperar contraseña
+(`AuthContext.jsx:105,118`) salen todos de `window.location.origin`. Así que con el dominio nuevo
+se actualizan solos, sin tocar código. La CSP tampoco hay que tocarla: usa `'self'`, que sigue al
+dominio que sirve la página; el único host fijo que tiene es el de Supabase, que no cambia.
+
+Lo que **sí** hay que hacer a mano, en el orden en que conviene:
+
+1. **Supabase → Authentication → URL Configuration**: poner el dominio nuevo en *Site URL* y en
+   *Redirect URLs*. Esto vive en el panel de Supabase, no en el repo, así que no se actualiza
+   solo. **Es la trampa que ya pasó una vez** (08/09/2026): el mail de confirmación llevaba a una
+   página que no abría porque la Site URL apuntaba a otro lado. Conviene dejar el dominio viejo
+   de Vercel también en Redirect URLs por un tiempo, para no romper mails ya enviados.
+2. **Regenerar el QR y el link del autorregistro** desde Configuración, y reemplazar cualquier QR
+   ya impreso o mandado por WhatsApp: los viejos apuntan al dominio anterior.
+3. **Reenviar el acceso a los alumnos** que ya tengan el link guardado en el celular, por el
+   mismo motivo.
+4. **Revisar el HSTS**: `vercel.json` manda `Strict-Transport-Security` con `includeSubDomains`,
+   que le dice al navegador que TODO subdominio del dominio propio tiene que ser HTTPS por un
+   año. Con todo en Vercel no hay problema. Pero si alguna vez se cuelga un subdominio en otro
+   lado sin HTTPS (por ejemplo una landing), va a dejar de abrir hasta que tenga certificado.
+5. **Mirar la consola en el primer deploy con el dominio nuevo** buscando errores
+   `Refused to load/connect`, por si aparece algún origen que la CSP no contemple.
