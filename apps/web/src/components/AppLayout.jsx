@@ -305,6 +305,7 @@ const useEstadoOffline = () => {
 
 const AppLayout = ({ title, subtitle, actions, children }) => {
     const [open, setOpen] = useState(false);
+    const [confirmandoSalir, setConfirmandoSalir] = useState(false);
     const { signOut, user, profile } = useAuth();
     const navigate = useNavigate();
     const { sinConexion, pendientes } = useEstadoOffline();
@@ -312,7 +313,13 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
     // Cerrar el menú con Escape, además de la X / tocar afuera / elegir una
     // opción -- mismo criterio que el Modal de ui-kit.jsx.
     useEffect(() => {
-        if (!open) return undefined;
+        // Al cerrar el menú, el aviso de "hay cambios sin mandar" vuelve a
+        // cero: si no, la próxima vez que se abre aparece ya confirmando algo
+        // que el profesor no volvió a pedir.
+        if (!open) {
+            setConfirmandoSalir(false);
+            return undefined;
+        }
         const alPresionar = (e) => {
             if (e.key === 'Escape') setOpen(false);
         };
@@ -320,18 +327,22 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
         return () => window.removeEventListener('keydown', alPresionar);
     }, [open]);
 
-    const salir = async () => {
+    const salir = async (forzar = false) => {
         // Cerrar sesión limpia la cola de sincronización de este celular
         // (AuthContext.jsx) -- si todavía hay algo sin mandar, se perdería.
         // Nunca debería pasar en el uso normal (se manda solo apenas vuelve
         // la señal), pero si justo se corta de nuevo a mitad de camino, hay
         // que avisar antes de perderlo.
-        if (pendientes > 0) {
-            const seguir = window.confirm(
-                `Todavía hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin mandar (asistencia o pagos cargados sin conexión). Si cerrás sesión ahora se pierden. ¿Cerrar igual?`,
-            );
-            if (!seguir) return;
+        //
+        // El aviso lo dibuja la app, no window.confirm() (10/09/2026, repaso
+        // general): con el cartel nativo, un navegador que lo suprime devuelve
+        // false y ahí "Cerrar sesión" dejaba de funcionar del todo, sin
+        // explicación -- el mismo síntoma que Nalux reportó en Rutinas.
+        if (pendientes > 0 && !forzar) {
+            setConfirmandoSalir(true);
+            return;
         }
+        setConfirmandoSalir(false);
         await signOut();
         navigate('/login', { replace: true });
     };
@@ -529,13 +540,37 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             </div>
                             <div className="shrink-0 space-y-3 px-4 pt-4">
                                 <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-                                <button
-                                    type="button"
-                                    onClick={salir}
-                                    className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                                >
-                                    <LogOut className="h-4 w-4" /> Cerrar sesión
-                                </button>
+                                {confirmandoSalir ? (
+                                    <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+                                        <p className="text-xs text-muted-foreground">
+                                            Hay {pendientes} {pendientes === 1 ? 'cambio' : 'cambios'} sin mandar
+                                            (asistencia o pagos cargados sin conexión). Si se cierra sesión ahora se
+                                            pierden.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => salir(true)}
+                                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition active:scale-[0.98]"
+                                        >
+                                            <LogOut className="h-4 w-4" /> Cerrar igual
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmandoSalir(false)}
+                                            className="flex w-full items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => salir()}
+                                        className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                    >
+                                        <LogOut className="h-4 w-4" /> Cerrar sesión
+                                    </button>
+                                )}
                                 <KairoxFooterMark />
                             </div>
                         </motion.div>

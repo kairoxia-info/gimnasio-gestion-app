@@ -6,12 +6,15 @@
 > [`PLAN.md`](PLAN.md); este archivo es el resumen vivo del estado real.
 > **Se actualiza en cada bloque de trabajo — ver el historial al final.**
 
-> 🚨 **PENDIENTE ANTES DE LANZAR A PRODUCCIÓN — no lo pierdas de vista:** "Confirm email" de
-> Supabase Auth está **desactivado** desde el 22/08/2026 (a propósito, para poder probar signup
-> sin chocar con el límite de envío de mails del proyecto — ver Decisión 17 en la sección 4).
-> Mientras esté así, **cualquiera puede registrarse con el email de otra persona sin
-> verificarlo**. Hay que **reactivarlo** en `Dashboard de Supabase → Authentication →
-> Sign In / Providers → Email → Confirm email` antes de que un cliente real use esto.
+> ✅ **"Confirm email" ya está ACTIVADO** (08/09/2026), con SMTP propio y la plantilla en
+> español — probado de punta a punta desde producción. Este cartel antes decía que estaba
+> desactivado y quedó desactualizado tres días; se corrige el 11/09/2026 para que nadie lo lea
+> y lo vuelva a apagar creyendo que está mal.
+>
+> ✅ **Seguridad: migraciones 0042 a 0046 APLICADAS en producción** (11/09/2026). Cerraron dos
+> agujeros que juntos permitían robar los datos de cualquier gimnasio. El detalle está en la
+> última entrada del historial, al final de este archivo — leerla antes de tocar `profiles`,
+> el bucket `alumnos-fotos` o el login del alumno.
 
 ---
 
@@ -3224,3 +3227,239 @@ a tiempo sólo por revisar la base de datos antes de escribir código.
 Por eso Nalux pidió (07/09/2026) que **cada cambio se anote acá en la misma tanda de trabajo**.
 CONTEXT.md es lo único que sobrevive entre sesiones: si queda viejo, se planifica sobre
 información falsa y se rehace trabajo ya hecho.
+
+## 11/09/2026 — Repaso de punta a punta + auditoría de seguridad y privacidad
+
+Pedido de Nalux: *"revisá todos los módulos de punta a punta, que no quede nada sin revisar y
+probar que todo funcione... también quiero que llames al agente de seguridad y todos los agentes
+necesarios para que actúen con el tema de seguridad, privacidad, quiero que evitemos hackeos, o
+robo de algún dato"*.
+
+### Parte 1 — Repaso de módulos (aplicado, falta que Nalux lo pruebe)
+
+El barrido buscó las clases de bug que ya se repitieron en este proyecto: borrados sin
+confirmación, escrituras sin `catch` que quedan mudas si fallan, y `window.confirm()` (el cartel
+nativo que Nalux ya reportó que "no hace nada" en algunos navegadores).
+
+- **Alimentos** (`AlimentosPage.jsx`): "Eliminar" borraba de una, sin preguntar y sin avisar si
+  fallaba, en las dos vistas (tarjeta del celular y tabla de escritorio). Ahora usa la
+  confirmación inline "¿Sí, eliminar? / Cancelar" y muestra el error.
+- **Planes y precios** (`PreciosPage.jsx`): lo mismo en planes, períodos y descuentos. Además
+  —y esto era lo importante— **borrar un plan dejaba huérfanos a los alumnos que lo tenían
+  asignado**: los alumnos guardan el plan por NOMBRE (`plan_precio_nombre`, texto suelto, no hay
+  clave foránea), así que al borrarlo la precarga del cobro dejaba de encontrarle el precio.
+  Ahora avisa a cuántos alumnos afecta y no deja borrar hasta cambiarles el plan (mismo criterio
+  que ya tenían los períodos).
+- **Ficha del alumno** (`AlumnoPage.jsx`): los borrados de Progreso y de Pagos usaban
+  `window.confirm()` y no manejaban el error. Pasan al patrón propio de la app. En Pagos, la
+  confirmación ahora dice qué número de comprobante se pierde. El alta de un registro de
+  progreso tampoco avisaba si fallaba.
+- **Rutinas** (`RutinasPage.jsx`): "Eliminar" seguía con `window.confirm()` — en el MISMO archivo
+  hay un comentario explicando por qué "Quitar" dejó de usarlo. Se unifica.
+- **Cerrar sesión** (`AppLayout.jsx`): cuando había cambios sin sincronizar, el aviso era un
+  `window.confirm()`. Si el navegador lo suprimía devolvía `false` y **el profesor no podía
+  cerrar sesión**, sin ninguna explicación. Ahora el aviso lo dibuja la app.
+- **Asistencia, Rutinas y Planes de alimentación**: cuando una asignación masiva fallaba a mitad
+  de camino (`Promise.all` corta al primer error), lo que ya se había guardado quedaba guardado
+  pero la pantalla no se recargaba, así que mostraba un estado que no era el real. Ahora recarga
+  igual y el mensaje dice que hay que revisar qué quedó hecho.
+
+Revisados y confirmados sanos: `AsistenciaPage.escribirMarca`, los efectos de `?alumno=` y
+`?editar=` (ya tenían el guard de `loading`), `?tab=` en la ficha, el `cargarIngresosMensuales`
+del Panel, y las asignaciones de rutinas/alimentación. No quedó ningún `TODO`/`FIXME` ni ningún
+icono de peligro con el color de marca.
+
+`npx eslint src/` y `vite build` limpios.
+
+### Parte 2 — Seguridad: DOS AGUJEROS GRAVES, verificados contra la base de producción
+
+Corrieron dos agentes (appsec de código e infosec de infraestructura) y en paralelo se
+consultaron los advisors de Supabase y se verificó todo contra la base real.
+
+**A) Cualquier usuario registrado podía leer y escribir los datos de CUALQUIER gimnasio.**
+La cadena, toda verificada:
+
+1. `profiles_update_self` deja hacer UPDATE de la propia fila, y el GRANT de 0002 daba UPDATE
+   sobre la tabla entera. **RLS filtra filas, no columnas**, así que cualquiera podía escribirse
+   sus propias columnas `role` y `gimnasio_id` desde la consola del navegador, con una línea.
+2. Todas las policies de negocio dicen `gimnasio_id = get_mi_gimnasio_id()`, y esa función es
+   literalmente `SELECT gimnasio_id FROM profiles WHERE id = auth.uid()`. O sea: ponerse el
+   `gimnasio_id` de otro **da acceso completo de lectura y escritura** a sus alumnos, DNI,
+   teléfonos, pagos y medidas corporales. Con `role='admin'` además se habilita
+   `eliminar_mi_cuenta()`, que borra el gimnasio entero en cascada.
+3. Faltaba saber el UUID del gimnasio a atacar — y eso lo entregaba el punto B.
+
+**B) El bucket `alumnos-fotos` se podía listar entero sin estar logueado.**
+La policy de lectura era `FOR SELECT TO public USING (bucket_id = 'alumnos-fotos')`. La migración
+0036 daba el riesgo por mitigado porque el path lleva el UUID del alumno "no adivinable", pero no
+hace falta adivinarlo: `storage.list()` es un SELECT y pasa por esa misma policy. Cualquiera, sin
+cuenta, podía pedir el listado y sacar el UUID de todos los gimnasios (son los nombres de
+carpeta) y de todos sus alumnos, más las fotos.
+
+**C) El tope de intentos del login del alumno no frenaba nada.**
+`iniciar_sesion_alumno()` sumaba 1 al contador y *después* verificaba la contraseña; si estaba
+mal hacía `RAISE EXCEPTION`, y en Postgres eso **aborta la transacción y revierte la suma**. Cada
+intento fallido borraba su propia marca: se podían probar contraseñas sin límite. Lo único que el
+tope llegaba a contar eran los logins correctos, o sea al revés. Comprobado sobre una tabla de
+prueba: 5 fallos seguidos dejaban el contador en 0. De paso, compartía las columnas del contador
+con "ver mi plan" (topes 20 y 60), así que un alumno que recargaba su plan 20 veces en 5 minutos
+después no podía entrar y le decía "Demasiados intentos" sin haber escrito nada mal.
+
+**Migraciones escritas y todavía SIN APLICAR** (hay que aplicarlas contra producción):
+
+- `0042_login_alumno_tope_intentos_real.sql` — contador propio para el login, cuenta solo los
+  fallos, entrar bien lo pone en cero. Devuelve NULL en vez de excepción para que la suma no se
+  revierta. Va junto con el cambio en `AlumnoLoginPage.jsx` (sin ese chequeo navegaba a
+  `/mi-plan/null`).
+- `0043_profiles_no_autopromocion.sql` — quita el GRANT de UPDATE sobre `role` y `gimnasio_id`
+  (Postgres chequea privilegios de columna antes que RLS) + trigger de respaldo. **Ojo**: el
+  trigger deja pasar a `create_gimnasio()`, que SÍ tiene que escribir esas columnas al dar de
+  alta cada cuenta nueva — sin esa excepción, ningún gimnasio nuevo podría crearse.
+- `0044_fotos_alumnos_no_enumerables.sql` — la lectura del bucket pasa a ser solo del gimnasio
+  propio y con sesión. No rompe nada: la foto solo se usa en pantallas del profesor.
+- `0045_permisos_funciones_internas.sql` — saca el EXECUTE público de las funciones de trigger y
+  de uso interno (`eliminar_mi_cuenta`, `handle_new_user`, etc.) y fija el `search_path` en las 4
+  que no lo tenían.
+
+**Lo que se revisó y está bien:** las 18 tablas tienen RLS con `WITH CHECK`; las funciones
+públicas resuelven el tenant desde el código recibido y nunca desde un parámetro del cliente; las
+contraseñas van con bcrypt; los mensajes de error no permiten enumerar usuarios; no hay
+`service_role` key ni secretos commiteados; no hay SQL armado por concatenación.
+
+### Parte 3 — Pendientes que quedaron anotados (no se tocó nada)
+
+- **Backups**: si el proyecto de Supabase está en plan Free **no hay backups restaurables**. Hay
+  pagos y datos reales de un gimnasio sin red de contención. Verificar el plan en
+  `Settings → Billing`.
+- **Headers de seguridad**: `apps/web/vercel.json` no tiene CSP, HSTS, X-Frame-Options ni
+  Referrer-Policy. Hay una propuesta lista para pegar, pero hay que probarla en un preview de
+  Vercel primero — una CSP mal calibrada rompe el login.
+- **Dependencias**: `npm audit --omit=dev` da 4 altas con fix disponible (`react-router-dom`,
+  `postcss`, `nanoid`). La de react-router es específica de "RSC Mode", que esta app no usa, así
+  que la exposición real es baja, pero actualizar es barato.
+- **Ley 25.326 (privacidad)**: `/unirse/:codigo` pide DNI, fecha de nacimiento y contacto de
+  emergencia de un desconocido, sin ningún texto de privacidad ni consentimiento, y no hace nada
+  distinto si la persona es menor de edad. Falta también una forma de que el alumno pida la baja
+  de sus datos.
+- **"Leaked password protection"** de Supabase Auth está desactivado (chequea contra
+  HaveIBeenPwned). Se activa desde el Dashboard.
+
+### Estado final: migraciones aplicadas y verificadas (11/09/2026, más tarde)
+
+Nalux dio el OK y se aplicaron **todas** contra la base de producción (`fftdmpqbemcnxdnfnvhd`).
+Quedó además una `0046` que no estaba planeada.
+
+| Migración | Qué cerró |
+|---|---|
+| `0042_login_alumno_tope_intentos_real.sql` | El tope de intentos del login del alumno, que no frenaba nada |
+| `0043_profiles_no_autopromocion.sql` | Que cualquiera se cambiara su propio `role`/`gimnasio_id` |
+| `0044_fotos_alumnos_no_enumerables.sql` | Que se listara el bucket de fotos sin estar logueado |
+| `0045_permisos_funciones_internas.sql` | EXECUTE público en funciones de trigger e internas + `search_path` |
+| `0046` (sin archivo propio, va en 0045) | `listar_planes_para_codigo()`, endpoint público muerto desde 0038 |
+
+**Verificación del arreglo crítico**, hecha con una transacción revertida contra datos reales:
+
+- Simulando el ataque (`SET LOCAL role authenticated` + UPDATE de `role` y `gimnasio_id`):
+  las dos columnas quedaron **intactas**. El ataque ya no funciona.
+- Simulando el camino de `create_gimnasio()` (SECURITY DEFINER, que NO corre como
+  `authenticated`): la escritura **sí pasa**. O sea que dar de alta un gimnasio nuevo sigue
+  funcionando — que era el riesgo de romper algo con este cambio.
+
+Chequeo final contra la base, 9 de 9 en verde: `profiles.role` y `profiles.gimnasio_id` ya no
+son editables por `authenticated`, `first_name` sí, el trigger está activo, la policy pública del
+bucket ya no existe, `eliminar_mi_cuenta` ya no es ejecutable por `anon`, y las tres funciones que
+el alumno necesita sin sesión (`ver_plan_por_codigo`, `iniciar_sesion_alumno`,
+`join_gimnasio_por_codigo`) siguen abiertas.
+
+Los advisors de seguridad de Supabase pasaron de **27 avisos a 15**. El aviso de
+`function_search_path_mutable` desapareció del todo. Los 15 que quedan son las funciones
+`SECURITY DEFINER` que tienen que seguir siendo llamables a propósito, más
+"Leaked password protection", que se activa desde el Dashboard y no desde SQL.
+
+**Lo que NO se pudo probar desde acá:** el entorno bloquea la navegación del navegador y las
+peticiones a `localhost`, así que los cambios de pantalla (las confirmaciones de borrado nuevas,
+el aviso de cerrar sesión, el login del alumno devolviendo NULL) están verificados solo por
+`npx eslint src/` y `vite build`, los dos limpios — o sea que compilan, pero **falta probarlos a
+mano en `localhost:3001`**. Lo primero que conviene mirar: entrar como alumno con una contraseña
+equivocada (tiene que decir "Usuario o contraseña incorrectos", no irse a una pantalla en blanco)
+y que la foto del alumno se siga viendo en la lista de Alumnos.
+
+### Prueba en vivo, local + URL real (11/09/2026, cierre del día)
+
+Nalux pidió abrir la app en local y en la URL de producción y probar en las dos. Aclaró que
+**todavía están en etapa de prueba, así que nada de esto afecta a alumnos reales** — por eso se
+dejó la versión buena en la base en vez de revertirla.
+
+**Bug nuevo encontrado probando (ya arreglado): el mensaje de "código inválido" nunca aparecía.**
+En `MiPlanPage.jsx` las regex comparaban SIN acentos (`/codigo de acceso invalido/i`) pero la RPC
+devuelve el mensaje CON acentos ("Código de acceso inválido" — confirmado ejecutando la función
+como rol `anon`). Nunca coincidían, así que a un alumno con el código vencido se le mostraba
+"No se pudo cargar el plan en este momento, intentar más tarde" para siempre, en vez de decirle
+que le pida un código nuevo al profesor. Se normaliza el texto antes de comparar (`sinAcentos()`),
+así deja de depender de los acentos además de las mayúsculas. Verificado en vivo en local: ahora
+dice "Este código no es válido o ya no está activo. Pedir al profesor un código nuevo."
+
+**Ojo con el orden al desplegar.** La migración 0042 hace que `iniciar_sesion_alumno()` devuelva
+NULL en vez de lanzar excepción, y eso SOLO funciona con el frontend nuevo (el que chequea el
+NULL). Como la base ya está actualizada y el frontend desplegado todavía es el viejo, hoy en
+producción una contraseña equivocada manda al alumno a `/mi-plan/null` y le muestra "No se pudo
+cargar el plan" en lugar de "Usuario o contraseña incorrectos" — comprobado en la URL real. Quien
+escribe bien la contraseña entra normal, no cambió nada para ese caso. **Se arregla solo al
+desplegar el frontend**, que es lo que corresponde hacer. Lección para la próxima: cuando un
+cambio de SQL depende de un cambio de JS, van juntos o va primero el JS.
+
+**Lo que quedó probado de punta a punta:**
+
+| Prueba | Local | Producción |
+|---|---|---|
+| Login de alumno, usuario inexistente | ✅ "Usuario o contraseña incorrectos" | ⚠️ va a `/mi-plan/null` (falta desplegar) |
+| `/mi-plan/<código inválido>` | ✅ mensaje correcto (arreglo de acentos) | ⚠️ mensaje genérico (falta desplegar) |
+| `/unirse/<código>` renderiza | ✅ | ✅ |
+| `ver_plan_por_codigo` ejecutable por `anon` | ✅ confirmado en SQL — el REVOKE de la 0045 no rompió nada | |
+
+**Lo que NO se pudo probar y queda para Nalux:** todo lo que está detrás del login del profesor
+(las confirmaciones de borrado nuevas en Alimentos, Precios, Rutinas, Progreso y Pagos; el aviso
+al cerrar sesión). No se prueban desde acá porque implica escribir una contraseña, y eso no se
+hace. Compilan (`eslint` y `vite build` limpios) pero el comportamiento hay que verlo a mano.
+Tampoco se pudo probar la foto del alumno: **no hay ninguna cargada en la base todavía**, así que
+conviene subir una al probar, para confirmar que el cambio del bucket (0044) no la rompió.
+
+**Hallazgo menor, anotado y no arreglado:** el bucket `gimnasio-logos` sigue siendo listable sin
+sesión, y los nombres de carpeta son los UUID de los gimnasios — o sea que un anónimo puede saber
+cuántos gimnasios hay y cuáles son sus UUID (comprobado: ve los 2). Ya **no es explotable**,
+porque con la 0043 el UUID por sí solo no abre ninguna puerta: nadie puede cambiarse el
+`gimnasio_id` para usarlo. Pero los logos y los videos de ejercicios necesitan lectura pública de
+verdad (el alumno los ve en `/mi-plan` sin sesión), así que cerrarlo implica pasar los buckets a
+privado y servir URLs firmadas desde `ver_plan_por_codigo()`. Es el mismo "cuando crezca" que ya
+estaba anotado para las fotos.
+
+**Dato de contexto:** hay **dos gimnasios** en la base ("Full GYM NT" y "Mi GYM FIT"), así que el
+agujero de la 0043 no era hipotético — cada uno podía leer y escribir los datos del otro.
+
+### Verificación del panel del profesor, con Nalux logueada (11/09/2026)
+
+Nalux inició sesión ella misma en `localhost:3001` (gimnasio "Mi GYM FIT") y desde ahí se
+revisaron las pantallas que no se podían probar sin sesión. **Todas pasaron.** En cada borrado se
+llegó hasta la confirmación y después se CANCELÓ, y al terminar se verificó contra la base que los
+contadores siguieran iguales: 41 alimentos, 7 planes, 3 rutinas, 4 progresos, 6 pagos — los
+mismos de antes de empezar. No se borró nada.
+
+| Pantalla | Qué se probó | Resultado |
+|---|---|---|
+| Alimentos | Clic en "Eliminar" | Aparece `Sí, eliminar / Cancelar` en vez de borrar de una ✅ |
+| Planes y precios | "Sí, eliminar" sobre el plan "Mensual", que lo tienen 4 alumnos | Lo frenó: *"No se puede borrar «Mensual»: lo tienen asignado 4 alumnos. Cambiarles el plan primero, o pausar este plan..."*. El plan NO se borró ✅ |
+| Rutinas | Clic en "Eliminar" de una rutina asignada | Confirmación propia (ya no el cartel del navegador) + aviso contextual: *"Está asignada a 1 alumno activo: la siguen teniendo tal cual está hoy, pero desaparece de la biblioteca..."* ✅ |
+| Ficha → Progreso | Clic en el tachito | El icono se reemplaza por `Sí, eliminar / Cancelar`, sin cartel nativo ✅ |
+| Ficha → Pagos | Clic en el tachito | Muestra *"Se pierde el comprobante N° 1"* con el número real del comprobante ✅ |
+| Menú lateral | Abrir/cerrar | El menú desplegable funciona. "Cerrar sesión" muestra el botón normal, que es lo correcto: el aviso nuevo solo salta si quedaron cambios sin sincronizar |
+| `?tab=progreso` en la ficha | Entrar por URL directa | Abre en la pestaña correcta ✅ |
+
+**Hallazgo real encontrado durante esta prueba:** hay **1 alumno con el plan "5 dias a la semana"**,
+un plan que ya NO existe en `configuracion_precios`. O sea que alguien borró ese plan en algún
+momento y dejó al alumno apuntando a la nada — exactamente el bug que arregla el guard nuevo.
+Conviene que Nalux le reasigne un plan a ese alumno, porque mientras tanto la precarga del cobro
+no le va a encontrar el precio.
+
+**Lo único que quedó sin probar:** el aviso de "hay cambios sin mandar" al cerrar sesión (haría
+falta cortar la conexión a propósito para llenar la cola offline), y la foto del alumno (no hay
+ninguna cargada en la base todavía).

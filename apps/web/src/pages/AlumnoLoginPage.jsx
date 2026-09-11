@@ -65,6 +65,14 @@ const AlumnoLoginPage = () => {
                 p_contrasena: contrasena,
             });
             if (err) throw err;
+            // La RPC devuelve NULL cuando el usuario no existe o la contraseña
+            // está mal (migración 0042: ahí no puede lanzar excepción, porque
+            // eso revertiría el contador de intentos fallidos que acaba de
+            // sumar). Sin este chequeo se navegaba a /mi-plan/null.
+            if (!codigo) {
+                setError('Usuario o contraseña incorrectos.');
+                return;
+            }
             try {
                 localStorage.setItem(CLAVE_SESION, codigo);
             } catch (_) {

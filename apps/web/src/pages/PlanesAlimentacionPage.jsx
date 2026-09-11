@@ -373,9 +373,14 @@ const PlanesAlimentacionPage = () => {
     };
 
     const eliminar = async (id) => {
-        setEliminandoId(null);
-        await removeRec('planes_alimentacion_biblioteca', id);
-        cargar();
+        setError('');
+        try {
+            await removeRec('planes_alimentacion_biblioteca', id);
+            setEliminandoId(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el plan. Reintentar en unos minutos.');
+        }
     };
 
     // Duplicar sirve para versionar sin miedo: se copia tal cual con
@@ -446,7 +451,11 @@ const PlanesAlimentacionPage = () => {
             setConflictoAlumnos(null);
             cargar();
         } catch (_) {
-            setAsignarMsg('No se pudo completar la asignación. Intentar de nuevo.');
+            // Promise.all corta al primer error, pero los planes que ya se
+            // guardaron quedaron guardados: se recarga igual para que la lista
+            // muestre el estado real, no el de antes de intentar.
+            setAsignarMsg('No se pudo completar la asignación. Revisar a quiénes les quedó asignado y reintentar.');
+            cargar();
         } finally {
             setAsignando(false);
         }

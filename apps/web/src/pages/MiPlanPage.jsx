@@ -294,8 +294,18 @@ const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => {
 // de igualdad estricta para no depender de mayúsculas exactas, pero seguimos
 // siendo específicos: cualquier otro error de Postgres cae al mensaje
 // genérico de abajo, nunca se le muestra el texto crudo al alumno.
-const esCodigoInvalido = (msg = '') => /codigo de acceso invalido/i.test(msg);
-const esRateLimit = (msg = '') => /demasiadas consultas/i.test(msg);
+//
+// Los mensajes de la RPC vienen CON acentos ("Código de acceso inválido") y
+// estas regex estaban escritas SIN acentos, así que nunca coincidían: a un
+// alumno con el código vencido se le mostraba "No se pudo cargar el plan en
+// este momento, intentar más tarde" para siempre, en vez de decirle que pida
+// un código nuevo al profesor. Encontrado probando en vivo el 11/09/2026 y
+// confirmado contra la base (la RPC devuelve exactamente "Código de acceso
+// inválido"). Se normaliza el texto antes de comparar, así deja de depender
+// de los acentos además de las mayúsculas.
+const sinAcentos = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const esCodigoInvalido = (msg = '') => /codigo de acceso invalido/i.test(sinAcentos(msg));
+const esRateLimit = (msg = '') => /demasiadas consultas/i.test(sinAcentos(msg));
 
 // Misma clave que usa AlumnoLoginPage.jsx para guardar el codigo_acceso
 // después de loguearse (migración 0028) -- acá solo se borra, para

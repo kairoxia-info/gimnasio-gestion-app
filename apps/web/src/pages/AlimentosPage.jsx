@@ -30,6 +30,12 @@ const AlimentosPage = () => {
     const [form, setForm] = useState(vacio);
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
+    // Confirmación inline por alimento, mismo patrón "¿Seguro?" que Alumnos
+    // (10/09/2026, repaso general): antes el botón "Eliminar" borraba de una
+    // sin preguntar y sin manejar el error -- si el borrado fallaba quedaba
+    // mudo y el alimento seguía en la lista sin explicación.
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [borrando, setBorrando] = useState(false);
 
     const cargar = () => {
         setLoading(true);
@@ -43,6 +49,20 @@ const AlimentosPage = () => {
     };
 
     useEffect(cargar, []);
+
+    const borrar = async (id) => {
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('alimentos', id);
+            setConfirmandoBorrarId(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el alimento. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
+    };
 
     const categorias = useMemo(
         () => Array.from(new Set([...CATEGORIAS, ...items.map((i) => i.categoria).filter(Boolean)])),
@@ -207,13 +227,34 @@ const AlimentosPage = () => {
                                     >
                                         Editar
                                     </Btn>
-                                    <Btn
-                                        variant="danger"
-                                        className="flex-1 px-3 py-1.5 text-xs"
-                                        onClick={() => removeRec('alimentos', a.id).then(cargar)}
-                                    >
-                                        Eliminar
-                                    </Btn>
+                                    {confirmandoBorrarId === a.id ? (
+                                        <>
+                                            <Btn
+                                                variant="danger"
+                                                className="flex-1 px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrar(a.id)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="flex-1 px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrarId(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </>
+                                    ) : (
+                                        <Btn
+                                            variant="danger"
+                                            className="flex-1 px-3 py-1.5 text-xs"
+                                            onClick={() => setConfirmandoBorrarId(a.id)}
+                                        >
+                                            Eliminar
+                                        </Btn>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -264,13 +305,34 @@ const AlimentosPage = () => {
                                             >
                                                 Editar
                                             </Btn>
-                                            <Btn
-                                                variant="danger"
-                                                className="px-3 py-1.5 text-xs"
-                                                onClick={() => removeRec('alimentos', a.id).then(cargar)}
-                                            >
-                                                Eliminar
-                                            </Btn>
+                                            {confirmandoBorrarId === a.id ? (
+                                                <>
+                                                    <Btn
+                                                        variant="danger"
+                                                        className="px-3 py-1.5 text-xs"
+                                                        disabled={borrando}
+                                                        onClick={() => borrar(a.id)}
+                                                    >
+                                                        {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                                    </Btn>
+                                                    <Btn
+                                                        variant="ghost"
+                                                        className="px-3 py-1.5 text-xs"
+                                                        disabled={borrando}
+                                                        onClick={() => setConfirmandoBorrarId(null)}
+                                                    >
+                                                        Cancelar
+                                                    </Btn>
+                                                </>
+                                            ) : (
+                                                <Btn
+                                                    variant="danger"
+                                                    className="px-3 py-1.5 text-xs"
+                                                    onClick={() => setConfirmandoBorrarId(a.id)}
+                                                >
+                                                    Eliminar
+                                                </Btn>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

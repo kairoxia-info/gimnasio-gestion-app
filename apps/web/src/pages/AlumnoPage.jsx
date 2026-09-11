@@ -916,10 +916,18 @@ const medida = (v) => {
 const Progreso = ({ alumnoId, registros, onChange }) => {
     const [form, setForm] = useState(FORM_VACIO);
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    // Confirmación inline por registro (10/09/2026, repaso general): antes esto
+    // era un window.confirm(), el mismo cartel nativo que Nalux ya reportó que
+    // en algunos navegadores no aparece y deja el botón "sin hacer nada". Y si
+    // el borrado fallaba, no se avisaba nada.
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [borrando, setBorrando] = useState(false);
 
     const guardar = async (e) => {
         e.preventDefault();
         setSaving(true);
+        setError('');
         try {
             await createRec('progreso', {
                 alumno_id: alumnoId,
@@ -934,8 +942,24 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
             });
             setForm({ ...FORM_VACIO, fecha: hoy() });
             onChange();
+        } catch (_) {
+            setError('No se pudo guardar el registro. Reintentar en unos minutos.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const borrar = async (id) => {
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('progreso', id);
+            setConfirmandoBorrarId(null);
+            onChange();
+        } catch (_) {
+            setError('No se pudo eliminar el registro. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
         }
     };
 
@@ -949,6 +973,11 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
 
     return (
         <div className="grid gap-5 lg:grid-cols-[1fr,1.2fr]">
+            {error && (
+                <div className="lg:col-span-2">
+                    <ErrorBox>{error}</ErrorBox>
+                </div>
+            )}
             <Card>
                 <h3 className="mb-4 font-display text-lg font-bold">Nuevo registro</h3>
                 <form onSubmit={guardar} className="space-y-3">
@@ -1075,21 +1104,35 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                         })()}
                                         {r.observaciones && <p className="mt-1 text-xs">{r.observaciones}</p>}
                                     </div>
-                                    <button
-                                        type="button"
-                                        aria-label="Eliminar registro"
-                                        onClick={() => {
-                                            // Sin confirmación y con el color de marca en vez del
-                                            // rojo fijo de peligro -- bug real encontrado en
-                                            // revisión (09/09/2026), mismo patrón que "Eliminar
-                                            // pago" más abajo.
-                                            if (!window.confirm(`¿Eliminar el registro del ${fmtFecha(r.fecha)}? No se puede deshacer.`)) return;
-                                            removeRec('progreso', r.id).then(onChange);
-                                        }}
-                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    {confirmandoBorrarId === r.id ? (
+                                        <div className="flex shrink-0 items-center gap-1.5">
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrar(r.id)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrarId(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            aria-label="Eliminar registro"
+                                            onClick={() => setConfirmandoBorrarId(r.id)}
+                                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-destructive"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </li>
                             ))}
                         </ul>
@@ -1272,10 +1315,37 @@ const EstadoCuotaAlumno = ({ alumnoId, pagos, config }) => {
 };
 
 const PagosAlumno = ({ pagos, config, onChange }) => {
+    // Confirmación inline en dos pasos (10/09/2026, repaso general): antes era
+    // un window.confirm(), el cartel nativo que en algunos navegadores no
+    // aparece y deja el botón mudo. Acá pesa el doble porque cada pago es
+    // también el comprobante numerado: si el borrado falla hay que verlo.
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [borrando, setBorrando] = useState(false);
+    const [error, setError] = useState('');
+
+    const borrar = async (id) => {
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('pagos', id);
+            setConfirmandoBorrarId(null);
+            onChange();
+        } catch (_) {
+            setError('No se pudo eliminar el pago. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
+    };
+
     return (
         <div className="space-y-5">
             <Card>
                 <h3 className="mb-3 font-display text-lg font-bold">Historial de pagos</h3>
+                {error && (
+                    <div className="mb-3">
+                        <ErrorBox>{error}</ErrorBox>
+                    </div>
+                )}
                 {pagos.length === 0 ? (
                     <Empty>Sin pagos registrados para este alumno.</Empty>
                 ) : (
@@ -1299,28 +1369,38 @@ const PagosAlumno = ({ pagos, config, onChange }) => {
                                     <Badge className={ESTADOS_PAGO[estadoCuota(p, config)].className}>
                                         {ESTADOS_PAGO[estadoCuota(p, config)].label}
                                     </Badge>
-                                    <button
-                                        type="button"
-                                        aria-label="Eliminar pago"
-                                        onClick={() => {
-                                            // Sin confirmación y con el color de marca en vez del
-                                            // rojo fijo de peligro -- bug real encontrado en
-                                            // revisión (09/09/2026). Especialmente grave acá: cada
-                                            // pago es también el comprobante numerado, borrarlo sin
-                                            // querer pierde esa numeración para siempre.
-                                            if (
-                                                !window.confirm(
-                                                    `¿Eliminar este pago de ${money(p.monto)} del ${fmtFecha(p.fecha_pago)}? Se pierde el número de comprobante para siempre. No se puede deshacer.`,
-                                                )
-                                            ) {
-                                                return;
-                                            }
-                                            removeRec('pagos', p.id).then(onChange);
-                                        }}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    {confirmandoBorrarId === p.id ? (
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                            <span className="text-xs text-muted-foreground">
+                                                Se pierde el comprobante N° {p.numero ?? '—'}.
+                                            </span>
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrar(p.id)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrarId(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            aria-label="Eliminar pago"
+                                            onClick={() => setConfirmandoBorrarId(p.id)}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-destructive"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </li>
                         ))}

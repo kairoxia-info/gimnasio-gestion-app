@@ -53,17 +53,29 @@ const PreciosPage = () => {
     const [editDescuentoId, setEditDescuentoId] = useState(null);
     const [savingDescuento, setSavingDescuento] = useState(false);
 
+    // Los alumnos guardan el plan por NOMBRE (alumnos.plan_precio_nombre, texto
+    // suelto -- no hay clave foránea a configuracion_precios). Por eso hay que
+    // saber quién lo está usando antes de borrar un plan: si se borra igual, el
+    // alumno queda apuntando a un plan que ya no existe y la precarga del cobro
+    // deja de encontrarle el precio. Mismo criterio que ya se usaba con los
+    // períodos en borrarPeriodo().
+    const [alumnos, setAlumnos] = useState([]);
+    const [confirmandoBorrar, setConfirmandoBorrar] = useState(null); // { tipo, id }
+    const [borrando, setBorrando] = useState(false);
+
     const cargar = () => {
         setLoading(true);
         return Promise.all([
             listAll('configuracion_precios'),
             listAll('configuracion_periodos'),
             listAll('configuracion_descuentos'),
+            listAll('alumnos'),
         ])
-            .then(([planes, pers, desc]) => {
+            .then(([planes, pers, desc, alus]) => {
                 setItems(planes);
                 setPeriodos(pers.sort((a, b) => Number(a.dias) - Number(b.dias)));
                 setDescuentos(desc.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+                setAlumnos(alus);
                 setError('');
             })
             .catch(() => setError('No se pudieron cargar los planes.'))
@@ -135,10 +147,45 @@ const PreciosPage = () => {
             setError(
                 `No se puede borrar "${p.nombre}": lo usan ${enUso.length} plan(es). Cambiarles el período primero, o pausarlo.`,
             );
+            setConfirmandoBorrar(null);
             return;
         }
-        await removeRec('configuracion_periodos', p.id);
-        cargar();
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('configuracion_periodos', p.id);
+            setConfirmandoBorrar(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el período. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
+    };
+
+    // Un plan borrado deja huérfanos a los alumnos que lo tenían asignado: no
+    // se borra a ciegas, se avisa a quién afecta y se pide cambiarles el plan
+    // primero (o pausarlo, que es lo que casi siempre se quiere en realidad).
+    const borrarPlan = async (p) => {
+        const enUso = alumnos.filter((a) => a.plan_precio_nombre === p.nombre);
+        if (enUso.length > 0) {
+            setError(
+                `No se puede borrar "${p.nombre}": lo tienen asignado ${enUso.length} alumno${enUso.length === 1 ? '' : 's'}. Cambiarles el plan primero, o pausar este plan para que deje de aparecer al cobrar.`,
+            );
+            setConfirmandoBorrar(null);
+            return;
+        }
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('configuracion_precios', p.id);
+            setConfirmandoBorrar(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el plan. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
     };
 
     const cargarSugeridos = async () => {
@@ -172,8 +219,17 @@ const PreciosPage = () => {
     };
 
     const borrarDescuento = async (d) => {
-        await removeRec('configuracion_descuentos', d.id);
-        cargar();
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('configuracion_descuentos', d.id);
+            setConfirmandoBorrar(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar el descuento. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
     };
 
     const periodosActivos = periodos.filter((p) => p.activo);
@@ -269,13 +325,34 @@ const PreciosPage = () => {
                                     >
                                         Editar
                                     </Btn>
-                                    <Btn
-                                        variant="danger"
-                                        className="px-3 py-1.5 text-xs"
-                                        onClick={() => borrarPeriodo(p)}
-                                    >
-                                        Eliminar
-                                    </Btn>
+                                    {confirmandoBorrar?.tipo === 'periodo' && confirmandoBorrar.id === p.id ? (
+                                        <>
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrarPeriodo(p)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrar(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </>
+                                    ) : (
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-1.5 text-xs"
+                                            onClick={() => setConfirmandoBorrar({ tipo: 'periodo', id: p.id })}
+                                        >
+                                            Eliminar
+                                        </Btn>
+                                    )}
                                 </div>
                             </li>
                         ))}
@@ -339,13 +416,34 @@ const PreciosPage = () => {
                                     >
                                         Editar
                                     </Btn>
-                                    <Btn
-                                        variant="danger"
-                                        className="px-3 py-1.5 text-xs"
-                                        onClick={() => borrarDescuento(d)}
-                                    >
-                                        Eliminar
-                                    </Btn>
+                                    {confirmandoBorrar?.tipo === 'descuento' && confirmandoBorrar.id === d.id ? (
+                                        <>
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrarDescuento(d)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrar(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </>
+                                    ) : (
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-1.5 text-xs"
+                                            onClick={() => setConfirmandoBorrar({ tipo: 'descuento', id: d.id })}
+                                        >
+                                            Eliminar
+                                        </Btn>
+                                    )}
                                 </div>
                             </li>
                         ))}
@@ -396,13 +494,34 @@ const PreciosPage = () => {
                                 >
                                     Editar
                                 </Btn>
-                                <Btn
-                                    variant="danger"
-                                    className="px-3 py-2 text-xs"
-                                    onClick={() => removeRec('configuracion_precios', p.id).then(cargar)}
-                                >
-                                    Eliminar
-                                </Btn>
+                                {confirmandoBorrar?.tipo === 'plan' && confirmandoBorrar.id === p.id ? (
+                                    <>
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-2 text-xs"
+                                            disabled={borrando}
+                                            onClick={() => borrarPlan(p)}
+                                        >
+                                            {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                        </Btn>
+                                        <Btn
+                                            variant="ghost"
+                                            className="px-3 py-2 text-xs"
+                                            disabled={borrando}
+                                            onClick={() => setConfirmandoBorrar(null)}
+                                        >
+                                            Cancelar
+                                        </Btn>
+                                    </>
+                                ) : (
+                                    <Btn
+                                        variant="danger"
+                                        className="px-3 py-2 text-xs"
+                                        onClick={() => setConfirmandoBorrar({ tipo: 'plan', id: p.id })}
+                                    >
+                                        Eliminar
+                                    </Btn>
+                                )}
                             </div>
                         </div>
                     ))}

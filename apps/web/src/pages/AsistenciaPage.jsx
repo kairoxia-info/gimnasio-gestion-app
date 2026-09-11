@@ -308,7 +308,11 @@ const AsistenciaPage = () => {
             setCerrando(false);
             cargar();
         } catch (_) {
-            setError('No se pudo cerrar el día.');
+            // Promise.all corta al primer error, pero los que ya salieron
+            // quedaron guardados: hay que recargar igual, si no la pantalla
+            // muestra sin marcar a gente que en la base ya figura ausente.
+            setError('No se pudo cerrar el día completo. Revisar quién quedó sin marcar y reintentar.');
+            cargar();
         } finally {
             setGuardando(false);
         }

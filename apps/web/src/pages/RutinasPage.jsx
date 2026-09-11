@@ -168,6 +168,8 @@ const RutinasPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [busqueda, setBusqueda] = useState('');
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [borrando, setBorrando] = useState(false);
 
     // Modal "Nueva rutina" / "Editar rutina"
     const [open, setOpen] = useState(false);
@@ -622,16 +624,32 @@ const RutinasPage = () => {
     // biblioteca ya NO le saca la rutina al alumno que la tenía, la sigue
     // viendo igual. Se avisa igual a cuántos alcanza, porque a partir de ahí
     // esa rutina deja de poder asignarse a alguien nuevo.
-    const borrar = async (r) => {
+    //
+    // La confirmación es propia de la app (confirmandoBorrarId), NO
+    // window.confirm(): es el mismo cartel nativo que Nalux ya reportó como
+    // "el botón no hace nada" para "Quitar" más abajo en este mismo archivo
+    // -- el navegador lo puede suprimir y ahí queda mudo. Se unifica
+    // (10/09/2026, repaso general) y de paso se muestra el error si falla.
+    const avisoBorrar = (r) => {
         const asignados = contarAsignados(r.id);
         const plural = asignados === 1 ? '' : 's';
-        const mensaje =
-            asignados > 0
-                ? `Esta rutina está asignada a ${asignados} alumno${plural} activo${plural}. Ese${plural} alumno${plural} la sigue${asignados === 1 ? '' : 'n'} teniendo tal como está hoy, pero la rutina desaparece de la biblioteca y no se va a poder asignar de nuevo. ¿Igual se quiere borrar?`
-                : '¿Seguro que se quiere borrar esta rutina?';
-        if (!window.confirm(mensaje)) return;
-        await removeRec('rutinas', r.id);
-        cargar();
+        return asignados > 0
+            ? `Está asignada a ${asignados} alumno${plural} activo${plural}: la siguen teniendo tal cual está hoy, pero desaparece de la biblioteca y no se va a poder asignar de nuevo.`
+            : 'Se borra de la biblioteca. No se puede deshacer.';
+    };
+
+    const borrar = async (r) => {
+        setBorrando(true);
+        setError('');
+        try {
+            await removeRec('rutinas', r.id);
+            setConfirmandoBorrarId(null);
+            cargar();
+        } catch (_) {
+            setError('No se pudo eliminar la rutina. Reintentar en unos minutos.');
+        } finally {
+            setBorrando(false);
+        }
     };
 
     const abrirAsignar = (r) => {
@@ -694,7 +712,11 @@ const RutinasPage = () => {
             setConflictoAlumnos(null);
             cargar();
         } catch (_) {
-            setAsignarMsg('No se pudo completar la asignación. Intentar de nuevo.');
+            // Promise.all corta al primer error, pero las asignaciones que ya
+            // salieron quedaron guardadas: se recarga igual para que la lista
+            // muestre el estado real, no el de antes de intentar.
+            setAsignarMsg('No se pudo completar la asignación. Revisar a quiénes les quedó asignada y reintentar.');
+            cargar();
         } finally {
             setAsignando(false);
         }
@@ -884,10 +906,41 @@ const RutinasPage = () => {
                                     <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirPdfModal(r)}>
                                         <Printer className="h-3.5 w-3.5" /> PDF
                                     </Btn>
-                                    <Btn variant="danger" className="px-3 py-2 text-xs" onClick={() => borrar(r)}>
-                                        Eliminar
-                                    </Btn>
+                                    {confirmandoBorrarId === r.id ? (
+                                        <>
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-2 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => borrar(r)}
+                                            >
+                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-2 text-xs"
+                                                disabled={borrando}
+                                                onClick={() => setConfirmandoBorrarId(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </>
+                                    ) : (
+                                        <Btn
+                                            variant="danger"
+                                            className="px-3 py-2 text-xs"
+                                            onClick={() => {
+                                                setError('');
+                                                setConfirmandoBorrarId(r.id);
+                                            }}
+                                        >
+                                            Eliminar
+                                        </Btn>
+                                    )}
                                 </div>
+                                {confirmandoBorrarId === r.id && (
+                                    <p className="mt-2 text-xs text-muted-foreground">{avisoBorrar(r)}</p>
+                                )}
                             </Card>
                         );
                     })}
