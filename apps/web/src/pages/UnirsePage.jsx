@@ -12,10 +12,16 @@ import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
 // completa el profesor al darlo de alta -- por eso acá no hay selector de
 // plan (lo había antes) ni subida de foto (exigiría abrir una puerta de
 // escritura pública al Storage; se decidió que la suba el profesor).
+// El DNI se sacó de toda la app (11/09/2026, decisión de Nalux: "sacalo así no
+// hay problemas con nada"). No lo usaba ninguna función -- ni el comprobante de
+// pago ni nada, solo se guardaba y se mostraba -- así que era juntar un dato de
+// identidad sin ningún motivo, que es el tipo de cosa que después hay que
+// justificar frente a la Ley 25.326. El dato que no se tiene no hay que
+// cuidarlo. La columna `dni` sigue existiendo en la base, vacía, por si algún
+// día se decide lo contrario.
 const vacio = {
     nombre: '',
     apellido: '',
-    dni: '',
     contacto: '',
     email: '',
     fecha_nacimiento: '',
@@ -75,7 +81,11 @@ const UnirsePage = () => {
                 p_nombre: `${form.nombre.trim()} ${form.apellido.trim()}`.trim(),
                 p_contacto: form.contacto.trim() || null,
                 p_email: form.email.trim() || null,
-                p_dni: form.dni.trim() || null,
+                // p_dni ya no se manda. El parámetro sigue existiendo en la RPC y
+                // la función lo ignora: sacarlo de la firma rompería el
+                // autorregistro en producción hasta que se despliegue este
+                // frontend (ya pasó con el login del alumno esta misma mañana).
+                p_dni: null,
                 p_fecha_nacimiento: form.fecha_nacimiento || null,
                 p_contacto_emergencia: form.contacto_emergencia.trim() || null,
             });
@@ -187,15 +197,6 @@ const UnirsePage = () => {
                                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                                 placeholder="nombre@correo.com"
                                 autoComplete="email"
-                            />
-                        </Field>
-
-                        <Field label="DNI (opcional)">
-                            <Input
-                                value={form.dni}
-                                onChange={(e) => setForm({ ...form, dni: e.target.value })}
-                                placeholder="30111222"
-                                inputMode="numeric"
                             />
                         </Field>
 

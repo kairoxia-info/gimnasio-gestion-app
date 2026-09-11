@@ -2003,7 +2003,7 @@ const AlumnoPage = () => {
                             </div>
                         )}
 
-                        {(alumno.email || alumno.dni || alumno.fecha_nacimiento || alumno.contacto_emergencia || alumno.objetivo) && (
+                        {(alumno.email || alumno.fecha_nacimiento || alumno.contacto_emergencia || alumno.objetivo) && (
                             <Card className="mb-6">
                                 <h2 className="mb-3 font-display text-lg font-bold">Datos personales</h2>
                                 <dl className="grid gap-3 sm:grid-cols-2">
@@ -2013,14 +2013,6 @@ const AlumnoPage = () => {
                                                 Correo
                                             </dt>
                                             <dd className="text-sm">{alumno.email}</dd>
-                                        </div>
-                                    )}
-                                    {alumno.dni && (
-                                        <div>
-                                            <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                DNI
-                                            </dt>
-                                            <dd className="text-sm">{alumno.dni}</dd>
                                         </div>
                                     )}
                                     {alumno.fecha_nacimiento && (

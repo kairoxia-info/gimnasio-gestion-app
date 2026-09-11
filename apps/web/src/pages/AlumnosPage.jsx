@@ -23,7 +23,6 @@ const vacio = {
     email: '',
     fecha_alta: hoy(),
     fecha_nacimiento: '',
-    dni: '',
     contacto_emergencia: '',
     objetivo: '',
     foto_url: '',
@@ -135,7 +134,6 @@ const AlumnosPage = () => {
             email: a.email || '',
             fecha_alta: String(a.fecha_alta || '').slice(0, 10) || hoy(),
             fecha_nacimiento: String(a.fecha_nacimiento || '').slice(0, 10),
-            dni: a.dni || '',
             contacto_emergencia: a.contacto_emergencia || '',
             objetivo: a.objetivo || '',
             foto_url: a.foto_url || '',
@@ -550,12 +548,6 @@ const AlumnosPage = () => {
                             <span className="text-xs text-muted-foreground">
                                 Para el aviso de cumpleaños en el panel general.
                             </span>
-                        </Field>
-                        <Field label="DNI (opcional)">
-                            <Input
-                                value={form.dni}
-                                onChange={(e) => setForm({ ...form, dni: e.target.value })}
-                            />
                         </Field>
                         <Field label="Contacto de emergencia (opcional)">
                             <Input

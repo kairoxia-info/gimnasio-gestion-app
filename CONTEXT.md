@@ -3686,3 +3686,40 @@ un cambio no se aplicó (pasó justo con esto). Hay que mirar cuál referencia e
   abogado**, no algo que se resuelva escribiendo texto en la app. Lo que se agregó ahora es lo
   mínimo honesto para no estar pidiendo DNI a desconocidos sin decir nada; no reemplaza una
   política de privacidad hecha en serio.
+
+### El DNI se sacó de toda la app (11/09/2026)
+
+Decisión de Nalux: *"lo del dni entonces sacalo así no hay problemas con nada"*, y ante la
+pregunta del alcance: *"todo incluidos los dos ya guardados, sacá los campos de las tres pantallas
+para que no se cargue nunca más"*.
+
+Antes de sacarlo se verificó que **no lo usaba ninguna función de la app**: ni el comprobante de
+pago, ni ningún cálculo, ni ninguna consulta. Solo se guardaba y se mostraba en la ficha. O sea
+que se estaba juntando un número de identidad de gente real —incluidos menores— sin ningún
+motivo. Frente a la Ley 25.326 eso es todo costo y cero beneficio: el dato que no se tiene no hay
+que cuidarlo, ni justificar por qué se pide, ni explicar si algún día se filtra.
+
+**Qué se sacó:**
+
+- `UnirsePage.jsx` — el campo del autorregistro público.
+- `AlumnosPage.jsx` — el campo del alta/edición que hace el profesor.
+- `AlumnoPage.jsx` — donde se mostraba en "Datos personales" de la ficha.
+- Los **2 DNI que estaban cargados** en la base (uno de un autorregistro de prueba, otro de un
+  alta manual). Verificado después: 0 DNI, y los 8 alumnos intactos.
+
+**La firma de `join_gimnasio_por_codigo()` se dejó igual, con `p_dni` y todo.** Sacar el
+parámetro habría roto el autorregistro en producción hasta desplegar el frontend nuevo — que es
+exactamente el error que se cometió esta misma mañana con `iniciar_sesion_alumno()`. Así el
+frontend viejo que hoy está en Vercel sigue funcionando; simplemente el valor que manda se
+descarta. Comprobado con una transacción revertida, llamando a la función con un DNI como lo hace
+el cliente viejo: el alumno se crea con teléfono y fecha de nacimiento, y el DNI queda en NULL.
+
+**La columna `alumnos.dni` no se borró**, queda vacía. Borrar una columna es irreversible;
+vaciarla no. Si algún día se decide lo contrario, está.
+
+Verificado en el navegador después del cambio: el formulario público ya no pide DNI, la ficha del
+alumno que sí lo tenía ya no lo muestra, y el modal de "Editar alumno" del profesor tampoco lo
+tiene.
+
+**Pendiente menor:** cuando el frontend nuevo esté desplegado y no queden clientes viejos dando
+vueltas, se puede sacar `p_dni` de la firma de la RPC. No corre apuro: hoy se descarta igual.
