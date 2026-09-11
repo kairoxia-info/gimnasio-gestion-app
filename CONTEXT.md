@@ -3723,3 +3723,78 @@ tiene.
 
 **Pendiente menor:** cuando el frontend nuevo esté desplegado y no queden clientes viejos dando
 vueltas, se puede sacar `p_dni` de la firma de la RPC. No corre apuro: hoy se descarta igual.
+
+### Correccion: "Leaked password protection" es de plan Pro, no gratis (11/09/2026)
+
+En las notas de la auditoria y en la lista de pendientes figuraba activar **"Prevent use of
+leaked passwords"** (el chequeo contra HaveIBeenPwned) como un click gratis en el Dashboard. **Es
+falso**: la propia pantalla de Supabase aclara *"Only available on Pro plan and above"*. Como
+Nalux decidio quedarse en Free, esa opcion **no esta disponible** y se saca de la lista de
+pendientes. El advisor de Supabase la va a seguir reportando; hay que ignorarla mientras el
+proyecto siga en Free.
+
+En su lugar, en la misma pantalla (`Authentication → Sign In / Providers → Email`) hay cuatro
+cosas que SI son gratis y valen mas:
+
+1. **Minimum password length: estaba en 6.** La cuenta del profesor -- que abre todos los
+   alumnos, telefonos, pagos y medidas -- exigia MENOS que la de un alumno, a quien la app ya le
+   pide 8 caracteres con una mayuscula (migraciones 0039/0040). Estaba al reves. Subir a 8.
+2. **Password requirements: estaba sin elegir.** Poner la opcion que exige minusculas, mayusculas
+   y numeros, para que quede alineado con lo que ya se les exige a los alumnos.
+3. **"Require current password when updating": estaba apagado.** Con eso apagado, alguien que
+   agarre una sesion abierta puede cambiar la contraseña SIN saber la actual y dejar al dueño
+   afuera de su propia cuenta.
+4. **"Secure password change": estaba apagado.** Exige haber iniciado sesion hace poco para poder
+   cambiar la contraseña.
+
+Ninguno de los cuatro invalida las contraseñas existentes: aplican a contraseñas nuevas y a
+cambios futuros.
+
+**Aparte, tambien en esa pantalla:** "Enable Captcha protection" (en Attack Protection) se dejo
+apagado a proposito. Protege los endpoints de Supabase Auth, o sea el registro y login del
+PROFESOR, pero no toca el autorregistro de alumnos ni el login del alumno, que van por funciones
+propias -- que son justamente las dos puertas abiertas al publico. Sumaria friccion donde no hace
+falta y no cubriria donde si. Para frenar abuso en esas dos, lo que sirve es Cloudflare gratis
+delante del dominio, filtrando por IP antes de que la peticion llegue a Supabase.
+
+**Confirmado en el Dashboard:** el proyecto esta en plan **FREE** y dice **"LAST BACKUP: No
+backups"**. Lo que antes era una sospecha de la auditoria ahora es un hecho verificado. Sigue
+siendo decision de Nalux dejarlo asi hasta que ella diga.
+
+### Lista "cuando pasemos a plan Pro en Supabase" (decision de Nalux, 11/09/2026)
+
+Nalux decidio seguir en **plan Free** por ahora, y que lo que dependa de Pro quede anotado para
+cuando cambien. No volver a proponer el cambio de plan salvo que ella lo pida.
+
+Lo que se destraba solo con pasar a Pro, en orden de importancia:
+
+1. **Backups.** En Free NO hay backups restaurables -- confirmado en el Dashboard, dice
+   "LAST BACKUP: No backups". Hoy hay pagos, alumnos y datos de dos gimnasios sin ninguna red de
+   contencion. Pro incluye backups diarios con 7 dias de retencion. Mientras tanto, la mitigacion
+   gratis es un export manual desde el SQL Editor guardado fuera de Supabase.
+2. **"Prevent use of leaked passwords"** (`Authentication → Sign In / Providers → Email`). Chequea
+   la contraseña contra la base de HaveIBeenPwned, o sea las que ya apareicieron en filtraciones
+   de otros sitios, y las rechaza. Es lo que corta el ataque mas barato que existe: probar
+   combinaciones de mail y contraseña que ya circulan en listas publicas.
+   **Como se comporta en Free (comprobado por Nalux):** el interruptor se deja tildar, pero al
+   apretar Guardar **Supabase devuelve un error y no guarda nada**. Hay que destildarlo para que
+   el guardado pase. O sea que falla ruidosamente, no en silencio -- mejor asi.
+   Importante: como el guardado se rechaza ENTERO, cualquier otro cambio hecho en esa misma tanda
+   (longitud minima, requisitos) tampoco se aplica. Si se tocan varias cosas juntas y salta el
+   error, hay que rehacerlas con el de contraseñas filtradas apagado.
+
+Aplica solo a las cuentas de PROFESOR (las de Supabase Auth). El login del alumno va por
+`iniciar_sesion_alumno()`, que es propio, con bcrypt y su propio tope de intentos (migracion
+0042), y ya exige 8 caracteres con una mayuscula.
+
+**Lo que Nalux si dejo activado ese dia, y es gratis:**
+
+- Longitud minima de contraseña: de 6 a **8**.
+- Requisitos de contraseña: **minusculas, mayusculas y digitos**.
+- **"Requerir la contraseña actual al actualizar": ON.** Es el que evita que alguien con una
+  sesion abierta ajena cambie la contraseña sin saber la actual y deje al dueño afuera.
+- "Cambio de contraseña seguro" quedo **apagado**, decision consciente de ella.
+
+Nalux confirmo que el primer intento de guardado **fallo con error** porque tenia tildado el de
+contraseñas filtradas, y que lo destildo para poder guardar. O sea que los valores de arriba son
+los del guardado que SI paso.
