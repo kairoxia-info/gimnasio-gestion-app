@@ -26,7 +26,7 @@ import { copiarAlPortapapeles } from '@/lib/copiar';
 import { validarContrasena } from '@/lib/validacionPassword';
 import { crearAccesoAutomatico, generarContrasenaAlumno } from '@/lib/accesoAlumno';
 import { useAuth } from '@/contexts/AuthContext';
-import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
+import { columnasDe, createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
     ESTADOS_ALUMNO,
     agruparCombos,
@@ -2177,7 +2177,12 @@ const AlumnoPage = () => {
             // resto de la ficha -- si falla, estadoCuota() cae a sus defaults
             // (0 días de gracia, 7 de aviso) en vez de romper la pantalla.
             const [alumnoRes, planAliRows, progreso, asistencias, pagos, gimnasioRes] = await Promise.all([
-                supabase.from('alumnos').select('*').eq('id', id).single(),
+                // columnasDe('alumnos') y no '*' (repaso de seguridad del
+                // 14/09/2026): desde la migración 0051 los permisos de esta
+                // tabla son por columna, y un '*' falla entero contra las que
+                // el panel ya no puede pedir (hash de contraseña, contadores
+                // internos, DNI). Ver el comentario largo en lib/data.js.
+                supabase.from('alumnos').select(columnasDe('alumnos')).eq('id', id).single(),
                 listAll('planes_alimentacion', { filters: { alumno_id: id }, sort: '-created_at' }),
                 listAll('progreso', { filters: { alumno_id: id }, sort: '-fecha' }),
                 listAll('asistencias', { filters: { alumno_id: id }, sort: '-fecha' }),

@@ -14,6 +14,36 @@ const aplicarSort = (query, sort) => {
     return query.order(columna, { ascending });
 };
 
+// Columnas que el panel del profesor SÍ puede pedir, por colección
+// (repaso de seguridad del 14/09/2026). Hasta acá todo pedía `select('*')`,
+// y eso hacía que el navegador recibiera de cada alumno el hash bcrypt de su
+// contraseña, los contadores internos de tope de intentos y el DNI -- datos
+// que NINGUNA pantalla usa (verificado buscándolos en todo `src/`). No era
+// una fuga hacia afuera (RLS sigue limitando a los alumnos del propio
+// gimnasio), pero un secreto que no hace falta en el cliente no tiene por qué
+// viajar hasta ahí: con esto, un XSS futuro, una extensión de navegador
+// metida, o la compu del profesor abierta ya no alcanzan para llevarse hashes
+// que después se puedan romper offline.
+//
+// Ojo al tocar esto: la migración 0051 recorta los permisos a nivel de COLUMNA
+// en Postgres, y ahí `SELECT *` no filtra en silencio -- falla entero con
+// "permission denied for column". O sea que esta lista y la de la migración
+// tienen que decir lo mismo; si se agrega una columna nueva a `alumnos` que el
+// panel necesite, hay que sumarla en los DOS lados.
+//
+// Las funciones SECURITY DEFINER (iniciar_sesion_alumno, crear_acceso_alumno,
+// ver_plan_por_codigo, etc.) no se ven afectadas: corren con los permisos de
+// su dueño, así que siguen leyendo y escribiendo password_hash y contadores
+// como siempre. Solo cambia lo que puede pedir el navegador.
+const COLUMNAS_POR_COLECCION = {
+    alumnos:
+        'id, gimnasio_id, nombre, contacto, email, fecha_alta, fecha_nacimiento, foto_url, ' +
+        'activo, observaciones_salud, plan_precio_nombre, user_id, created_at, origen, ' +
+        'codigo_acceso, contacto_emergencia, objetivo, pendiente, usuario, notas_internas',
+};
+
+export const columnasDe = (collection) => COLUMNAS_POR_COLECCION[collection] || '*';
+
 // filters: objeto plano { columna: valor } -> encadena .eq(columna, valor).
 // Alcanza para todo lo que hoy filtran las páginas (siempre por igualdad,
 // nunca por rango/like), y RLS ya se encarga de gimnasio_id, así que nunca
@@ -36,7 +66,7 @@ const aplicarFiltros = (query, filters) => {
 // como siempre.
 export const listAll = async (collection, options = {}) => {
     const { sort, filters } = options;
-    let query = supabase.from(collection).select('*');
+    let query = supabase.from(collection).select(columnasDe(collection));
     query = aplicarFiltros(query, filters);
     query = aplicarSort(query, sort);
     try {
@@ -64,7 +94,7 @@ export const createRec = async (collection, data) => {
     const { data: creado, error } = await supabase
         .from(collection)
         .insert({ ...data, gimnasio_id })
-        .select()
+        .select(columnasDe(collection))
         .single();
     if (error) throw error;
     return creado;
@@ -75,7 +105,7 @@ export const updateRec = async (collection, id, data) => {
         .from(collection)
         .update(data)
         .eq('id', id)
-        .select()
+        .select(columnasDe(collection))
         .single();
     if (error) throw error;
     return actualizado;
