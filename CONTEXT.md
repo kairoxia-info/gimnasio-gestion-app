@@ -4125,3 +4125,17 @@ cumpliendo).
 `eslint src/` limpio. Pendiente: que Nalux reintente el registro con una contraseña que cumpla
 (ej. mayúscula + minúscula + número + 8 caracteres) para confirmar de punta a punta que con
 "Confirm email" apagado entra directo, sin pedir mail.
+
+**Agregado el mismo día, más pedidos sobre el rebranding**: caja de login/onboarding/restablecer
+contraseña más grande (`max-w-md` -> `max-w-lg`, `p-8` -> `p-10`, las tres pantallas
+consistentes entre sí). Logo chico de RutNail agregado DENTRO de la app, debajo de "Creado por
+Kairox IA" en `KairoxFooterMark` (aparece en el menú lateral logueado, el login del alumno y el
+autorregistro, al ser un componente compartido). El login del alumno
+(`AlumnoLoginPage.jsx`) además cambió su ícono genérico de mancuerna por el mismo `<Logo>`
+grande que ya usan las pantallas del profesor. Y un link de "Soporte" (`mailto:
+equipokairox.ia@gmail.com`) al lado de "Creado por Kairox IA" -- se muestra la palabra
+"Soporte", no la dirección entera, mismo estilo subrayado que el link de Kairox IA.
+
+Verificado en vivo en `localhost:3001` (login del alumno y autorregistro, sin sesión) y
+confirmado el `href="mailto:..."` exacto en el árbol de accesibilidad. `eslint src/` y `npm run
+build` limpios.

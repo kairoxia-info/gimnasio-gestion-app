@@ -118,25 +118,46 @@ const GimnasioMark = ({ className = 'h-10' }) => {
 
 // Firma chica de la plataforma, para adentro de la app y para las pantallas
 // públicas sin sesión (autorregistro, login del alumno) — a propósito
-// discreta: el logo de RutNail tiene que resaltar en el login del
+// discreta: el logo GRANDE de RutNail tiene que resaltar en el login del
 // profesor, no acá, donde el protagonista es el gimnasio de cada profe
 // (GimnasioMark, arriba) o directamente no hay ninguna marca de gimnasio
 // todavía que mostrar. "Kairox IA" (14/09/2026, pedido de Nalux) lleva a la
 // página oficial del creador -- se abre en pestaña nueva porque saca al
 // visitante de la app a un sitio externo, mismo criterio que cualquier otro
 // link externo de esta app (ej. WhatsApp).
+//
+// El logo chico de abajo (mismo día, pedido de Nalux: "que no ocupe mucho
+// lugar pero que se vea") es el único lugar donde RutNail aparece DENTRO de
+// la app ya logueada -- todo lo demás en esa pantalla es la marca del
+// gimnasio del profe, así que esto queda chico y apagado (h-5, sin negrita)
+// a propósito, para no competir con eso.
+//
+// "Soporte" (mismo día): mailto directo a equipokairox.ia@gmail.com -- se
+// muestra la palabra, no la dirección entera, mismo criterio visual que
+// "Kairox IA" arriba (subrayado punteado, discreto) para que cualquiera
+// entienda de un vistazo que es un link, sin ocupar más lugar que un mail
+// escrito entero.
 export const KairoxFooterMark = () => (
-    <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        Creado por{' '}
+    <div className="flex flex-col items-center gap-1.5">
+        <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Creado por{' '}
+            <a
+                href="https://kairox-ia.vercel.app/#inicio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-dotted underline-offset-2 transition hover:text-foreground"
+            >
+                Kairox IA
+            </a>
+        </p>
         <a
-            href="https://kairox-ia.vercel.app/#inicio"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline decoration-dotted underline-offset-2 transition hover:text-foreground"
+            href="mailto:equipokairox.ia@gmail.com"
+            className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 underline decoration-dotted underline-offset-2 transition hover:text-foreground"
         >
-            Kairox IA
+            Soporte
         </a>
-    </p>
+        <img src="/logo-rutnail.png" alt="RutNail" className="mt-0.5 h-5 w-auto object-contain opacity-70" />
+    </div>
 );
 
 const ThemeToggle = () => {

@@ -66,7 +66,7 @@ const ResetPasswordPage = () => {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+                className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-10 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-36" />

@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Dumbbell, Loader2, Lock, User } from 'lucide-react';
+import { Loader2, Lock, User } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
+import { KairoxFooterMark, Logo, ThemeToggle } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 
 // Clave de localStorage donde queda guardado el codigo_acceso después de un
@@ -121,9 +121,12 @@ const AlumnoLoginPage = () => {
                 className="relative w-full max-w-sm rounded-3xl border border-border bg-card p-8"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
-                    <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10">
-                        <Dumbbell className="h-8 w-8 text-primary" strokeWidth={1.8} />
-                    </span>
+                    {/* Logo de RutNail (14/09/2026, pedido de Nalux) en vez del
+                        ícono genérico de mancuerna que había acá -- mismo
+                        <Logo> que ya usan LoginPage/OnboardingPage/
+                        ResetPasswordPage, así que un solo lugar sigue
+                        definiendo cómo se ve. */}
+                    <Logo className="h-20" />
                     <h1 className="font-display mt-3 text-xl font-bold">Tu rutina y tu plan</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Entrar con el usuario y la contraseña que dio el profesor.
