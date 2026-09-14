@@ -4257,3 +4257,40 @@ gimnasios" en ninguna de las dos pantallas.
 ("180 grados en landmine") que había quedado oculto de una verificación anterior en esta misma
 sesión, antes de un corte de contexto -- no se había destapado. Se destapó ahora y se confirmó
 por SQL que `biblioteca_ocultos` quedó en 0 filas en todo el proyecto.
+
+## 14/09/2026 — El logo se veía chico en todos lados: tenía mucho margen transparente de sobra
+
+**Pedido de Nalux**: *"quiero que el logo de la app tanto abajo de soporte y la que esta en la
+ventana, no se ve bien el logo, quiero que lo agrandes mas que se vea bien el logo"*.
+
+**Causa real, no solo "hay que agrandarlo"**: se decodificó `public/logo-rutnail.png` a mano
+(mismo criterio que la verificación de transparencia de esta sesión) para medir el bounding box
+real del dibujo contra el canvas completo. El archivo original (1254×1254) tenía un margen
+transparente enorme alrededor de la marca -- el dibujo real solo ocupaba 83% del ancho y apenas
+**65% del alto** del canvas. Como `Logo`/`KairoxFooterMark` usan `object-contain` con solo el
+alto fijado (`h-5`, `h-36`, etc.), ese margen de sobra se descontaba SIEMPRE del tamaño visible:
+a cualquier `h-*` que se le pusiera, el logo que realmente se veía terminaba siendo un 35% más
+chico de lo que el alto de la caja hacía pensar. Achicar o agrandar la clase de Tailwind nunca
+iba a arreglar esto del todo -- el problema estaba en el archivo.
+
+**Corregido**:
+1. Recortado `public/logo-rutnail.png` al contenido real (bounding box de píxeles con alfa > 10)
+   más un margen chico del 3.5%, manteniendo la transparencia. Quedó en 1117×870, con el dibujo
+   ocupando ~94% del canvas en vez de 65-83%. Mismo archivo, mismo nombre -- así se corrige de
+   una sola vez en TODOS los lugares que lo usan: el logo grande de login/onboarding/recuperar
+   contraseña/login del alumno, el logo chico de `KairoxFooterMark`, y el favicon de la pestaña
+   del navegador (`index.html` ya apunta a este mismo archivo).
+2. Además, el logo chico de `KairoxFooterMark` (abajo de "Soporte", dentro de la app ya
+   logueada) pasó de `h-5 opacity-70` a `h-8 opacity-90` -- Nalux pidió agrandarlo explícitamente
+   y el original quedaba demasiado apagado para leerse bien.
+
+**Herramienta usada**: sin ImageMagick ni `sharp` instalados, se escribió un script Node chico
+que decodifica el PNG a mano (zlib + los 5 filtros de PNG), recorta, y lo vuelve a codificar con
+su propio cálculo de CRC32 -- mismo enfoque manual que ya se usó esta sesión para confirmar la
+transparencia del logo original.
+
+**Verificado en vivo** (`localhost:3001`): el logo chico abajo de "Soporte" en el panel del profe
+se ve notablemente más grande y lleno; el logo grande de `/alumno` (login del alumno) se ve igual
+de proporcionado que antes pero sin el aire vacío alrededor. Sin distorsión -- el recorte
+mantiene la proporción original del dibujo (ancho:alto ≈ 1.28:1 antes y después), solo saca el
+margen transparente de sobra.

@@ -129,8 +129,12 @@ const GimnasioMark = ({ className = 'h-10' }) => {
 // El logo chico de abajo (mismo día, pedido de Nalux: "que no ocupe mucho
 // lugar pero que se vea") es el único lugar donde RutNail aparece DENTRO de
 // la app ya logueada -- todo lo demás en esa pantalla es la marca del
-// gimnasio del profe, así que esto queda chico y apagado (h-5, sin negrita)
-// a propósito, para no competir con eso.
+// gimnasio del profe, así que esto queda chico y sin negrita a propósito,
+// para no competir con eso (h-8/opacity-90, 14/09/2026: "no se ve bien el
+// logo... agrandalo mas" -- h-5/opacity-70 quedaba demasiado chico y apagado
+// para leerse bien; ver también el recorte del PNG en public/logo-
+// rutnail.png, que tenía mucho margen transparente alrededor del dibujo
+// real y lo hacía ver más chico todavía a cualquier tamaño).
 //
 // "Soporte" (mismo día): mailto directo a equipokairox.ia@gmail.com -- se
 // muestra la palabra, no la dirección entera, mismo criterio visual que
@@ -156,7 +160,7 @@ export const KairoxFooterMark = () => (
         >
             Soporte
         </a>
-        <img src="/logo-rutnail.png" alt="RutNail" className="mt-0.5 h-5 w-auto object-contain opacity-70" />
+        <img src="/logo-rutnail.png" alt="RutNail" className="mt-0.5 h-8 w-auto object-contain opacity-90" />
     </div>
 );
 
