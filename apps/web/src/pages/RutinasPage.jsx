@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
@@ -1469,10 +1469,23 @@ const RutinasPage = () => {
                             {itemsDelDiaActivo.length > 0 && (
                                 <div className="mb-5 space-y-4">
                                     {agruparPorBloque(itemsDelDiaActivo).map(([nombreBloque, delBloque], iBloque) => (
-                                        <div key={`${nombreBloque}-${iBloque}`} className="space-y-3">
+                                        <div
+                                            key={`${nombreBloque}-${iBloque}`}
+                                            // "Caja" visual por grupo muscular (14/09/2026, pedido de
+                                            // Nalux probando en la URL real: "quiero que abajo de día 1
+                                            // haya una caja para escribir espalda y bícep, y abajo los
+                                            // ejercicios... después poder agregar otra caja más"). Antes
+                                            // el bloque solo se distinguía por una tira finita de fondo
+                                            // sobre el encabezado -- acá se envuelve TODO el grupo
+                                            // (encabezado + sus ejercicios) en un borde bien visible, así
+                                            // se lee de un vistazo dónde empieza y termina cada bloque.
+                                            // Los ejercicios "sin bloque" (nombreBloque vacío) se dejan
+                                            // sin caja, como catch-all de siempre.
+                                            className={`space-y-3 ${nombreBloque ? 'rounded-2xl border-2 border-primary/30 bg-primary/[0.03] p-3' : ''}`}
+                                        >
                                             {nombreBloque && (
                                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-secondary/20 p-2.5">
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                    <p className="text-base font-bold uppercase tracking-wide text-primary">
                                                         {nombreBloque}
                                                     </p>
                                                     {/* Tipo de grupo (Fase 2.3, 13/09/2026): circuito (rondas)
@@ -1564,8 +1577,8 @@ const RutinasPage = () => {
                                                                     (col-span-4) y los cuatro campos entran en una. */}
                                                                 <div className="grid grid-cols-4 items-end gap-2 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto] sm:gap-3">
                                                                     <div className="col-span-4 min-w-0 sm:col-span-1">
-                                                                        <p className="text-sm font-bold">{it.nombre}</p>
-                                                                        <p className="text-xs text-muted-foreground">
+                                                                        <p className="text-base font-bold">{it.nombre}</p>
+                                                                        <p className="text-sm text-muted-foreground">
                                                                             {it.grupo}
                                                                         </p>
                                                                     </div>
@@ -1668,6 +1681,26 @@ const RutinasPage = () => {
                                                                     no aplica a superseries. */}
                                                                 {tieneSeriesDetalle(it) ? (
                                                                     <div className="mt-3 space-y-1.5 rounded-xl border border-border/60 bg-secondary/30 p-3">
+                                                                        {/* Encabezado de columnas (14/09/2026, reportado por
+                                                                            Nalux probando en la URL real: "el kg confunde
+                                                                            porque pareciera que dice 10 kg y no, en
+                                                                            realidad son 10 repeticiones y kg vacío"). Antes
+                                                                            cada fila solo tenía el placeholder "kg" en la
+                                                                            caja de peso -- con esa caja vacía y "10" tipeado
+                                                                            al lado en la de reps, se leía como un solo "10
+                                                                            kg". Un encabezado fijo arriba, una sola vez,
+                                                                            aclara qué es cada columna sin repetirlo en cada
+                                                                            fila. */}
+                                                                        <div className="flex items-center gap-2 px-0.5">
+                                                                            <span className="w-5 shrink-0" aria-hidden="true" />
+                                                                            <span className="flex-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                                                                Repeticiones
+                                                                            </span>
+                                                                            <span className="flex-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                                                                Peso (kg, opcional)
+                                                                            </span>
+                                                                            <span className="w-8 shrink-0" aria-hidden="true" />
+                                                                        </div>
                                                                         {it.seriesDetalle.map((s, i) => (
                                                                             <div key={i} className="flex items-center gap-2">
                                                                                 <span className="w-5 shrink-0 text-center text-xs font-semibold text-muted-foreground">
@@ -1678,7 +1711,7 @@ const RutinasPage = () => {
                                                                                     onChange={(e) =>
                                                                                         editarFilaSerie(it, i, 'reps', e.target.value)
                                                                                     }
-                                                                                    placeholder="reps"
+                                                                                    placeholder="Ej: 10"
                                                                                     className="px-2 py-1.5 text-xs"
                                                                                 />
                                                                                 <Input
@@ -1686,7 +1719,7 @@ const RutinasPage = () => {
                                                                                     onChange={(e) =>
                                                                                         editarFilaSerie(it, i, 'peso', e.target.value)
                                                                                     }
-                                                                                    placeholder="kg"
+                                                                                    placeholder="Sin peso"
                                                                                     className="px-2 py-1.5 text-xs"
                                                                                 />
                                                                                 <button
@@ -1812,7 +1845,7 @@ const RutinasPage = () => {
                                                                         </button>
                                                                     </div>
                                                                     <div className="grid grid-cols-3 gap-1">
-                                                                        <Field label="Series">
+                                                                        <Field label="Series" labelClassName="text-xs">
                                                                             <Input
                                                                                 type="number"
                                                                                 value={it.series}
@@ -1826,7 +1859,7 @@ const RutinasPage = () => {
                                                                                 className="px-2 py-1.5 text-xs"
                                                                             />
                                                                         </Field>
-                                                                        <Field label="Reps">
+                                                                        <Field label="Reps" labelClassName="text-xs">
                                                                             <Input
                                                                                 value={it.reps}
                                                                                 onChange={(e) =>
@@ -1835,7 +1868,7 @@ const RutinasPage = () => {
                                                                                 className="px-2 py-1.5 text-xs"
                                                                             />
                                                                         </Field>
-                                                                        <Field label="Peso">
+                                                                        <Field label="Peso" labelClassName="text-xs">
                                                                             <Input
                                                                                 value={it.peso}
                                                                                 onChange={(e) =>
@@ -1898,12 +1931,52 @@ const RutinasPage = () => {
                                 </div>
                             )}
 
-                            {/* Buscador para seguir sumando ejercicios a ESTE día (y bloque).
-                                A propósito vive acá abajo, no arriba de todo el formulario: es lo
-                                que se toca una y otra vez mientras se arma el día, así que
-                                conviene que quede pegado a lo que se está armando. */}
-                            <div className="space-y-3 border-t border-border pt-4">
-                                <Field label="Agregar ejercicios a este día">
+                            {/* Armar una caja nueva (14/09/2026, rediseñado a pedido de Nalux
+                                probando en la URL real: "quiero que abajo de día 1 haya una caja
+                                para escribir espalda y bícep, y abajo los ejercicios... después
+                                poder agregar otra caja más"). El orden importa: antes el campo
+                                "Bloque" estaba DEBAJO del buscador y su valor no se limpiaba solo
+                                al agregar -- fácil de olvidarse de cambiarlo y que el ejercicio
+                                siguiente caiga en la caja anterior sin darse cuenta. Ahora se
+                                nombra la caja PRIMERO (se lee de arriba a abajo: 1. nombrás,
+                                2. elegís ejercicios, 3. agregás), y el botón "Bloque nuevo"
+                                aparece en cuanto hay algo escrito, para vaciar el campo a
+                                propósito antes de armar el próximo grupo. A propósito vive acá
+                                abajo de la lista ya cargada, no arriba de todo el formulario: es
+                                lo que se toca una y otra vez mientras se arma el día. */}
+                            <div className="space-y-3 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/[0.02] p-3">
+                                <Field label="Nombre del bloque (ej: Espalda-Bícep)">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            list="bloques-sugeridos"
+                                            value={bloque}
+                                            onChange={(e) => setBloque(e.target.value)}
+                                            placeholder="Espalda-Bícep, Abdomen, Entrada en calor..."
+                                            className="flex-1"
+                                        />
+                                        {bloque && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setBloque('')}
+                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+                                            >
+                                                <X className="h-4 w-4" /> Bloque nuevo
+                                            </button>
+                                        )}
+                                    </div>
+                                    <datalist id="bloques-sugeridos">
+                                        {BLOQUES_SUGERIDOS.map((b) => (
+                                            <option key={b} value={b} />
+                                        ))}
+                                    </datalist>
+                                    <span className="text-sm text-muted-foreground">
+                                        {bloque
+                                            ? `Los ejercicios que agregues abajo van a la caja "${bloque}".`
+                                            : 'Dejalo vacío para agregar ejercicios sueltos, sin agrupar en ninguna caja.'}
+                                    </span>
+                                </Field>
+
+                                <Field label="Buscar y elegir ejercicios para esta caja">
                                     <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-2">
                                         <Search
                                             className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -1956,36 +2029,22 @@ const RutinasPage = () => {
                                         )}
                                     </div>
                                     <span className="text-xs text-muted-foreground">
-                                        Marcar varios para agregarlos todos juntos, uno detrás del otro — si van
-                                        en superserie, ponerlos en el mismo bloque.
+                                        Marcar varios para agregarlos todos juntos, uno detrás del otro -- si van
+                                        en superserie, dejalos en la misma caja.
                                     </span>
                                 </Field>
-                                <div className="grid gap-3 sm:grid-cols-[1fr,auto]">
-                                    <Field label="Bloque (opcional)">
-                                        <Input
-                                            list="bloques-sugeridos"
-                                            value={bloque}
-                                            onChange={(e) => setBloque(e.target.value)}
-                                            placeholder="Entrada en calor, Superserie..."
-                                        />
-                                        <datalist id="bloques-sugeridos">
-                                            {BLOQUES_SUGERIDOS.map((b) => (
-                                                <option key={b} value={b} />
-                                            ))}
-                                        </datalist>
-                                    </Field>
-                                    <div className="flex items-end">
-                                        <Btn
-                                            type="button"
-                                            onClick={agregarItems}
-                                            disabled={ejsElegidos.size === 0}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            <Plus className="h-4 w-4" />
-                                            {ejsElegidos.size > 0 ? `Agregar (${ejsElegidos.size})` : 'Agregar'}
-                                        </Btn>
-                                    </div>
-                                </div>
+
+                                <Btn
+                                    type="button"
+                                    onClick={agregarItems}
+                                    disabled={ejsElegidos.size === 0}
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    {ejsElegidos.size > 0
+                                        ? `Agregar (${ejsElegidos.size})${bloque ? ` a "${bloque}"` : ''}`
+                                        : 'Agregar'}
+                                </Btn>
                             </div>
                         </Card>
                     )}

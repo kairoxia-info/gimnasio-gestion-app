@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
-import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
+import { Btn, ErrorBox, Field, FechaInput, Input } from '@/components/ui-kit';
 
 // Alcance definido por Nalux (09/09/2026): el alumno carga SOLO sus datos
 // personales. El plan, el objetivo, las observaciones de salud y la foto los
@@ -201,11 +201,9 @@ const UnirsePage = () => {
                         </Field>
 
                         <Field label="Fecha de nacimiento (opcional)">
-                            <Input
-                                type="date"
+                            <FechaInput
                                 value={form.fecha_nacimiento}
                                 onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })}
-                                autoComplete="bday"
                             />
                             {edad !== null && (
                                 <span className="text-xs text-muted-foreground">{edad} años</span>

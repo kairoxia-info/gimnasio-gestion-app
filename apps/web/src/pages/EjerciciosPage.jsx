@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { AlertTriangle, Dumbbell, ExternalLink, Lock, Play, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Dumbbell, ExternalLink, Eye, EyeOff, Lock, Play, Plus, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
@@ -59,11 +59,26 @@ const EjerciciosPage = () => {
     // para poder mostrar también su nombre como título del modal.
     const [previewEj, setPreviewEj] = useState(null);
 
+    // Ver/ocultar (14/09/2026, migración 0054, pedido de Nalux): la
+    // biblioteca base es compartida entre TODOS los gimnasios -- no se
+    // puede editar ni borrar (afectaría a los demás), pero antes tampoco
+    // había forma de sacarse de encima uno que no se usa; el mensaje solo
+    // decía "no se puede". Ahora cada gimnasio puede ocultarlo (sin tocar
+    // la fila de nadie más) y volver a mostrarlo cuando quiera.
+    // `biblioteca_ocultos` es la misma tabla que ya usa AlimentosPage.jsx.
+    const [ocultosIds, setOcultosIds] = useState(() => new Set());
+    const [mostrarOcultos, setMostrarOcultos] = useState(false);
+    const [ocultando, setOcultando] = useState(null);
+
     const cargar = () => {
         setLoading(true);
-        listAll('ejercicios', { sort: 'nombre' })
-            .then((r) => {
+        Promise.all([
+            listAll('ejercicios', { sort: 'nombre' }),
+            listAll('biblioteca_ocultos', { filters: { tabla: 'ejercicios' } }),
+        ])
+            .then(([r, ocultos]) => {
                 setItems(r);
+                setOcultosIds(new Set(ocultos.map((o) => o.item_id)));
                 setError('');
             })
             .catch(() => setError('No se pudo cargar la biblioteca de ejercicios.'))
@@ -71,6 +86,36 @@ const EjerciciosPage = () => {
     };
 
     useEffect(cargar, []);
+
+    // Mismo criterio que AlimentosPage.jsx: insert/delete directo en
+    // biblioteca_ocultos (sin removeRec(), esa tabla no tiene columna `id`
+    // -- su clave es compuesta gimnasio_id + tabla + item_id).
+    const alternarOculto = async (itemId, yaOculto) => {
+        setOcultando(itemId);
+        setError('');
+        try {
+            if (yaOculto) {
+                const { error: err } = await supabase
+                    .from('biblioteca_ocultos')
+                    .delete()
+                    .eq('tabla', 'ejercicios')
+                    .eq('item_id', itemId);
+                if (err) throw err;
+                setOcultosIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
+            } else {
+                await createRec('biblioteca_ocultos', { tabla: 'ejercicios', item_id: itemId });
+                setOcultosIds((prev) => new Set(prev).add(itemId));
+            }
+        } catch (_) {
+            setError('No se pudo actualizar. Reintentar en unos minutos.');
+        } finally {
+            setOcultando(null);
+        }
+    };
 
     // Storage no se limpia solo: hay que borrar el archivo del bucket antes
     // (o junto con) la fila. Es "best effort" — si el archivo ya no está o
@@ -99,15 +144,18 @@ const EjerciciosPage = () => {
     // (gimnasio_id NULL); el resto los cargó este gimnasio.
     const cantidadBase = items.filter((e) => !e.gimnasio_id).length;
     const cantidadPropios = items.length - cantidadBase;
+    const cantidadOcultos = items.filter((e) => ocultosIds.has(e.id)).length;
 
-    // Los 3 filtros se combinan con AND: cada uno reduce la lista, no la
+    // Los 4 filtros se combinan con AND: cada uno reduce la lista, no la
     // reemplaza. El de grupo sigue siendo chips (es el que más se usa, tapa
     // grande); demostración es un select más chico (se usa menos seguido)
     // para no saturar la pantalla en el celular. El patrón de movimiento
     // (clasificacion) no tiene filtro propio a pedido de Nalux — el campo
     // sigue existiendo en el formulario y en la card, solo no hay forma de
-    // filtrar la lista por él.
+    // filtrar la lista por él. Los ocultos (14/09/2026) se caen de la lista
+    // por default, mismo criterio que AlimentosPage.jsx.
     const visibles = items.filter((ej) => {
+        if (!mostrarOcultos && ocultosIds.has(ej.id)) return false;
         if (filtro !== 'todos' && !(ej.grupo_muscular || []).includes(filtro)) return false;
         if (filtroDemo === 'con' && !ej.media_url) return false;
         if (filtroDemo === 'sin' && ej.media_url) return false;
@@ -288,21 +336,40 @@ const EjerciciosPage = () => {
                 </p>
             )}
 
-            <div className="mb-6 flex flex-wrap gap-2">
-                {['todos', ...grupos].map((g) => (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
+                    {['todos', ...grupos].map((g) => (
+                        <button
+                            key={g}
+                            type="button"
+                            onClick={() => setFiltro(g)}
+                            className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                                filtro === g
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-border text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            {g === 'todos' ? 'Todos' : g}
+                        </button>
+                    ))}
+                </div>
+                {cantidadOcultos > 0 && (
                     <button
-                        key={g}
                         type="button"
-                        onClick={() => setFiltro(g)}
-                        className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                            filtro === g
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-border text-muted-foreground hover:text-foreground'
-                        }`}
+                        onClick={() => setMostrarOcultos((v) => !v)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
                     >
-                        {g === 'todos' ? 'Todos' : g}
+                        {mostrarOcultos ? (
+                            <>
+                                <EyeOff className="h-3.5 w-3.5" /> Ocultar los ocultos de nuevo
+                            </>
+                        ) : (
+                            <>
+                                <Eye className="h-3.5 w-3.5" /> Ver ocultos ({cantidadOcultos})
+                            </>
+                        )}
                     </button>
-                ))}
+                )}
             </div>
 
             {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
@@ -320,7 +387,10 @@ const EjerciciosPage = () => {
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     {visibles.map((ej) => (
-                        <div key={ej.id} className="rounded-2xl border border-border bg-card p-5">
+                        <div
+                            key={ej.id}
+                            className={`rounded-2xl border border-border bg-card p-5 ${ocultosIds.has(ej.id) ? 'opacity-60' : ''}`}
+                        >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
@@ -407,10 +477,31 @@ const EjerciciosPage = () => {
                                     </Btn>
                                 </div>
                             ) : (
-                                <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                    <Lock className="h-3.5 w-3.5" /> Es de la biblioteca compartida, no se puede
-                                    editar ni borrar (afectaría a todos los gimnasios).
-                                </p>
+                                <div className="mt-4 space-y-2">
+                                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <Lock className="h-3.5 w-3.5" /> Es de la biblioteca compartida, no se puede
+                                        editar ni borrar (afectaría a todos los gimnasios).
+                                    </p>
+                                    {/* Ocultar (14/09/2026): lo que SÍ se puede hacer con un
+                                        global que no se quiere ver -- antes no había ninguna
+                                        acción posible acá, solo el aviso de arriba. */}
+                                    <Btn
+                                        variant="ghost"
+                                        className="px-3 py-2 text-xs"
+                                        disabled={ocultando === ej.id}
+                                        onClick={() => alternarOculto(ej.id, ocultosIds.has(ej.id))}
+                                    >
+                                        {ocultosIds.has(ej.id) ? (
+                                            <>
+                                                <Eye className="h-3.5 w-3.5" /> Mostrar de nuevo
+                                            </>
+                                        ) : (
+                                            <>
+                                                <EyeOff className="h-3.5 w-3.5" /> Ocultar
+                                            </>
+                                        )}
+                                    </Btn>
+                                </div>
                             )}
                         </div>
                     ))}

@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Info, Plus, Search, UserRound, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
+import { Badge, Btn, Empty, ErrorBox, Field, FechaInput, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
@@ -540,8 +540,7 @@ const AlumnosPage = () => {
                             )}
                         </Field>
                         <Field label="Fecha de nacimiento (opcional)">
-                            <Input
-                                type="date"
+                            <FechaInput
                                 value={form.fecha_nacimiento}
                                 onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })}
                             />

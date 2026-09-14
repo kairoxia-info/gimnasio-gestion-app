@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, X } from 'lucide-react';
 
@@ -43,14 +43,114 @@ export const Btn = ({ variant = 'primary', className = '', type = 'button', ...p
 const controlClass =
     'w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none';
 
-export const Field = ({ label, children, className = '' }) => (
+// Etiqueta subida de text-xs a text-sm (14/09/2026, Nalux probando en la URL
+// real: "se ve un poco chicas las letras, hay que agrandar más"). Afecta a
+// TODA la app porque Field es el componente compartido de etiqueta -- a
+// propósito: la queja fue general, no de una sola pantalla, y un texto de
+// 12px como etiqueta de campo (Series, Reps, Peso...) es chico para leer de
+// un vistazo en una compu de gimnasio. Los inputs (controlClass arriba) se
+// dejan en text-sm por ahora: agrandarlos también arriesga desbordar cajas
+// angostas ya ajustadas a propósito (ej. las cajas de superserie en
+// RutinasPage.jsx, w-[9.5rem] fijo) -- si hace falta, se agranda aparte y
+// puntual donde no haya ese riesgo.
+// labelClassName: escape hatch para las pocas cajas angostas de ancho fijo
+// (ej. las mini-tarjetas de superserie en RutinasPage.jsx, w-[9.5rem]) donde
+// el text-sm nuevo hace que "Series"/"Reps"/"Peso" se toquen entre sí sin
+// espacio -- ahí se vuelve a pedir text-xs explícito, puntual, sin bajarle
+// el tamaño al resto de la app.
+export const Field = ({ label, children, className = '', labelClassName = 'text-sm' }) => (
     <label className={`flex flex-col gap-2 ${className}`}>
-        {label && <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>}
+        {label && (
+            <span className={`${labelClassName} font-semibold uppercase tracking-wide text-muted-foreground`}>
+                {label}
+            </span>
+        )}
         {children}
     </label>
 );
 
 export const Input = ({ className = '', ...props }) => <input className={`${controlClass} ${className}`} {...props} />;
+
+// ---------------------------------------------------------------------------
+// FechaInput: fecha de nacimiento con máscara dd/mm/aaaa (14/09/2026, pedido
+// de Nalux probando en la URL real: "el marcador de fecha de nacimiento sea
+// mejor escrito, obvio respetando /, por ejemplo 10/02/2002, mientras van
+// poniendo solo números se vaya agregando la barra en donde corresponda").
+//
+// Reemplaza al <Input type="date"> nativo (que abre un calendario -- más
+// lento para tipear una fecha ya sabida, como la propia o la de un alumno
+// que se está dando de alta) por un campo de texto que se escribe con el
+// teclado numérico del celular y va agregando las "/" solas. Se integra
+// exactamente igual que el input nativo (mismos value/onChange con forma
+// {target: {value}}) para no tener que tocar cada pantalla que ya lo usaba
+// -- el value sigue siendo YYYY-MM-DD (lo que espera la columna DATE), la
+// conversión de ida y vuelta al texto dd/mm/aaaa vive toda acá adentro.
+// ---------------------------------------------------------------------------
+
+// Solo dígitos, hasta 8 (2 día + 2 mes + 4 año) -> "dd/mm/aaaa" a medida que
+// van alcanzando, sin esperar a que estén los 8.
+const formatearFechaTexto = (soloDigitos) => {
+    const d = soloDigitos.slice(0, 2);
+    const m = soloDigitos.slice(2, 4);
+    const y = soloDigitos.slice(4, 8);
+    let texto = d;
+    if (m) texto += `/${m}`;
+    if (y) texto += `/${y}`;
+    return texto;
+};
+
+// "dd/mm/aaaa" completo -> "aaaa-mm-dd", o '' si todavía está incompleto --
+// nunca se manda una fecha a medio escribir al estado que alimenta el
+// guardado (mismo criterio que el resto del formulario: vacío es vacío).
+const textoADateISO = (texto) => {
+    const m = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return '';
+    const [, d, mes, y] = m;
+    return `${y}-${mes}-${d}`;
+};
+
+const dateISOATexto = (iso) => {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    const [, y, mes, d] = m;
+    return `${d}/${mes}/${y}`;
+};
+
+export const FechaInput = ({ value, onChange, className = '', ...props }) => {
+    const [texto, setTexto] = useState(() => dateISOATexto(value));
+
+    // Sincroniza el texto mostrado si el value cambia DESDE AFUERA (ej. se
+    // abre el formulario de edición con la fecha ya cargada). No depende de
+    // `texto` en el array de deps a propósito: si dependiera, se dispararía
+    // en cada tecla propia y pisaría lo que la persona está escribiendo.
+    useEffect(() => {
+        setTexto(dateISOATexto(value));
+    }, [value]);
+
+    const manejarCambio = (e) => {
+        const digitos = e.target.value.replace(/\D/g, '').slice(0, 8);
+        const nuevoTexto = formatearFechaTexto(digitos);
+        setTexto(nuevoTexto);
+        // Mismo shape que un <input> nativo -- así cada pantalla que ya
+        // hacía onChange={(e) => setForm({...form, fecha_nacimiento:
+        // e.target.value})} sigue funcionando sin cambiar una línea.
+        onChange({ target: { value: textoADateISO(nuevoTexto) } });
+    };
+
+    return (
+        <Input
+            type="text"
+            inputMode="numeric"
+            autoComplete="bday"
+            placeholder="dd/mm/aaaa"
+            value={texto}
+            onChange={manejarCambio}
+            maxLength={10}
+            className={className}
+            {...props}
+        />
+    );
+};
 
 export const Textarea = ({ className = '', ...props }) => (
     <textarea className={`${controlClass} min-h-[90px] ${className}`} {...props} />

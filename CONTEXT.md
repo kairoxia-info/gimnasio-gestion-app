@@ -3971,3 +3971,57 @@ error los tres. Alumno de prueba borrado, confirmado en 0.
 **Lección para la próxima**: antes de sacarle permisos a una tabla por columna, verificar
 `pg_proc.prosecdef` de CADA función que la toca, no asumir por el nombre o el comentario de
 una migración vieja.
+
+## 14/09/2026 — Feedback de la primera prueba real en la URL de Vercel
+
+Nalux probó la app desplegada y mandó capturas con 6 pedidos. El primero (bug de "permission
+denied" al dar acceso a un alumno) ya quedó documentado arriba, como hotfix aparte. El resto,
+todo en una sola tanda, probado en local, **pendiente de su OK para subir**:
+
+- **Letras más grandes**: la etiqueta de los campos (Series, Reps, Peso...) subió de 12px a
+  14px en toda la app (`Field` en `ui-kit.jsx`), y el nombre del ejercicio en las tarjetas del
+  armador de rutinas subió de 14px a 16px. Se agregó `labelClassName` a `Field` como escape
+  hatch: las 3 etiquetas de las cajas angostas de superserie (ancho fijo 9.5rem) se dejaron en
+  12px a propósito, si no "SERIES REPS PESO" quedaban pegadas sin espacio.
+- **Rutinas -- "cajas" por grupo muscular**: rediseño de cómo se arma un bloque en
+  `RutinasPage.jsx`. Antes el campo "Bloque" estaba debajo del buscador de ejercicios y no se
+  limpiaba solo al agregar (fácil que el ejercicio siguiente cayera en el bloque anterior sin
+  querer). Ahora se nombra el bloque PRIMERO, con un botón "Bloque nuevo" para vaciarlo a
+  propósito, y cada grupo ya armado se ve envuelto en un borde bien visible (antes era solo una
+  tira finita de fondo sobre el encabezado).
+- **Confusión "10 kg" en series desglosadas**: se agregó un encabezado de columnas
+  ("Repeticiones" / "Peso (kg, opcional)") una sola vez arriba de las filas, en vez de que cada
+  fila vacía mostrara solo el placeholder "kg" pegado al número de al lado.
+- **Fecha de nacimiento con máscara dd/mm/aaaa**: componente nuevo `FechaInput` en
+  `ui-kit.jsx` -- reemplaza al `<input type="date">` nativo (calendario) por un campo de texto
+  que va agregando las "/" solas mientras se tipean los números. Mismo shape de
+  value/onChange que el input nativo, así no hubo que tocar la lógica de los formularios. Usado
+  en el alta/edición de alumno (`AlumnosPage.jsx`) y en el autorregistro público
+  (`UnirsePage.jsx`).
+- **Biblioteca de alimentos compartida + ver/ocultar (para alimentos Y ejercicios)**: migración
+  `0054`. Mismo patrón que ya tenía `ejercicios` desde la 0019 (`gimnasio_id = NULL` = de nadie,
+  visible para todos, no editable ni borrable). Primera versión sembraba 150 alimentos de uso
+  común -- Nalux la vio y pidió recortarla a propósito: **solo 4 de ejemplo** (Banana, Arroz
+  blanco, Café, Galletas de arroz), "para que vean que son de ejemplo, después cada profe
+  agrega el que quiere". A diferencia de `ejercicios` (una biblioteca grande sí tiene sentido:
+  500 movimientos estándar que no cambian de gimnasio a gimnasio), la nutrición varía mucho más
+  por región/tipo de dieta, así que acá alcanza con mostrar el patrón, no completarlo por el
+  profesor. Tabla nueva `biblioteca_ocultos` (compartida entre las dos bibliotecas, clave
+  compuesta gimnasio_id+tabla+item_id): un gimnasio puede ocultar un ítem global sin afectar a
+  los demás, y volver a mostrarlo cuando quiera. Se agregó también a `EjerciciosPage.jsx`, que
+  antes no tenía NINGUNA acción posible sobre un ítem global (solo un cartel de "no se puede").
+
+Todo probado en vivo contra la base y el panel reales (`localhost:3001`, mismo backend que
+producción): ocultar/mostrar un alimento y un ejercicio, confirmado que persiste tras recargar
+la página entera, y revertido después -- `biblioteca_ocultos` en 0 filas al terminar. `eslint
+src/` limpio en todo el proyecto.
+
+**Agregado el mismo día**: "Porción de referencia" en el formulario de alimentos pasó de un
+campo de texto libre entero a tres campos -- Cantidad (número), Unidad (`<select>` con g, ml,
+unidad, cda, cdta, taza, porción, scoop) y Aclaración opcional (para casos como "1 unidad
+(120 g)"). La columna `alimentos.unidad` en la base sigue siendo texto libre (sin migración
+nueva) -- el formulario arma el texto final (`armarUnidad()`) y lo vuelve a descomponer al
+editar (`descomponerUnidad()`, best-effort: si el texto viejo no calza con el patrón esperado,
+todo queda en la aclaración en vez de perderse). Probado en vivo: creado "1 unidad (150 g)"
+desde los tres campos, confirmado en la base, reabierto en edición y los tres campos volvieron
+a poblarse bien. Alimento de prueba borrado después.
