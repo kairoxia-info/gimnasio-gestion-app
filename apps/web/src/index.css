@@ -8,6 +8,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Escala general para pantallas de escritorio (14/09/2026, reportado por
+   Nalux probando en la URL real desde su monitor: "se sigue viendo muy
+   pequeño todo... que se ajuste a todas las pantallas"). Hasta acá nunca
+   había un tamaño base -- 16px fijo siempre, sin importar el ancho de
+   pantalla. Como (casi) todo en la app está medido en rem (texto, padding,
+   gap, hasta los íconos de lucide-react vía clases h-5/w-5), un solo cambio
+   acá agranda TODO proporcionalmente -- texto, tarjetas, espaciados, íconos
+   -- a la vez, en vez de tener que ir clase por clase por cada componente.
+   1024px es el mismo corte que ya usa el resto de la app para "esto es una
+   computadora, no un celular/tablet" (ver los `lg:` repartidos por todo
+   RutinasPage.jsx, AppLayout.jsx, etc.) -- abajo de eso (celular y tablet,
+   ya verificados y aprobados en vivo varias veces en esta sesión) queda
+   exactamente igual que siempre, 16px. */
+html {
+  font-size: 16px;
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: 18px;
+  }
+}
+
 body {
   font-family: "Inter", system-ui, sans-serif;
   overflow-x: clip;

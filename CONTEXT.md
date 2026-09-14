@@ -4139,3 +4139,40 @@ equipokairox.ia@gmail.com`) al lado de "Creado por Kairox IA" -- se muestra la p
 Verificado en vivo en `localhost:3001` (login del alumno y autorregistro, sin sesión) y
 confirmado el `href="mailto:..."` exacto en el árbol de accesibilidad. `eslint src/` y `npm run
 build` limpios.
+
+## 14/09/2026 — "Se sigue viendo muy pequeño todo": la app no tenía escala de escritorio
+
+Nalux probó la URL real desde su monitor y reportó que todo se veía chico. **Ojo con el método
+de verificación, que fue parte del problema**: toda la verificación visual de esta sesión se
+había hecho en el navegador automatizado, que por default renderiza en una ventana angosta
+(~670px, tipo tablet). A ese ancho todo se veía bien -- pero nunca se había mirado la app a
+1366px o 1920px, que es donde ella trabaja.
+
+**Causa**: la app nunca tuvo un tamaño de fuente base que dependiera del ancho de pantalla --
+`html` quedaba en los 16px por default del navegador, igual en un celular que en un monitor de
+27". Como casi todo está medido en `rem` (texto, padding, gap, y los íconos de lucide vía
+`h-5 w-5`), eso significaba que en una pantalla grande TODO quedaba chico y disperso a la vez.
+
+**Corregido en `index.css`**: `html { font-size: 16px }` y, a partir de `min-width: 1024px`,
+`18px`. Un solo lugar agranda todo proporcionalmente (+12.5%) en computadora, sin tocar nada
+abajo de 1024px (celular y tablet, ya aprobados en vivo varias veces). 1024px es el mismo corte
+que ya usa el resto de la app para `lg:`.
+
+**Verificado con mediciones reales, no con capturas** (importante: las capturas del navegador
+automatizado a anchos personalizados grandes NO son confiables -- muestran el contenido
+recortado aunque el DOM diga otra cosa; se confirmó midiendo `getBoundingClientRect()` contra
+`window.innerWidth`):
+
+| Ancho  | Fuente base | Scroll horizontal | Notas                                  |
+|--------|-------------|-------------------|----------------------------------------|
+| 320px  | 16px        | no                | celular chico, sin cambios             |
+| 768px  | 16px        | no                | tablet, sin cambios                    |
+| 1366px | 18px        | no                | laptop de Nalux, +12.5%                |
+| 1920px | 18px        | no                | 4 columnas de 440px, 0 desbordes       |
+
+En `/rutinas` a 1920px (la pantalla más apretada, con las cajas de superserie de ancho fijo):
+**0 elementos desbordados**. Las cajas `w-[9.5rem]` también están en rem, así que crecen
+proporcionalmente -- lo que entraba antes sigue entrando.
+
+**Queda como posible ajuste fino** si a Nalux le sigue pareciendo chico: sumar un escalón más
+para monitores muy grandes (ej. `min-width: 1536px` -> 19/20px). Es una línea de CSS.
