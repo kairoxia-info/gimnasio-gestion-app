@@ -7,12 +7,14 @@ import { Card, Empty, Loading } from '@/components/ui-kit';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { ESTADOS_PAGO, estadoAlumno, estadoCuota, fmtFecha, fmtMes, money } from '@/lib/format';
+import { ESTADOS_PAGO, estadoAlumno, estadoCuota, fmtDiaCorto, fmtFecha, fmtMes, hoy, money } from '@/lib/format';
 
-// Carga diferida: saca recharts (~100 KB) del bundle principal. El gráfico
-// está más abajo de lo que se ve al entrar al panel, así que no tiene por
-// qué demorar la primera pantalla -- mismo criterio que jsPDF/html2canvas.
+// Carga diferida: saca recharts (~100 KB) del bundle principal. Los
+// gráficos están más abajo de lo que se ve al entrar al panel, así que no
+// tienen por qué demorar la primera pantalla -- mismo criterio que
+// jsPDF/html2canvas.
 const GraficoIngresos = React.lazy(() => import('@/components/GraficoIngresos'));
+const GraficoAsistencias = React.lazy(() => import('@/components/GraficoAsistencias'));
 
 // Últimos 12 meses, agrupados en el servidor (ingresos_por_mes(), migración
 // 0024) -- reemplaza el viejo listAll('pagos') sin filtro que traía TODA la
@@ -122,6 +124,13 @@ const DashboardPage = () => {
         desde.setDate(desde.getDate() - 7);
         const semana = asistencias.filter((x) => new Date(x.fecha + 'T00:00:00') >= desde);
         const presentes = semana.filter((x) => x.presente).length;
+        // Fase 2.1 (13/09/2026): el tile de arriba mostraba esta misma suma de
+        // 7 días ("Asistencias (7 días)"), un número que mezclaba todos los
+        // días juntos y no decía nada de hoy en particular. Se reemplaza por
+        // el conteo de HOY, que es el que un profesor mirando el panel a la
+        // mañana realmente quiere saber -- el desglose de la semana completa
+        // pasa al gráfico de abajo (serieAsistencias).
+        const asistenciasHoy = asistencias.filter((x) => x.fecha === hoy() && x.presente).length;
 
         const morosos = activos
             .map((a) => ({ alumno: a, pago: ultimoPorAlumno.get(a.id) }))
@@ -233,6 +242,7 @@ const DashboardPage = () => {
             proximos,
             deudores,
             presentes,
+            asistenciasHoy,
             semana: semana.length,
             morosos,
             cumpleañeros,
@@ -245,7 +255,7 @@ const DashboardPage = () => {
     const stats = [
         { label: 'Alumnos activos', value: resumen.activos, icon: Users, to: '/alumnos' },
         { label: 'Al día con el pago', value: resumen.alDia, icon: Wallet, to: '/pagos' },
-        { label: 'Asistencias (7 días)', value: resumen.presentes, icon: CalendarCheck, to: '/asistencia' },
+        { label: 'Asistencias hoy', value: resumen.asistenciasHoy, icon: CalendarCheck, to: '/asistencia' },
         { label: 'Atrasados o por vencer', value: resumen.deudores + resumen.proximos, icon: TrendingUp, to: '/pagos' },
     ];
 
@@ -256,6 +266,25 @@ const DashboardPage = () => {
         () => ingresosMensuales.map((m) => ({ mes: fmtMes(m.mes), total: Number(m.total || 0) })),
         [ingresosMensuales],
     );
+
+    // Serie para el gráfico de asistencia diaria (Fase 2.1, 13/09/2026): los
+    // últimos 7 días (hoy incluido), cada uno con cuántos presentes tuvo. Se
+    // arma la lista de fechas primero (así un día sin ninguna asistencia
+    // cargada aparece igual, en 0, en vez de faltar del gráfico) y recién
+    // ahí se cuenta contra `asistencias`.
+    const serieAsistencias = useMemo(() => {
+        const hoyStr = hoy();
+        const dias = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            return d.toISOString().slice(0, 10);
+        });
+        return dias.map((fecha) => ({
+            dia: fmtDiaCorto(fecha),
+            presentes: asistencias.filter((x) => x.fecha === fecha && x.presente).length,
+            esHoy: fecha === hoyStr,
+        }));
+    }, [asistencias]);
 
     return (
         <AppLayout
@@ -375,6 +404,31 @@ const DashboardPage = () => {
                             )}
                         </Card>
                     </div>
+
+                    <Card>
+                        <div className="mb-4 flex items-center justify-between">
+                            <div>
+                                <h2 className="font-display text-lg font-bold">Asistencia de la semana</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Últimos 7 días, día por día. Hoy en el color de marca.
+                                </p>
+                            </div>
+                            <Link to="/asistencia" className="text-sm font-semibold text-primary">
+                                Ver asistencia
+                            </Link>
+                        </div>
+                        <div className="h-56">
+                            <React.Suspense
+                                fallback={
+                                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                                        Cargando el gráfico...
+                                    </div>
+                                }
+                            >
+                                <GraficoAsistencias serie={serieAsistencias} />
+                            </React.Suspense>
+                        </div>
+                    </Card>
 
                     <Card>
                         <div className="mb-4 flex items-center justify-between">

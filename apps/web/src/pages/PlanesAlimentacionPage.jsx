@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { ArrowDown, ArrowUp, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
@@ -7,7 +7,7 @@ import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
-import { armarTextoAlimentos, fmtFecha, hoy } from '@/lib/format';
+import { armarTextoAlimentos, fmtFecha, hoy, macrosDeComida, resumenMacros } from '@/lib/format';
 
 // Nombres típicos que sugiere "Agregar comida" -- el mismo criterio que
 // DIAS en rutinas (agregarDia toma el primero que todavía no se usó), pero
@@ -74,6 +74,11 @@ const PlanesAlimentacionPage = () => {
     const { gimnasio } = useAuth();
     const [planes, setPlanes] = useState([]);
     const [alimentos, setAlimentos] = useState([]);
+    // Fase 2.4 (13/09/2026): mapa por id para el cálculo de macros
+    // (macrosDeComida() en lib/format.js) -- un item de comida solo guarda
+    // el nombre del alimento, no sus macros, así que hay que cruzarlo contra
+    // la biblioteca actual cada vez.
+    const alimentosPorId = useMemo(() => new Map(alimentos.map((a) => [a.id, a])), [alimentos]);
     const [alumnosActivos, setAlumnosActivos] = useState([]);
     // Todos los planes_alimentacion ya asignados (a cualquier alumno) --
     // solo para detectar, al generar un PDF, si el alumno elegido ya tiene
@@ -735,14 +740,21 @@ const PlanesAlimentacionPage = () => {
                         <Empty>Este plan todavía no tiene comidas cargadas.</Empty>
                     ) : (
                         <div className="space-y-3">
-                            {(planViendo.items || []).map((comida, i) => (
-                                <div key={comida.key || i} className="rounded-2xl border border-border p-4">
-                                    <p className="font-display text-base font-bold">{comida.nombre}</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        {armarTextoAlimentos(comida.alimentos) || 'Sin alimentos cargados.'}
-                                    </p>
-                                </div>
-                            ))}
+                            {(planViendo.items || []).map((comida, i) => {
+                                // Macros estimados por comida (Fase 2.4, 13/09/2026):
+                                // solo cuenta lo que se puede calcular -- ver el
+                                // comentario de macrosDeComida() en lib/format.js.
+                                const macros = resumenMacros(macrosDeComida(comida, alimentosPorId));
+                                return (
+                                    <div key={comida.key || i} className="rounded-2xl border border-border p-4">
+                                        <p className="font-display text-base font-bold">{comida.nombre}</p>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            {armarTextoAlimentos(comida.alimentos) || 'Sin alimentos cargados.'}
+                                        </p>
+                                        {macros && <p className="mt-1.5 text-xs font-semibold text-primary">{macros}</p>}
+                                    </div>
+                                );
+                            })}
                             {planViendo.notas && (
                                 <div className="rounded-2xl border border-border bg-secondary p-4">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1130,6 +1142,16 @@ const PlanesAlimentacionPage = () => {
                                             </button>
                                         </div>
                                     </div>
+
+                                    {/* Macros estimados (Fase 2.4, 13/09/2026): se
+                                        recalcula en vivo a medida que se cargan
+                                        alimentos, mismo dato que después se ve en la
+                                        vista de solo lectura. */}
+                                    {resumenMacros(macrosDeComida(c, alimentosPorId)) && (
+                                        <p className="mb-3 text-xs font-semibold text-primary">
+                                            {resumenMacros(macrosDeComida(c, alimentosPorId))}
+                                        </p>
+                                    )}
 
                                     {c.alimentos.length > 1 && (
                                         <p className="mb-2 text-xs text-muted-foreground">

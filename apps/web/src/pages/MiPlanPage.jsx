@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
     AlertTriangle,
+    CheckCircle2,
     Download,
     Dumbbell,
     Lock,
@@ -12,13 +13,22 @@ import {
     Pause,
     Play,
     RotateCcw,
+    Scale,
     Timer,
     Wallet,
     X,
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { ThemeToggle } from '@/components/AppLayout';
-import { agruparCombos, agruparItemsRutina, agruparPorBloque, armarTextoAlimentos } from '@/lib/format';
+import {
+    agruparCombos,
+    agruparItemsRutina,
+    agruparPorBloque,
+    armarTextoAlimentos,
+    resumenTipoGrupo,
+    tieneSeriesDetalle,
+    tipoDeGrupo,
+} from '@/lib/format';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
@@ -210,6 +220,177 @@ const CronometroModal = ({ duracionInicial, onClose }) => {
                         className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold transition active:scale-[0.98]"
                     >
                         <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Timer real de circuito por intervalos (Fase 2.3, 13/09/2026): a diferencia
+// de CronometroModal (que cuenta UNA vez y se queda esperando a que el
+// alumno toque el siguiente ejercicio a mano), este recorre SOLO la
+// secuencia entera -- cada ejercicio de cada ronda, con su descanso -- sin
+// que el alumno tenga que tocar nada entre pasos. Es el mismo mecanismo de
+// beep+vibración al cambiar de paso, mismo diseño visual, solo que
+// encadenado automáticamente.
+const IntervaloModal = ({ delBloque, onClose }) => {
+    const config = delBloque[0] || {};
+    const rondas = Math.max(1, Number(config.rondas) || 1);
+    const tiempoTrabajo = Math.max(1, Number(config.tiempoTrabajo) || 40);
+    const tiempoDescansoEj = Math.max(0, Number(config.tiempoDescansoEj) || 0);
+    const descansoRondasSeg = parsearDescanso(config.descansoRondas) || 0;
+
+    // Secuencia plana de pasos (trabajo/descanso intercalados, ronda por
+    // ronda). Armada una sola vez al abrir -- no depende de nada que cambie
+    // mientras el timer está corriendo.
+    const secuencia = useMemo(() => {
+        const pasos = [];
+        for (let r = 1; r <= rondas; r += 1) {
+            delBloque.forEach((it, i) => {
+                pasos.push({ tipo: 'trabajo', nombre: it.nombre, duracion: tiempoTrabajo, ronda: r });
+                const esUltimoEjercicioDeLaRonda = i === delBloque.length - 1;
+                if (!esUltimoEjercicioDeLaRonda && tiempoDescansoEj > 0) {
+                    pasos.push({ tipo: 'descanso', duracion: tiempoDescansoEj, ronda: r });
+                }
+            });
+            const esUltimaRonda = r === rondas;
+            if (!esUltimaRonda && descansoRondasSeg > 0) {
+                pasos.push({ tipo: 'descanso-ronda', duracion: descansoRondasSeg, ronda: r });
+            }
+        }
+        return pasos;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const [pasoActual, setPasoActual] = useState(0);
+    const [restante, setRestante] = useState(secuencia[0]?.duracion || 0);
+    const [corriendo, setCorriendo] = useState(true);
+    const [terminado, setTerminado] = useState(secuencia.length === 0);
+    const finRef = useRef(Date.now() + (secuencia[0]?.duracion || 0) * 1000);
+    const avisadoRef = useRef(false);
+
+    useEffect(() => {
+        if (!corriendo || terminado) return undefined;
+        const id = setInterval(() => {
+            const seg = Math.max(0, Math.ceil((finRef.current - Date.now()) / 1000));
+            setRestante(seg);
+            if (seg <= 0 && !avisadoRef.current) {
+                avisadoRef.current = true;
+                reproducirBeep();
+                if (navigator.vibrate) navigator.vibrate(200);
+                // Medio segundo de aire antes de pasar al siguiente paso --
+                // que el beep se termine de escuchar antes de que cambie el
+                // nombre del ejercicio en pantalla.
+                setTimeout(() => {
+                    setPasoActual((p) => {
+                        const siguiente = p + 1;
+                        if (siguiente >= secuencia.length) {
+                            setTerminado(true);
+                            setCorriendo(false);
+                            if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]);
+                            return p;
+                        }
+                        finRef.current = Date.now() + secuencia[siguiente].duracion * 1000;
+                        avisadoRef.current = false;
+                        setRestante(secuencia[siguiente].duracion);
+                        return siguiente;
+                    });
+                }, 400);
+            }
+        }, 250);
+        return () => clearInterval(id);
+    }, [corriendo, terminado, secuencia]);
+
+    const pausarOReanudar = () => {
+        if (corriendo) {
+            setCorriendo(false);
+        } else {
+            finRef.current = Date.now() + restante * 1000;
+            avisadoRef.current = restante <= 0;
+            setCorriendo(true);
+        }
+    };
+
+    const paso = secuencia[pasoActual] || {};
+    const porcentaje = paso.duracion
+        ? Math.min(100, Math.round(((paso.duracion - restante) / paso.duracion) * 100))
+        : 0;
+    const esTrabajo = paso.tipo === 'trabajo';
+    const tituloPaso = terminado
+        ? '¡Circuito terminado!'
+        : esTrabajo
+          ? paso.nombre
+          : paso.tipo === 'descanso-ronda'
+            ? `Descanso · fin de ronda ${paso.ronda}`
+            : 'Descanso';
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Circuito por intervalos"
+            className="mp-no-imprimir fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 text-center shadow-xl">
+                <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                        {terminado ? 'Listo' : `Ronda ${paso.ronda || 1} de ${rondas}`}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Cerrar"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </div>
+
+                <p className="mt-2 text-xl font-bold leading-tight">{tituloPaso}</p>
+
+                {!terminado && (
+                    <>
+                        <p
+                            className={`mt-2 font-display text-7xl font-extrabold tabular-nums ${
+                                esTrabajo ? 'text-primary' : 'text-foreground'
+                            }`}
+                        >
+                            {formatearMmSs(restante)}
+                        </p>
+                        <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-secondary">
+                            <div
+                                className={`h-full rounded-full transition-all ${esTrabajo ? 'bg-primary' : 'bg-muted-foreground'}`}
+                                style={{ width: `${porcentaje}%` }}
+                            />
+                        </div>
+                    </>
+                )}
+
+                <div className="mt-6 flex gap-3">
+                    {!terminado && (
+                        <button
+                            type="button"
+                            onClick={pausarOReanudar}
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98]"
+                        >
+                            {corriendo ? (
+                                <>
+                                    <Pause className="h-5 w-5" aria-hidden="true" /> Pausar
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="h-5 w-5" aria-hidden="true" /> Seguir
+                                </>
+                            )}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-border px-5 py-4 text-lg font-bold transition active:scale-[0.98]"
+                    >
+                        {terminado ? 'Cerrar' : 'Salir'}
                     </button>
                 </div>
             </div>
@@ -450,6 +631,12 @@ const MiPlanPage = () => {
     // de arrancar de nuevo.
     const [cronometro, setCronometro] = useState(null);
     const cronometroIdRef = useRef(0);
+    // Circuito por intervalos activo (Fase 2.3, 13/09/2026): guarda los
+    // items del bloque que se está corriendo, o null si no hay ninguno
+    // abierto. A diferencia del cronómetro de descanso, acá no hace falta
+    // un "id" para forzar remontaje -- IntervaloModal se desmonta y se
+    // vuelve a montar solo con abrir/cerrar (onClose pone esto en null).
+    const [intervaloActivo, setIntervaloActivo] = useState(null);
     // Ejercicio cuya demostración se está mostrando en el modal de preview
     // ("Ver cómo se hace"), o null si está cerrado.
     const [previewItem, setPreviewItem] = useState(null);
@@ -519,6 +706,75 @@ const MiPlanPage = () => {
             setAvisoError('No se pudo guardar. No es grave, se puede seguir usando la pantalla igual.');
         } finally {
             setMarcandoAviso(false);
+        }
+    };
+
+    // Fases 2.6 (Tareas) + 2.7 (historial de cargas), 13/09/2026. Decisión de
+    // Nalux (preguntada antes de tocar código): por primera vez el alumno
+    // ESCRIBE algo desde esta pantalla -- migración 0050, dos RPC nuevas
+    // (marcar_entrenamiento_hecho/alumno_cargar_peso), mismo patrón de
+    // seguridad que el resto (resuelven el alumno por el código de la URL,
+    // nunca por un ID). diasHechosHoy arranca con lo que ya trae la RPC
+    // inicial (dias_completados_hoy, ya filtrado a HOY del lado del server) y
+    // se completa localmente cuando el alumno toca el botón -- así no hace
+    // falta volver a pedir el plan entero solo para reflejar un check.
+    const [diasHechosHoy, setDiasHechosHoy] = useState(() => new Set());
+    const [marcandoDia, setMarcandoDia] = useState(null);
+    const [errorMarcarDia, setErrorMarcarDia] = useState('');
+
+    useEffect(() => {
+        setDiasHechosHoy(new Set(plan?.dias_completados_hoy || []));
+    }, [plan]);
+
+    const marcarDiaHecho = async (nroSemana, dia) => {
+        const clave = `${nroSemana}|${dia}`;
+        if (diasHechosHoy.has(clave) || marcandoDia) return;
+        setMarcandoDia(clave);
+        setErrorMarcarDia('');
+        try {
+            const { error: err } = await supabase.rpc('marcar_entrenamiento_hecho', {
+                p_codigo: codigo,
+                p_semana: nroSemana,
+                p_dia: dia,
+            });
+            if (err) throw err;
+            setDiasHechosHoy((prev) => new Set(prev).add(clave));
+        } catch (_) {
+            setErrorMarcarDia('No se pudo guardar. Probar de nuevo.');
+        } finally {
+            setMarcandoDia(null);
+        }
+    };
+
+    // Un solo campo de peso, sin historial visible acá (ese lo ve el profe en
+    // la ficha, componente Progreso de AlumnoPage.jsx). Si el alumno ya
+    // cargó hoy, alumno_cargar_peso() actualiza esa misma fila en vez de
+    // duplicar -- por eso el botón dice siempre "Guardar", nunca hace falta
+    // distinguir "primera carga" de "corrección".
+    const [pesoInput, setPesoInput] = useState('');
+    const [guardandoPeso, setGuardandoPeso] = useState(false);
+    const [pesoGuardado, setPesoGuardado] = useState(false);
+    const [errorPeso, setErrorPeso] = useState('');
+
+    const guardarPeso = async () => {
+        const valor = Number(String(pesoInput).replace(',', '.'));
+        if (!Number.isFinite(valor) || valor <= 0 || valor > 400) {
+            setErrorPeso('Ingresar un peso válido, en kg.');
+            return;
+        }
+        setGuardandoPeso(true);
+        setErrorPeso('');
+        try {
+            const { error: err } = await supabase.rpc('alumno_cargar_peso', {
+                p_codigo: codigo,
+                p_peso: valor,
+            });
+            if (err) throw err;
+            setPesoGuardado(true);
+        } catch (_) {
+            setErrorPeso('No se pudo guardar. Probar de nuevo.');
+        } finally {
+            setGuardandoPeso(false);
         }
     };
 
@@ -795,6 +1051,58 @@ const MiPlanPage = () => {
                             </p>
                         </section>
 
+                        {/* Fase 2.7 (13/09/2026): único campo de escritura fuera de la
+                            rutina -- el peso de hoy. Sin historial acá a propósito, eso
+                            lo ve el profe en la ficha del alumno. */}
+                        <section className="mp-no-imprimir rounded-2xl border border-border bg-card p-5 sm:p-6">
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                                    <Scale className="h-6 w-6 text-primary" strokeWidth={2.2} aria-hidden="true" />
+                                </span>
+                                <p className="text-xl font-extrabold">Tu peso de hoy</p>
+                            </div>
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        step="0.1"
+                                        min="1"
+                                        max="400"
+                                        placeholder="Ej: 72.5"
+                                        value={pesoInput}
+                                        onChange={(e) => {
+                                            setPesoInput(e.target.value);
+                                            setPesoGuardado(false);
+                                        }}
+                                        className="w-full rounded-xl border border-border bg-background px-4 py-3 pr-12 text-lg font-semibold"
+                                    />
+                                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">
+                                        kg
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={guardarPeso}
+                                    disabled={guardandoPeso || !pesoInput}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-lg font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                                >
+                                    {guardandoPeso ? (
+                                        'Guardando...'
+                                    ) : pesoGuardado ? (
+                                        <>
+                                            <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Guardado
+                                        </>
+                                    ) : (
+                                        'Guardar'
+                                    )}
+                                </button>
+                            </div>
+                            {errorPeso && (
+                                <p className="mt-3 text-base font-semibold text-destructive">{errorPeso}</p>
+                            )}
+                        </section>
+
                         {/* Banda de encabezado con color propio por sección
                             (09/09/2026, pedido de Nalux: "el plan de ejercicio está
                             en la misma que a donde está el plan de alimentación y
@@ -859,11 +1167,40 @@ const MiPlanPage = () => {
                                                         Semana {nroSemana}
                                                     </h3>
                                                 )}
-                                                {dias.map(([dia, items]) => (
+                                                {dias.map(([dia, items]) => {
+                                                    const claveDia = `${nroSemana}|${dia}`;
+                                                    const diaCompletadoHoy = diasHechosHoy.has(claveDia);
+                                                    return (
                                                     <div key={`${nroSemana}-${dia}`} className="space-y-3">
-                                                        <h3 className="font-display text-xl font-bold uppercase text-primary">
-                                                            {dia}
-                                                        </h3>
+                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                            <h3 className="font-display text-xl font-bold uppercase text-primary">
+                                                                {dia}
+                                                            </h3>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => marcarDiaHecho(nroSemana, dia)}
+                                                                disabled={diaCompletadoHoy || marcandoDia === claveDia}
+                                                                className={`mp-no-imprimir inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition active:scale-[0.98] disabled:opacity-70 ${
+                                                                    diaCompletadoHoy
+                                                                        ? 'bg-ok/15 text-ok'
+                                                                        : 'bg-primary text-primary-foreground'
+                                                                }`}
+                                                            >
+                                                                {diaCompletadoHoy ? (
+                                                                    <>
+                                                                        <CheckCircle2
+                                                                            className="h-4 w-4"
+                                                                            aria-hidden="true"
+                                                                        />{' '}
+                                                                        Completado hoy
+                                                                    </>
+                                                                ) : marcandoDia === claveDia ? (
+                                                                    'Guardando...'
+                                                                ) : (
+                                                                    'Marcar como hecho'
+                                                                )}
+                                                            </button>
+                                                        </div>
                                                         {agruparPorBloque(agruparCombos(items)).map(
                                                             ([nombreBloque, delBloque], iBloque) => (
                                                                 <div
@@ -871,9 +1208,25 @@ const MiPlanPage = () => {
                                                                     className="space-y-3"
                                                                 >
                                                                     {nombreBloque && (
-                                                                        <p className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
-                                                                            {nombreBloque}
-                                                                        </p>
+                                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                                            <p className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
+                                                                                {nombreBloque}
+                                                                                {resumenTipoGrupo(delBloque) && (
+                                                                                    <span className="ml-2 block text-sm font-bold normal-case text-primary sm:inline sm:text-base">
+                                                                                        {resumenTipoGrupo(delBloque)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </p>
+                                                                            {tipoDeGrupo(delBloque) === 'intervalo' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setIntervaloActivo(delBloque)}
+                                                                                    className="mp-no-imprimir inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition active:scale-[0.98]"
+                                                                                >
+                                                                                    <Play className="h-4 w-4" aria-hidden="true" /> Iniciar circuito
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
                                                                     )}
                                                                     {delBloque.map((it) => {
                                                                         // Si el descanso quedó combinado ("60 s + 90 s"
@@ -997,34 +1350,71 @@ const MiPlanPage = () => {
                                                                                                 {it.grupo}
                                                                                             </p>
                                                                                         )}
-                                                                                        <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-3">
-                                                                                            <DatoEjercicio
-                                                                                                label="Series"
-                                                                                                valor={
-                                                                                                    it.series
-                                                                                                }
-                                                                                            />
-                                                                                            <DatoEjercicio
-                                                                                                label="Reps"
-                                                                                                valor={
-                                                                                                    it.reps
-                                                                                                }
-                                                                                            />
-                                                                                            <DatoEjercicio
-                                                                                                label="Peso"
-                                                                                                valor={
-                                                                                                    it.peso ||
-                                                                                                    '—'
-                                                                                                }
-                                                                                            />
-                                                                                            <DatoEjercicio
-                                                                                                label="Descanso"
-                                                                                                valor={
-                                                                                                    it.descanso ||
-                                                                                                    '—'
-                                                                                                }
-                                                                                            />
-                                                                                        </div>
+                                                                                        {tieneSeriesDetalle(it) ? (
+                                                                                            // Series desglosadas (Fase 2.3, 13/09/2026):
+                                                                                            // pirámides, drop sets -- cada serie con su
+                                                                                            // propio peso/reps. Mismo criterio de letra
+                                                                                            // grande que el resto de esta pantalla ("hay
+                                                                                            // personas grandes que tienen que leer
+                                                                                            // también", pedido de Nalux).
+                                                                                            <div className="mt-4 space-y-1.5">
+                                                                                                {it.seriesDetalle.map((s, i) => (
+                                                                                                    <div
+                                                                                                        key={i}
+                                                                                                        className="flex items-center gap-3 rounded-xl bg-secondary p-2.5 sm:p-3"
+                                                                                                    >
+                                                                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary sm:h-10 sm:w-10 sm:text-base">
+                                                                                                            {i + 1}
+                                                                                                        </span>
+                                                                                                        <span className="text-lg font-extrabold sm:text-2xl">
+                                                                                                            {s.reps || '—'} reps
+                                                                                                        </span>
+                                                                                                        {s.peso && (
+                                                                                                            <span className="ml-auto text-lg font-extrabold sm:text-2xl">
+                                                                                                                {s.peso} kg
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                                <p className="pt-1 text-base">
+                                                                                                    <span className="text-muted-foreground">
+                                                                                                        Descanso entre series:{' '}
+                                                                                                    </span>
+                                                                                                    <span className="font-semibold">
+                                                                                                        {it.descanso || '—'}
+                                                                                                    </span>
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-3">
+                                                                                                <DatoEjercicio
+                                                                                                    label="Series"
+                                                                                                    valor={
+                                                                                                        it.series
+                                                                                                    }
+                                                                                                />
+                                                                                                <DatoEjercicio
+                                                                                                    label="Reps"
+                                                                                                    valor={
+                                                                                                        it.reps
+                                                                                                    }
+                                                                                                />
+                                                                                                <DatoEjercicio
+                                                                                                    label="Peso"
+                                                                                                    valor={
+                                                                                                        it.peso ||
+                                                                                                        '—'
+                                                                                                    }
+                                                                                                />
+                                                                                                <DatoEjercicio
+                                                                                                    label="Descanso"
+                                                                                                    valor={
+                                                                                                        it.descanso ||
+                                                                                                        '—'
+                                                                                                    }
+                                                                                                />
+                                                                                            </div>
+                                                                                        )}
                                                                                     </>
                                                                                 )}
                                                                                 {it.intensidad && (
@@ -1101,7 +1491,8 @@ const MiPlanPage = () => {
                                                             ),
                                                         )}
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ))
                                     )}
@@ -1193,6 +1584,9 @@ const MiPlanPage = () => {
                             duracionInicial={cronometro.duracion}
                             onClose={() => setCronometro(null)}
                         />
+                    )}
+                    {intervaloActivo && (
+                        <IntervaloModal delBloque={intervaloActivo} onClose={() => setIntervaloActivo(null)} />
                     )}
                     {previewItem && (
                         <PreviewMediaModal

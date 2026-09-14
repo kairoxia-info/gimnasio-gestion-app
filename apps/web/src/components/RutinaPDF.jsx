@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { agruparCombos, agruparItemsRutina, agruparPorBloque } from '@/lib/format';
+import { agruparCombos, agruparItemsRutina, agruparPorBloque, resumenSeries, resumenTipoGrupo } from '@/lib/format';
 
 // Diseño de PDF de rutina, con la marca del gimnasio (logo, nombre, color) y
 // el rango de fechas del plan -- el mismo que ya se armó para MiPlanPage.jsx
@@ -59,7 +59,11 @@ export function esperarImagenesCargadas(selector, timeoutMs = 3000) {
 const nombreItem = (it) => (it.esCombo ? it.comboItems.map((x) => x.nombre).join(' + ') : it.nombre);
 
 const seriesXReps = (it) => {
-    if (!it.esCombo) return `${it.series}x${it.reps}`;
+    // Las superseries (esCombo) no tienen desglose por serie -- ver el
+    // comentario de desglosar() en RutinasPage.jsx. Un ejercicio suelto sí
+    // puede tenerlo, y ahí resumenSeries() ya arma el texto correcto (Fase
+    // 2.3, 13/09/2026): "4x10" de siempre, o el resumen de la pirámide.
+    if (!it.esCombo) return resumenSeries(it);
     const series = it.comboItems.map((x) => String(x.series));
     const seriesTexto = series.every((s) => s === series[0]) ? series[0] : series.join('/');
     const repsTexto = it.comboItems.map((x) => x.reps).join('+');
@@ -165,6 +169,9 @@ export const RutinaImprimiblePDF = ({
                                             }}
                                         >
                                             {bloque}
+                                            {resumenTipoGrupo(delBloque) && (
+                                                <span style={{ fontWeight: 400 }}> · {resumenTipoGrupo(delBloque)}</span>
+                                            )}
                                         </p>
                                     )}
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>

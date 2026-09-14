@@ -494,3 +494,213 @@ las consecuencias de cada una. Quedan acá tal cual se plantearon, como registro
    directa del profesor.** Coincide con lo que `pagos` ya hace hoy — no hace falta tocar código.
 7. ~~¿El gimnasio tiene o va a tener más de una sede?~~ **No, una sola sede.** 1.B.3 (sedes
    múltiples) queda descartado del alcance, no solo pospuesto.
+
+---
+
+## Fase 2 — Inspirada en investigación de competencia (13/09/2026)
+
+Nalux investigó una app competidora (Planni) y pasó capturas de toda la plataforma: dashboard,
+editor de sitio, biblioteca de ejercicios (1993, con video propio), armador de rutinas (bloques/
+circuitos/intervalos, desglose por serie), nutrición (ingredientes con equivalencias, planes con
+PDF/texto/recetas), módulo de Tareas con % de cumplimiento, ficha de alumno con 5 pestañas,
+"Ver como alumno", equipo/colaboradores con roles, y suscripción paga ($34.999 ARS/mes, en
+trial). De ahí salió esta fase. Explícitamente fuera de alcance por ahora: editor de sitio web,
+chat interno, roles de equipo y facturación con trial — son features de una plataforma que se
+vende a miles de entrenadores independientes, no del tamaño de este gimnasio.
+
+**Hallazgo antes de planear:** lo que Nalux pidió para "Día 1: grupo muscular (ej. Espalda-
+Bíceps), abajo los ejercicios" **ya existe**. `rutinas.items` tiene un campo `bloque` (texto
+libre, con sugerencias) que ya agrupa visualmente los ejercicios de un día bajo un título — mismo
+mecanismo, en `RutinasPage.jsx` (`agruparPorBloque()` en `lib/format.js`) y ya se refleja en la
+vista de solo lectura y en `MiPlanPage`. Lo único real para hacer ahí es pulir las sugerencias
+(bajan a la Fase 2.1) — no hace falta construir nada de cero para eso.
+
+### Fase 2.1 — Pulidas rápidas (bajo esfuerzo, sin cambios de schema mayores)
+
+**Hecha (13/09/2026).** Verificada en vivo con la sesión de Nalux, sin dejar restos de prueba.
+
+- ~~Sugerencias de grupo muscular en el datalist de "Bloque"~~ **hecho**: se sumaron
+  "Espalda-Bíceps", "Pecho-Tríceps", "Piernas", "Hombro-Core", "Full body", "Tren superior",
+  "Tren inferior" a `BLOQUES_SUGERIDOS` en `RutinasPage.jsx`. Confirmado en el DOM real del
+  `<datalist>`.
+- ~~Asistencias por día en el Dashboard~~ **hecho**: el tile "Asistencias (7 días)" (que sumaba
+  TODOS los presentes de la semana en un solo número) pasó a "Asistencias hoy"
+  (`resumen.asistenciasHoy`), y se agregó una tarjeta nueva "Asistencia de la semana" con un
+  gráfico de barras día por día (`components/GraficoAsistencias.jsx`, lazy-loaded como
+  `GraficoIngresos`), hoy resaltado en el color de marca. Probado en vivo: etiquetas de los 7
+  días correctas, sin errores de consola.
+- ~~Notas privadas del profesor por alumno~~ **hecho**: columna `alumnos.notas_internas`
+  (migración 0048) + componente `NotasPrivadas` en la ficha, justo debajo de "Datos personales".
+  Verificado que `ver_plan_por_codigo()` no la selecciona (queda fuera de lo que ve el alumno).
+  Probado guardando y limpiando una nota de prueba contra la base real.
+- **Toggle "Mostrar kcal y macros al alumno": POSPUESTO, no se hizo.** Se descubrió al ir a
+  implementarlo que hoy no hay nada que mostrar u ocultar: `planes_alimentacion_biblioteca.items`
+  es texto libre (nombre de comida + descripción), sin ningún vínculo a `alimentos` con
+  cantidades que permita calcular kcal/macros de un plan. Ese cálculo recién existe cuando se
+  construya la **Fase 2.4** (ingredientes con equivalencias). El toggle se mueve a esa fase, para
+  agregarlo junto con el cálculo que le da sentido — construirlo ahora sería un control que no
+  hace nada.
+- ~~"Duplicar semana" dentro de una rutina multi-semana~~ **hecho**: botón junto al selector de
+  semana en `RutinasPage.jsx`, copia todos los ejercicios de la semana activa a la siguiente
+  (`duplicarSemanaActual()`). Solo pide confirmación si la semana destino ya tenía contenido; si
+  está vacía, copia directo. Todo local -- no se guarda hasta tocar "Guardar" la rutina, así que
+  se probó completo (crear, duplicar, verificar visualmente) y se cerró sin guardar, sin dejar
+  ningún rastro en la base.
+
+### Fase 2.2 — "Ver como alumno"
+
+**Hecha (13/09/2026).** Resultó ser mucho más barata de lo estimado: `alumno.codigo_acceso` ya
+viaja con el `select('*')` de la ficha, y `/mi-plan/:codigo` (la RPC `ver_plan_por_codigo()`) es
+la MISMA ruta que usa el alumno real -- no hizo falta simular nada. Un link "Ver como alumno" en
+la cabecera de la ficha (`AlumnoPage.jsx`), visible solo si `alumno.activo` (esa RPC exige
+`activo=true`). Probado abriendo el link real de un alumno: título "Tu plan | Alumno 3", con su
+rutina y el aviso de cuota tal cual él los vería.
+
+### Fase 2.3 — Rutinas: series desglosadas + circuitos/intervalos con timer real
+
+**Hecha (13/09/2026).** La más grande de esta fase, en dos partes.
+
+**A) Desglose de series** (pirámides, drop sets). Cada item de `rutinas.items` puede tener
+`seriesDetalle` (array, una fila `{reps, peso}` por serie) -- si no lo tiene, sigue funcionando
+exactamente igual que siempre (series/reps/peso uniformes). Helpers nuevos en `lib/format.js`:
+`tieneSeriesDetalle`, `desglosarSeries`, `filasDeSeries`, `resumenSeries`. Botón "Desglosar
+series" / "Unificar" en el editor (`RutinasPage.jsx`), solo para ejercicios sueltos (no
+superseries -- ahí no entra una tabla de series en una caja de 9.5rem sin rehacer ese layout
+entero). Actualizado en las 4 pantallas que muestran una rutina: el detalle de solo lectura y el
+editor (`RutinasPage.jsx`), la ficha del profesor (`AlumnoPage.jsx`, resumen compacto "12/10/8"),
+el plan del alumno (`MiPlanPage.jsx`, tabla grande y legible) y el PDF (`RutinaPDF.jsx`). Probado
+en vivo armando una pirámide real (12/40, 10/45, 8/50, 6/55) y confirmando el resumen en la
+vista de detalle: "4 series (12/10/8/6 reps · peso variable) · 60 s".
+
+**B) Circuito e Intervalo** (tipo de grupo con rondas). Cada item puede llevar `tipoGrupo`
+('circuito' | 'intervalo', ausente = bloque normal), `rondas`, `descansoRondas` y, para
+intervalo, `tiempoTrabajo`/`tiempoDescansoEj` -- redundante en todos los items del mismo bloque,
+mismo criterio que ya usa `bloque` en sí. Se edita a nivel del bloque entero (un selector +
+campos de config en el encabezado del bloque, `RutinasPage.jsx`), no ejercicio por ejercicio.
+Intervalo suma un **timer real** en `/mi-plan/:codigo` (`IntervaloModal`, junto a
+`CronometroModal` existente): arma la secuencia completa (cada ejercicio de cada ronda, con sus
+descansos) y la recorre SOLA, con beep y vibración al cambiar de paso, sin que el alumno tenga
+que tocar nada -- circuito termina, muestra "¡Circuito terminado!".
+
+**Bug real encontrado probando en vivo, corregido:** `agruparCombos()` (usada en las 3 pantallas
+de solo lectura para fusionar superseries) no copiaba `tipoGrupo`/`rondas`/etc. al objeto
+sintético del combo. Como armar un circuito casi siempre significa tildar 2+ ejercicios y
+agregarlos juntos (que es justo lo que genera un combo), esto hacía que la etiqueta y el botón
+"Iniciar circuito" desaparecieran en el caso más común, no en un caso raro. Se agregó la
+propagación de esos campos en `agruparCombos()`. Confirmado con el mismo caso que lo destapó:
+"PRUEBA intervalo" con 2 ejercicios agregados juntos, asignada a un alumno de prueba (Alumno 5,
+que no tenía ninguna rutina) -- después del fix, "Iniciar circuito" completó las 2 rondas solo y
+terminó en "¡Circuito terminado!" sin ninguna interacción intermedia. Datos de prueba borrados
+(rutina + la asignación de Alumno 5) después.
+
+### Fase 2.4 — Nutrición: cálculo de macros por comida
+
+**Hecha (13/09/2026), con un alcance distinto al planeado originalmente.** Se investigó primero
+`alimentos.unidad` en datos reales: es texto TOTALMENTE libre ("100 g", "1 unidad", "1 cda", "1
+scoop (30 g)"...), no la convención fija "todo por 100g" que tiene Planni. Copiar su sistema de
+equivalencias (`unidad_sugerida` + gramos por unidad, migración nueva) hubiera significado pedirle
+a Nalux que cargue un dato más por cada uno de los 33 alimentos ya existentes antes de que sirviera
+para algo.
+
+En cambio, se encontró que el cálculo ya es posible SIN ninguna columna nueva: cada alimento
+escala sus propios macros contra SU PROPIA porción de referencia (`unidad`) -- si `unidad` empieza
+con un número ("100 g" -> 100), la cantidad que carga el profesor se toma en esas mismas unidades;
+si no tiene número ("1 unidad", "1 scoop"), la referencia es 1 y la cantidad es "cuántas veces esa
+porción". Cero migración, cero dato nuevo que pedirle a Nalux, funciona con lo que ya está cargado.
+
+Helpers nuevos en `lib/format.js`: `primerNumero`, `macrosDeItem`, `macrosDeComida`,
+`resumenMacros`. Nunca inventan un número: un alimento sin macros cargados, borrado de la
+biblioteca, o una cantidad sin ningún número (¿"al gusto"?) se cuenta aparte como "sin calcular"
+en vez de participar del total. De un grupo de alternativas ("elegir uno: Pollo o Pescado") se usa
+solo la primera opción como estimación -- sumar todas contaría comida que el alumno no va a comer.
+
+Mostrado en `PlanesAlimentacionPage.jsx`, tanto en el armador (recalcula en vivo mientras se carga)
+como en la vista de solo lectura de un plan. **No se sumó a la ficha del alumno
+(`AlumnoPage.jsx`)** -- esa pantalla no carga la biblioteca de alimentos completa hoy, y agregar
+esa consulta + el cruce ahí es una extensión menor, pendiente si Nalux la pide.
+
+Probado con datos reales: "Pechuga de pollo (cocida)" (165 kcal / 31g prot / 3.6g grasa por
+"100 g") con cantidad "150" dio *"≈ 248 kcal · 47g prot · 0g carb · 5g grasas"* -- coincide exacto
+con el cálculo a mano (165 × 1.5 = 247.5 → 248; 31 × 1.5 = 46.5 → 47; 3.6 × 1.5 = 5.4 → 5). El
+toggle "mostrar macros al alumno" (pospuesto de la Fase 2.1) sigue sin hacerse: mostrarlo en
+`/mi-plan/:codigo` requeriría tocar `ver_plan_por_codigo()` para exponer los macros de cada
+alimento referenciado, que es una superficie nueva que conviene revisar con cuidado aparte, no
+sumar de apuro acá.
+
+### Fase 2.5 — Progreso con fotos
+
+**Hecha (13/09/2026).** Columna `progreso.foto_path` + bucket nuevo `progreso-fotos` (migración
+0049). A diferencia de `alumnos-fotos`/`ejercicios-media` (públicos), este bucket es **privado**
+desde el arranque: una foto de progreso físico es más sensible que una de perfil, y es
+exactamente el tipo de dato para el que la auditoría de seguridad de esta misma sesión
+(11/09/2026) recomendó URLs firmadas como "el paso siguiente" para `alumnos-fotos` -- como este
+bucket se creaba de cero, no había motivo para repetir el criterio menos estricto. Se guarda el
+PATH del archivo (no una URL pública, que no serviría en un bucket privado) y el cliente pide
+signed URLs en batch (`createSignedUrls`, un solo viaje de red) cada vez que cambia la lista de
+registros, no una por una en cada render.
+
+UI en `AlumnoPage.jsx` (componente `Progreso`): input de foto opcional en "Nuevo registro" (mismo
+patrón de archivo+preview que `AlumnosPage.jsx`), miniatura clickeable en el historial (abre la
+foto de tamaño real en pestaña nueva), y el borrado de un registro limpia también el archivo del
+bucket (best effort, mismo criterio que `EjerciciosPage.jsx`).
+
+Probado de punta a punta contra la base real, sin poder usar el selector de archivos del sistema
+operativo (las herramientas de este entorno no lo automatizan): se creó un registro de prueba, se
+subió una imagen real al bucket y se guardó su `foto_path` vía la API REST directa con la sesión
+real de Nalux (mismo camino que haría el navegador), se recargó la página y **la miniatura
+apareció sola** con una signed URL genuina (`.../object/sign/progreso-fotos/...?token=...`). Se
+borró el registro con el botón real de la UI y se confirmó en la base: la fila Y el archivo del
+bucket quedaron en 0 -- la limpieza automática funciona.
+
+### Fase 2.6 — "Marcar como hecho" + Fase 2.7 — Historial de cargas del alumno
+
+**Hechas juntas (13/09/2026), con un alcance más simple que el planteado originalmente.** Estas dos
+fases fueron las únicas que necesitaban que el alumno pudiera ESCRIBIR desde `/mi-plan/:codigo`
+(hasta acá 100% de solo lectura) -- por eso se frenó antes de tocar código y se le preguntó a Nalux
+cómo seguir, con tres opciones concretas. Eligió la más simple de las tres: *"Sí, construí las dos
+fases completas"* con el diseño de un botón "Marcar como hecho" por día + un campo chico para
+cargar el peso de hoy -- no el módulo de Tareas/hábitos con bandeja de revisión y % de cumplimiento
+que se había esbozado originalmente para 2.6, ni los récords automáticos de "última carga" por
+ejercicio esbozados para 2.7 (G3/G4 del plan original). Ambas quedan como posible extensión futura,
+no descartadas, solo no construidas ahora.
+
+**Migración `0050_alumno_escribe_progreso.sql`:**
+- Tabla nueva `entrenamientos_completados` (`alumno_id`, `rutina_asignada_id`, `semana`, `dia`,
+  `fecha`, `UNIQUE` por los cuatro + fecha) -- un registro por cada día que el alumno marcó, con
+  RLS igual al resto (el profesor la ve/gestiona desde el panel; el alumno nunca la toca directo).
+- `progreso.origen` (`'profesor'` | `'alumno'`, default `'profesor'`) -- para que la ficha del
+  profesor distinga quién cargó cada registro.
+- Rate limit propio (`alumnos.escritura_intentos_contador`/`_ventana_inicio`, 30 acciones/5min) --
+  **contador separado** del de "ver el plan" (60/5min) y del de login (20/5min), a propósito:
+  mismo error que ya se había corregido en la migración 0042 compartiendo contadores de acciones
+  distintas.
+- `marcar_entrenamiento_hecho(p_codigo, p_semana, p_dia)` -- resuelve el alumno y su rutina activa
+  por el código (nunca por un ID que mande el cliente), inserta con `ON CONFLICT ... DO NOTHING`
+  (tocar el botón varias veces el mismo día no duplica).
+- `alumno_cargar_peso(p_codigo, p_peso)` -- valida `0 < peso <= 400`, actualiza la fila de hoy con
+  `origen='alumno'` si ya existe, si no la crea. Cargar dos veces en el mismo día actualiza el
+  valor, no duplica el registro.
+- `ver_plan_por_codigo()` ahora devuelve `dias_completados_hoy` (array `"semana|dia"`, ya filtrado
+  a `fecha = CURRENT_DATE` del lado del server) -- el frontend lo usa para saber qué pintar como
+  "Completado" sin tener que llamar a otra función aparte.
+
+**Frontend:**
+- `MiPlanPage.jsx`: tarjeta "Tu peso de hoy" (input + botón "Guardar") entre el saludo y "Tu
+  rutina"; botón "Marcar como hecho" por cada día de la rutina, que pasa a "Completado hoy" (con
+  ícono, en verde) apenas se confirma -- vuelve a aparecer al día siguiente, es un check diario, no
+  un progreso acumulado de la rutina entera.
+- `AlumnoPage.jsx` (ficha del profesor), para que este dato no quede invisible del lado del
+  profesor: en "Progreso" cada registro cargado por el alumno lleva la etiqueta "Cargado por el
+  alumno"; en "Entrenamiento", el día que el alumno marcó hoy muestra el badge "El alumno lo marcó
+  hoy" junto al conteo de ejercicios.
+
+**Probado de punta a punta contra la base real** (proyecto `fftdmpqbemcnxdnfnvhd`): alumno y rutina
+de prueba, las dos funciones nuevas llamadas dos veces cada una (confirma que NO duplican fila),
+validaciones de error (peso fuera de rango, código inexistente) confirmadas, `dias_completados_hoy`
+reflejando lo recién marcado. Repetido después en el navegador real contra `localhost:3001`: se
+marcó el día y se cargó el peso desde `/mi-plan/:codigo`, y ambos aparecieron correctamente en la
+ficha del profesor (badge verde + etiqueta "Cargado por el alumno"). Todos los datos de prueba
+(alumno, rutina asignada, filas de `progreso` y `entrenamientos_completados`) se borraron después
+de cada prueba, confirmado con conteos en 0.
+
+**Fase 2 completa.** Las 7 sub-fases (2.1 a 2.7) están hechas y verificadas.

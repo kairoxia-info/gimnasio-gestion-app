@@ -3831,3 +3831,58 @@ autorregistro y la campanita paso a 1 sola. Para descartar que lo hubiera dispar
 pestaña (que tambien dispara una recarga), se creo un segundo y se verifico **solo con una
 captura de pantalla**, sin ejecutar nada en la pagina ni darle foco: ya marcaba 2. Los dos
 registros de prueba se borraron despues; quedaron los 8 alumnos de siempre.
+
+## 13/09/2026 — Fase 2.1: pulidas rápidas de la investigación de competencia
+
+Ver el detalle completo de la Fase 2 (y las que siguen) en `PLAN.md`. Resumen de lo hecho hoy:
+
+- **Rutinas**: sugerencias de grupo muscular en el campo "Bloque" (Espalda-Bíceps, Pecho-Tríceps,
+  Piernas, Hombro-Core, Full body, Tren superior, Tren inferior). El campo ya era de texto libre
+  y ya agrupaba visualmente los ejercicios de un día bajo el nombre que se le pusiera -- esto solo
+  suma sugerencias al `<datalist>`, no cambia nada del guardado.
+- **Rutinas**: botón "Duplicar semana" junto al selector de semana, copia todos los ejercicios de
+  la semana activa a la siguiente. Pide confirmación solo si la semana destino ya tenía contenido.
+- **Dashboard**: "Asistencias (7 días)" (un solo número, todos los días sumados) pasó a
+  "Asistencias hoy" + una tarjeta nueva con gráfico de barras día por día de los últimos 7 días,
+  hoy resaltado en el color de marca (`components/GraficoAsistencias.jsx`).
+- **Ficha del alumno**: "Notas privadas" -- campo de texto que solo ve el profesor, nunca el
+  alumno (columna `alumnos.notas_internas`, migración 0048; verificado que
+  `ver_plan_por_codigo()` no la selecciona).
+- **Pospuesto, no hecho**: el toggle "Mostrar kcal y macros al alumno" se descubrió sin sentido
+  hoy -- los planes de alimentación no calculan macros todavía (eso es la Fase 2.4, ingredientes
+  con equivalencias). Se mueve para hacerse junto con esa fase.
+
+Todo probado en vivo con la sesión de Nalux. `eslint src/` y `npm run build` limpios. Nada
+commiteado todavía.
+
+## 13/09/2026 — Fase 2 completa: 2.2 a 2.7 (grupos musculares, circuitos, macros, fotos, y por
+## primera vez el alumno puede escribir)
+
+Resto de la Fase 2, detalle completo en `PLAN.md`. Resumen:
+
+- **2.2 "Ver como alumno"**: link en la ficha para que el profesor vea exactamente lo que ve el
+  alumno en `/mi-plan/:codigo`, sin tener que pedirle el código.
+- **2.3 Rutinas — series desglosadas + circuitos/intervalos**: pirámides/drop sets (peso o reps
+  distinto por serie, un ejercicio) y circuitos por tiempo (rondas, timer real que encadena
+  trabajo→descanso→siguiente ejercicio solo, sin que el alumno toque nada entre pasos). Bug
+  encontrado en la propia prueba en vivo: `agruparCombos()` no propagaba el tipo de grupo a las
+  superseries armadas automáticamente -- corregido.
+- **2.4 Macros por comida**: sin migración nueva -- cada alimento escala sus propios macros
+  contra su propia porción de referencia (`alimentos.unidad`, texto libre en los datos reales).
+- **2.5 Progreso con fotos**: bucket privado `progreso-fotos` (a diferencia de `alumnos-fotos`,
+  público) + signed URLs en batch.
+- **2.6 + 2.7 — el alumno escribe por primera vez**: se frenó antes de tocar código para
+  preguntarle a Nalux cómo abordar que el alumno escriba algo desde su celular por primera vez
+  (hasta acá `/mi-plan/:codigo` era 100% solo lectura) -- eligió el diseño más simple de tres
+  opciones. Migración `0050`: tabla `entrenamientos_completados`, `progreso.origen`
+  (`'profesor'`/`'alumno'`), dos RPC nuevas (`marcar_entrenamiento_hecho`,
+  `alumno_cargar_peso`) con rate limit propio, `ver_plan_por_codigo()` devuelve
+  `dias_completados_hoy`. En `/mi-plan/:codigo`: botón "Marcar como hecho" por día + campo "Tu
+  peso de hoy". En la ficha del profesor: badge "El alumno lo marcó hoy" y etiqueta "Cargado por
+  el alumno" en el historial de progreso -- sin esto el dato quedaba invisible del lado del
+  profesor.
+
+Cada fase probada en vivo (browser + SQL directo contra la base real) y con los datos de prueba
+borrados después, confirmado con conteos en 0. `eslint src/` y `npm run build` limpios en todo
+el proyecto. Recién ahora, con las 7 sub-fases terminadas, se hace el primer commit/push de toda
+la Fase 2 -- Nalux pidió "cuando termines todas las fases sube todo", un solo push al final.

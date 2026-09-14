@@ -2,7 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
-import { ArrowLeft, Check, Copy, MessageCircle, Pencil, Plus, Printer, Trash2, UserRound } from 'lucide-react';
+import {
+    ArrowLeft,
+    Check,
+    CheckCircle2,
+    Copy,
+    Eye,
+    MessageCircle,
+    Pencil,
+    Plus,
+    Printer,
+    Smartphone,
+    Trash2,
+    UserRound,
+} from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, PasswordInput, Select, Textarea } from '@/components/ui-kit';
@@ -27,6 +40,8 @@ import {
     fmtFecha,
     hoy,
     money,
+    resumenTipoGrupo,
+    tieneSeriesDetalle,
 } from '@/lib/format';
 
 // Carga diferida: recharts (~100 KB) recién se descarga cuando el profesor
@@ -132,6 +147,27 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
     useEffect(() => {
         setFechaFinEdit(plan?.fechaFin || '');
     }, [plan]);
+
+    // Fase 2.6 (13/09/2026): lo que el alumno marcó "hecho" HOY desde
+    // /mi-plan (migración 0050, entrenamientos_completados) -- mismo
+    // criterio de "hoy" que ve el propio alumno en su pantalla, para que acá
+    // el profesor vea exactamente lo mismo. Si mañana el alumno no marca
+    // nada, el badge desaparece solo -- no es un progreso acumulado de la
+    // rutina entera, es un check del día.
+    const [diasHechosHoy, setDiasHechosHoy] = useState(() => new Set());
+    useEffect(() => {
+        if (!plan?.asignacionId) {
+            setDiasHechosHoy(new Set());
+            return;
+        }
+        listAll('entrenamientos_completados', {
+            filters: { alumno_id: alumnoId, rutina_asignada_id: plan.asignacionId, fecha: hoy() },
+        })
+            .then((filas) => {
+                setDiasHechosHoy(new Set(filas.map((f) => `${f.semana}|${f.dia}`)));
+            })
+            .catch(() => setDiasHechosHoy(new Set()));
+    }, [alumnoId, plan?.asignacionId]);
 
     const abrirSelector = () => {
         setMsg('');
@@ -382,11 +418,18 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                             )}
                             {dias.map(([d, lista]) => (
                                 <Card key={`${nroSemana}-${d}`}>
-                                    <div className="mb-3 flex items-center justify-between">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                                         <h3 className="font-display text-lg font-bold uppercase">{d}</h3>
-                                        <Badge className="border-border text-muted-foreground">
-                                            {lista.length} ejercicio{lista.length === 1 ? '' : 's'}
-                                        </Badge>
+                                        <div className="flex items-center gap-2">
+                                            {diasHechosHoy.has(`${nroSemana}|${d}`) && (
+                                                <Badge className="gap-1 border-ok/40 bg-ok/10 text-ok">
+                                                    <CheckCircle2 className="h-3 w-3" /> El alumno lo marcó hoy
+                                                </Badge>
+                                            )}
+                                            <Badge className="border-border text-muted-foreground">
+                                                {lista.length} ejercicio{lista.length === 1 ? '' : 's'}
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <div className="space-y-4">
                                         {agruparPorBloque(agruparCombos(lista)).map(([nombreBloque, delBloque], iBloque) => (
@@ -394,6 +437,11 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                 {nombreBloque && (
                                                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                         {nombreBloque}
+                                                        {resumenTipoGrupo(delBloque) && (
+                                                            <span className="ml-2 normal-case text-primary">
+                                                                · {resumenTipoGrupo(delBloque)}
+                                                            </span>
+                                                        )}
                                                     </p>
                                                 )}
                                                 {delBloque.map((it) =>
@@ -469,17 +517,30 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                                     </p>
                                                                     <p className="text-sm font-semibold">{it.series}</p>
                                                                 </div>
+                                                                {/* Series desglosadas (Fase 2.3, 13/09/2026): esta es la
+                                                                    ficha del PROFESOR, no lo que ve el alumno (eso ya
+                                                                    se actualizó en MiPlanPage.jsx) -- alcanza con el
+                                                                    resumen compacto "12/10/8" en vez de repetir la
+                                                                    tabla completa en una vista que ya es chica. */}
                                                                 <div>
                                                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                                         Reps
                                                                     </p>
-                                                                    <p className="text-sm font-semibold">{it.reps}</p>
+                                                                    <p className="text-sm font-semibold">
+                                                                        {tieneSeriesDetalle(it)
+                                                                            ? it.seriesDetalle.map((s) => s.reps || '—').join('/')
+                                                                            : it.reps}
+                                                                    </p>
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                                         Peso
                                                                     </p>
-                                                                    <p className="text-sm font-semibold">{it.peso || '—'}</p>
+                                                                    <p className="text-sm font-semibold">
+                                                                        {tieneSeriesDetalle(it)
+                                                                            ? it.seriesDetalle.map((s) => s.peso || '—').join('/')
+                                                                            : it.peso || '—'}
+                                                                    </p>
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -913,7 +974,16 @@ const medida = (v) => {
     return n > 0 ? n : null;
 };
 
+// Fase 2.5 (13/09/2026): mismo límite y mapa de extensiones que ya usan
+// AlumnosPage.jsx/ConfiguracionPage.jsx/EjerciciosPage.jsx para sus propias
+// subidas -- se repite acá en vez de compartirlo porque ese es el patrón
+// que ya sigue el resto de estas pantallas (cada una con su propia
+// constante chica), no algo nuevo que se está inventando.
+const MAX_FOTO_PROGRESO_BYTES = 2 * 1024 * 1024;
+const MIME_TO_EXT_PROGRESO = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+
 const Progreso = ({ alumnoId, registros, onChange }) => {
+    const { profile } = useAuth();
     const [form, setForm] = useState(FORM_VACIO);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -923,13 +993,67 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
     // el borrado fallaba, no se avisaba nada.
     const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
     const [borrando, setBorrando] = useState(false);
+    // Foto de progreso (Fase 2.5, 13/09/2026): mismo patrón de
+    // archivo+preview que AlumnosPage.jsx, pero el bucket ('progreso-fotos',
+    // migración 0049) es PRIVADO -- una foto de progreso físico es más
+    // sensible que una de perfil. Por eso acá no hay getPublicUrl(): se
+    // guarda el PATH crudo en progreso.foto_path y se piden signed URLs
+    // (fotosFirmadas más abajo) cada vez que hay que mostrarlas.
+    const [fotoFile, setFotoFile] = useState(null);
+    const [fotoPreview, setFotoPreview] = useState('');
+    const [fotoError, setFotoError] = useState('');
+    const [fotosFirmadas, setFotosFirmadas] = useState({});
+
+    // Se resuelven en batch (createSignedUrls, un solo viaje de red) cada
+    // vez que cambia la lista de registros -- no una por una al renderizar,
+    // que dispararía N requests innecesarios en cada re-render.
+    useEffect(() => {
+        const paths = registros.filter((r) => r.foto_path).map((r) => r.foto_path);
+        if (paths.length === 0) {
+            setFotosFirmadas({});
+            return;
+        }
+        supabase.storage
+            .from('progreso-fotos')
+            .createSignedUrls(paths, 3600)
+            .then(({ data }) => {
+                const mapa = {};
+                (data || []).forEach((d) => {
+                    if (d.signedUrl) mapa[d.path] = d.signedUrl;
+                });
+                setFotosFirmadas(mapa);
+            })
+            .catch(() => setFotosFirmadas({}));
+    }, [registros]);
+
+    const onFotoChange = (e) => {
+        const file = e.target.files?.[0];
+        setFotoError('');
+        if (!file) {
+            setFotoFile(null);
+            setFotoPreview('');
+            return;
+        }
+        if (!MIME_TO_EXT_PROGRESO[file.type]) {
+            setFotoError('La foto debe ser PNG, JPG o WEBP.');
+            e.target.value = '';
+            return;
+        }
+        if (file.size > MAX_FOTO_PROGRESO_BYTES) {
+            setFotoError('La foto no puede pesar más de 2 MB.');
+            e.target.value = '';
+            return;
+        }
+        setFotoFile(file);
+        setFotoPreview(URL.createObjectURL(file));
+    };
 
     const guardar = async (e) => {
         e.preventDefault();
         setSaving(true);
         setError('');
         try {
-            await createRec('progreso', {
+            const creado = await createRec('progreso', {
                 alumno_id: alumnoId,
                 fecha: form.fecha,
                 peso: medida(form.peso),
@@ -940,7 +1064,29 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                 pierna: medida(form.pierna),
                 observaciones: form.observaciones,
             });
+
+            // La foto se sube DESPUÉS de crear el registro, nunca antes: la
+            // policy del bucket exige que ya exista una fila real de
+            // progreso con ese id (mismo criterio que alumnos-fotos).
+            if (fotoFile && profile?.gimnasio_id) {
+                try {
+                    const ext = MIME_TO_EXT_PROGRESO[fotoFile.type];
+                    const path = `${profile.gimnasio_id}/${creado.id}.${ext}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('progreso-fotos')
+                        .upload(path, fotoFile, { upsert: true });
+                    if (uploadError) throw uploadError;
+                    await updateRec('progreso', creado.id, { foto_path: path });
+                } catch (_) {
+                    setError(
+                        'El registro se guardó, pero la foto no se pudo subir. Se puede volver a intentar borrando el registro y cargándolo de nuevo.',
+                    );
+                }
+            }
+
             setForm({ ...FORM_VACIO, fecha: hoy() });
+            setFotoFile(null);
+            setFotoPreview('');
             onChange();
         } catch (_) {
             setError('No se pudo guardar el registro. Reintentar en unos minutos.');
@@ -949,11 +1095,21 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
         }
     };
 
-    const borrar = async (id) => {
+    const borrar = async (registro) => {
         setBorrando(true);
         setError('');
         try {
-            await removeRec('progreso', id);
+            // Storage no se limpia solo (mismo criterio que EjerciciosPage.jsx):
+            // se borra el archivo primero, best effort -- si ya no está o
+            // falla, no bloquea el borrado del registro en sí.
+            if (registro.foto_path) {
+                try {
+                    await supabase.storage.from('progreso-fotos').remove([registro.foto_path]);
+                } catch (_) {
+                    // best effort, seguimos igual
+                }
+            }
+            await removeRec('progreso', registro.id);
             setConfirmandoBorrarId(null);
             onChange();
         } catch (_) {
@@ -1045,6 +1201,23 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                             onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
                         />
                     </Field>
+                    <Field label="Foto de progreso (opcional)">
+                        <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={onFotoChange}
+                            className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-semibold"
+                        />
+                        <span className="text-xs text-muted-foreground">PNG, JPG o WEBP. Máximo 2 MB.</span>
+                        {fotoError && <p className="mt-1 text-xs text-destructive">{fotoError}</p>}
+                        {fotoPreview && (
+                            <img
+                                src={fotoPreview}
+                                alt="Vista previa"
+                                className="mt-2 h-24 w-24 rounded-xl border border-border object-cover"
+                            />
+                        )}
+                    </Field>
                     <Btn type="submit" disabled={saving}>
                         {saving ? 'Guardando...' : 'Registrar'}
                     </Btn>
@@ -1079,10 +1252,45 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                         <ul className="divide-y divide-border">
                             {registros.map((r) => (
                                 <li key={r.id} className="flex items-start justify-between gap-3 py-3">
-                                    <div>
-                                        <p className="text-sm font-semibold">
-                                            {fmtFecha(r.fecha)}
-                                            {medida(r.peso) !== null ? ` · ${r.peso} kg` : ''}
+                                    <div className="flex min-w-0 items-start gap-3">
+                                        {/* Foto de progreso (Fase 2.5, 13/09/2026): miniatura
+                                            clickeable que abre la foto de tamaño real en una
+                                            pestaña nueva -- con la signed URL ya resuelta
+                                            (fotosFirmadas), nunca la URL pública (el bucket es
+                                            privado). Si la signed URL todavía no llegó (recién
+                                            montado, o venció y no se refrescó), no se muestra
+                                            nada en vez de un ícono roto. */}
+                                        {r.foto_path && fotosFirmadas[r.foto_path] && (
+                                            <a
+                                                href={fotosFirmadas[r.foto_path]}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="shrink-0"
+                                            >
+                                                <img
+                                                    src={fotosFirmadas[r.foto_path]}
+                                                    alt={`Foto de progreso del ${fmtFecha(r.fecha)}`}
+                                                    className="h-14 w-14 rounded-xl border border-border object-cover"
+                                                />
+                                            </a>
+                                        )}
+                                        <div className="min-w-0">
+                                        <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                                            <span>
+                                                {fmtFecha(r.fecha)}
+                                                {medida(r.peso) !== null ? ` · ${r.peso} kg` : ''}
+                                            </span>
+                                            {/* Fase 2.7 (13/09/2026): distingue lo que cargó el
+                                                alumno desde /mi-plan (migración 0050,
+                                                alumno_cargar_peso) de lo que cargó el profesor acá
+                                                mismo -- sin esto, el profesor no tiene forma de
+                                                saber que el alumno cargó su propio peso. */}
+                                            {r.origen === 'alumno' && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                                                    <Smartphone className="h-3 w-3" aria-hidden="true" />
+                                                    Cargado por el alumno
+                                                </span>
+                                            )}
                                         </p>
                                         {/* Solo las medidas realmente tomadas ese dia: antes
                                             salian las cinco siempre, con 0 en las que no se
@@ -1103,6 +1311,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                             );
                                         })()}
                                         {r.observaciones && <p className="mt-1 text-xs">{r.observaciones}</p>}
+                                        </div>
                                     </div>
                                     {confirmandoBorrarId === r.id ? (
                                         <div className="flex shrink-0 items-center gap-1.5">
@@ -1110,7 +1319,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                                 variant="danger"
                                                 className="px-3 py-1.5 text-xs"
                                                 disabled={borrando}
-                                                onClick={() => borrar(r.id)}
+                                                onClick={() => borrar(r)}
                                             >
                                                 {borrando ? 'Eliminando...' : 'Sí, eliminar'}
                                             </Btn>
@@ -1408,6 +1617,82 @@ const PagosAlumno = ({ pagos, config, onChange }) => {
                 )}
             </Card>
         </div>
+    );
+};
+
+/* ---------------- Notas privadas del profesor ---------------- */
+
+// Fase 2.1 (13/09/2026), pedido de Nalux. A diferencia de "Observaciones de
+// salud" (arriba, en la cabecera de la ficha) esto NUNCA lo ve el alumno:
+// es para que el profesor anote contexto o recordatorios propios ("prefiere
+// entrenar de mañana", "pidió bajar la intensidad de piernas"). Por eso la
+// columna nueva (notas_internas) no se agrega a ver_plan_por_codigo() -- la
+// función que arma lo que ve el alumno en /mi-plan/:codigo tiene una lista
+// blanca explícita de columnas, así que con no tocarla alcanza para que
+// quede fuera.
+const NotasPrivadas = ({ alumnoId, notasIniciales }) => {
+    const [notas, setNotas] = useState(notasIniciales || '');
+    const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
+    const [guardado, setGuardado] = useState(false);
+
+    // Si se navega a otro alumno sin desmontar este componente (no pasa hoy,
+    // AppLayout se remonta por ruta, pero cuesta nada cubrirlo) no queda la
+    // nota del alumno anterior pisando la del nuevo.
+    useEffect(() => {
+        setNotas(notasIniciales || '');
+        setGuardado(false);
+    }, [alumnoId, notasIniciales]);
+
+    const guardar = async () => {
+        setGuardando(true);
+        setError('');
+        setGuardado(false);
+        try {
+            await updateRec('alumnos', alumnoId, { notas_internas: notas.trim() || null });
+            setGuardado(true);
+        } catch (_) {
+            setError('No se pudo guardar la nota. Reintentar en unos minutos.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const cambio = notas !== (notasIniciales || '');
+
+    return (
+        <Card className="mb-6">
+            <h2 className="font-display text-lg font-bold">Notas privadas</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+                Solo las ve el profesor. El alumno nunca tiene acceso a esto.
+            </p>
+            <Textarea
+                className="mt-3"
+                rows={3}
+                value={notas}
+                onChange={(e) => {
+                    setNotas(e.target.value);
+                    setGuardado(false);
+                }}
+                placeholder="Contexto, recordatorios, preferencias del alumno..."
+            />
+            {error && (
+                <div className="mt-2">
+                    <ErrorBox>{error}</ErrorBox>
+                </div>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+                <Btn
+                    variant="ghost"
+                    className="px-4 py-2 text-xs"
+                    disabled={guardando || !cambio}
+                    onClick={guardar}
+                >
+                    {guardando ? 'Guardando...' : 'Guardar nota'}
+                </Btn>
+                {guardado && !cambio && <span className="text-xs text-ok">Guardado.</span>}
+            </div>
+        </Card>
     );
 };
 
@@ -1982,17 +2267,41 @@ const AlumnoPage = () => {
                                 <Badge className={ESTADOS_ALUMNO[estadoAlumno(alumno)].className}>
                                     {ESTADOS_ALUMNO[estadoAlumno(alumno)].label}
                                 </Badge>
-                                {/* La ficha no tiene su propio formulario -- "Editar
-                                    datos" abre el mismo modal de la lista (pedido de
-                                    Nalux, 10/09/2026: la campanita manda acá diciendo
-                                    "faltan sus datos" pero no había cómo cargarlos sin
-                                    volver a la lista). */}
-                                <Link
-                                    to={`/alumnos?editar=${id}`}
-                                    className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
-                                >
-                                    <Pencil className="h-3.5 w-3.5" /> Editar datos
-                                </Link>
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    {/* Fase 2.2 (13/09/2026), pedido de Nalux: que el
+                                        profesor pueda ver exactamente lo que ve el
+                                        alumno antes de mandarle el link. No hace falta
+                                        construir una vista aparte -- alumno.codigo_acceso
+                                        ya viaja con el select('*') de más arriba, y
+                                        /mi-plan/:codigo es la MISMA ruta que usa el
+                                        alumno de verdad (via ver_plan_por_codigo()), así
+                                        que abrirla es literalmente lo que él ve, sin
+                                        simular nada. Esa RPC exige activo=true, por eso
+                                        el botón se esconde si el alumno está inactivo o
+                                        pendiente -- para esos casos daría "Código de
+                                        acceso inválido" en vez de mostrar algo útil. */}
+                                    {alumno.activo && (
+                                        <a
+                                            href={`/mi-plan/${alumno.codigo_acceso}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+                                        >
+                                            <Eye className="h-3.5 w-3.5" /> Ver como alumno
+                                        </a>
+                                    )}
+                                    {/* La ficha no tiene su propio formulario -- "Editar
+                                        datos" abre el mismo modal de la lista (pedido de
+                                        Nalux, 10/09/2026: la campanita manda acá diciendo
+                                        "faltan sus datos" pero no había cómo cargarlos sin
+                                        volver a la lista). */}
+                                    <Link
+                                        to={`/alumnos?editar=${id}`}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" /> Editar datos
+                                    </Link>
+                                </div>
                             </div>
                         </div>
 
@@ -2042,6 +2351,8 @@ const AlumnoPage = () => {
                                 </dl>
                             </Card>
                         )}
+
+                        <NotasPrivadas alumnoId={id} notasIniciales={alumno.notas_internas} />
 
                         <AccesoAlumno
                             alumno={alumno}

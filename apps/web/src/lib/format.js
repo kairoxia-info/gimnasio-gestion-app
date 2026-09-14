@@ -29,6 +29,18 @@ export const fmtMes = (v) => {
     return `${mes.charAt(0).toUpperCase()}${mes.slice(1)} '${anio}`;
 };
 
+// "Lun 08" para las etiquetas del eje X del gráfico de asistencia diaria
+// (DashboardPage.jsx, Fase 2.1). v es "YYYY-MM-DD". Corto a propósito, mismo
+// criterio que fmtMes() -- 7 de estos en una fila no entran con fmtFecha().
+export const fmtDiaCorto = (v) => {
+    if (!v) return '';
+    const d = new Date(String(v).slice(0, 10) + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    const dia = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+    const num = d.toLocaleDateString('es-AR', { day: '2-digit' });
+    return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} ${num}`;
+};
+
 // Texto que se usa como "opción" de una comida al elegir UNA comida (p. ej.
 // "Desayuno") de un plan de la biblioteca reutilizable
 // (PlanesAlimentacionPage.jsx, migración 0025) desde la ficha de un alumno
@@ -65,6 +77,97 @@ export const armarTextoAlimentos = (items) => {
         }
     });
     return partes.filter(Boolean).join(' + ');
+};
+
+// ---------------------------------------------------------------------------
+// Cálculo de macros de una comida (Fase 2.4, 13/09/2026). Se investigó
+// primero: `alimentos.unidad` es texto TOTALMENTE libre en los datos reales
+// ("100 g", "1 unidad", "1 cda", "1 scoop (30 g)"...), no una convención
+// fija de "todo por 100g" -- así que estos helpers NO fuerzan ninguna
+// conversión a gramos ni inventan equivalencias. En cambio, escalan los
+// macros de CADA alimento contra SU PROPIA porción de referencia: si
+// `unidad` empieza con un número (100 g -> 100), la cantidad que carga el
+// profesor se toma en esas mismas unidades; si no tiene número (1 unidad,
+// 1 scoop), se toma como "referencia = 1" y la cantidad es "cuántas veces
+// esa porción". Nunca se calcula nada para un alimento sin macros cargados
+// o un item sin cantidad numérica -- se cuenta aparte como "sin calcular"
+// en vez de mostrar un número inventado.
+// ---------------------------------------------------------------------------
+
+// Primer número que aparece en un texto libre, coma o punto decimal. Mismo
+// criterio que ya usa parsearDescanso() en MiPlanPage.jsx, separado acá
+// porque hace falta en más de un lado.
+export const primerNumero = (texto) => {
+    if (texto === null || texto === undefined) return null;
+    const m = String(texto).match(/(\d+(?:[.,]\d+)?)/);
+    if (!m) return null;
+    const n = Number(m[1].replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+};
+
+// Macros de UN item de comida, ya escalados a la cantidad que pidió el
+// profesor. null si falta cualquier dato necesario -- alimento borrado de
+// la biblioteca, sin macros cargados, o cantidad sin ningún número.
+export const macrosDeItem = (item, alimentosPorId) => {
+    const alimento = alimentosPorId?.get(item?.alimentoId);
+    if (!alimento) return null;
+    if (alimento.calorias === null || alimento.calorias === undefined) return null;
+    const cantidadNum = primerNumero(item?.cantidad);
+    if (cantidadNum === null) return null;
+    const referencia = primerNumero(alimento.unidad) || 1;
+    const factor = cantidadNum / referencia;
+    return {
+        kcal: Number(alimento.calorias || 0) * factor,
+        proteinas: Number(alimento.proteinas || 0) * factor,
+        carbohidratos: Number(alimento.carbohidratos || 0) * factor,
+        grasas: Number(alimento.grasas || 0) * factor,
+    };
+};
+
+// Macros de una comida entera: suma cada item calculable y cuenta cuántos
+// quedaron afuera (para poder avisar "estimado, faltan N sin calcular" en
+// vez de mostrar un total que parece exacto y no lo es). Los opcionales no
+// suman -- no son parte necesaria de la comida. De un grupo de alternativas
+// ("elegir uno: Pollo o Pescado") se toma solo la PRIMERA opción como
+// estimación -- sumar todas contaría comida que el alumno no va a comer.
+export const macrosDeComida = (comida, alimentosPorId) => {
+    const gruposYaContados = new Set();
+    const totales = { kcal: 0, proteinas: 0, carbohidratos: 0, grasas: 0 };
+    let calculados = 0;
+    let sinCalcular = 0;
+    (comida?.alimentos || []).forEach((it) => {
+        if (it.opcional) return;
+        if (it.grupo) {
+            if (gruposYaContados.has(it.grupo)) return;
+            gruposYaContados.add(it.grupo);
+        }
+        const m = macrosDeItem(it, alimentosPorId);
+        if (!m) {
+            sinCalcular += 1;
+            return;
+        }
+        calculados += 1;
+        totales.kcal += m.kcal;
+        totales.proteinas += m.proteinas;
+        totales.carbohidratos += m.carbohidratos;
+        totales.grasas += m.grasas;
+    });
+    if (calculados === 0) return null;
+    return { ...totales, sinCalcular };
+};
+
+// Texto compacto para mostrar el resultado ("≈ 420 kcal · 35g prot · 45g
+// carb · 12g grasas", con un "+ N sin calcular" si corresponde). Redondea a
+// entero -- un decimal de proteína no aporta nada y hace más difícil leer
+// rápido, que es para lo que sirve este resumen.
+export const resumenMacros = (macros) => {
+    if (!macros) return null;
+    const r = (v) => Math.round(v);
+    let texto = `≈ ${r(macros.kcal)} kcal · ${r(macros.proteinas)}g prot · ${r(macros.carbohidratos)}g carb · ${r(macros.grasas)}g grasas`;
+    if (macros.sinCalcular > 0) {
+        texto += ` (+ ${macros.sinCalcular} sin calcular)`;
+    }
+    return texto;
 };
 
 export const antiguedad = (fechaAlta) => {
@@ -307,6 +410,39 @@ export const agruparPorBloque = (lista) => {
     return grupos;
 };
 
+// ---------------------------------------------------------------------------
+// Tipo de grupo (Fase 2.3, 13/09/2026): un bloque con nombre puede ser
+// ademas un CIRCUITO (rondas de ejercicios en secuencia) o un INTERVALO
+// (mismo circuito, pero con tiempos fijos de trabajo/descanso y un
+// temporizador real del lado del alumno -- formato tabata). Un bloque
+// normal (sin tipoGrupo) sigue funcionando exactamente igual que siempre.
+//
+// El dato vive REPETIDO en cada item del bloque (mismo criterio que ya usa
+// `bloque` en sí, o `comboId`) en vez de en una entidad de grupo aparte,
+// porque rutinas.items sigue siendo un array plano -- armar una estructura
+// de "grupos" separada hubiera significado tocar el modelo entero. Se lee
+// del PRIMER item del grupo porque todos comparten el mismo valor.
+// ---------------------------------------------------------------------------
+
+export const tipoDeGrupo = (delBloque) => delBloque?.[0]?.tipoGrupo || 'bloque';
+
+// Texto listo para mostrar en las pantallas de solo lectura (ficha del
+// profesor, plan del alumno, PDF). null si es un bloque normal -- ahí no
+// hay nada nuevo que anunciar, sigue siendo el título de bloque de siempre.
+export const resumenTipoGrupo = (delBloque) => {
+    const tipo = tipoDeGrupo(delBloque);
+    if (tipo === 'bloque') return null;
+    const primero = delBloque[0] || {};
+    const rondas = Number(primero.rondas) || 3;
+    const rondasTxt = `${rondas} ronda${rondas === 1 ? '' : 's'}`;
+    if (tipo === 'intervalo') {
+        const trabajo = Number(primero.tiempoTrabajo) || 40;
+        const descansoEj = Number(primero.tiempoDescansoEj) || 20;
+        return `Intervalo · ${rondasTxt} · ${trabajo}s trabajo / ${descansoEj}s descanso`;
+    }
+    return `Circuito · ${rondasTxt}${primero.descansoRondas ? ` · descanso ${primero.descansoRondas} entre rondas` : ''}`;
+};
+
 // Semana -> Día -> ejercicios. Devuelve [[semana, [[dia, items], ...]], ...]
 // ordenado por número de semana y por el orden de DIAS.
 export const agruparItemsRutina = (items) => {
@@ -322,6 +458,59 @@ export const agruparItemsRutina = (items) => {
     return [...semanas.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([s, dias]) => [s, [...dias.entries()].sort((a, b) => DIAS.indexOf(a[0]) - DIAS.indexOf(b[0]))]);
+};
+
+// ---------------------------------------------------------------------------
+// Desglose de series (Fase 2.3, 13/09/2026): pirámides, drop sets -- peso o
+// reps distinto en cada serie de un mismo ejercicio. Por default un
+// ejercicio sigue siendo "series x reps" uniforme (como siempre); si tiene
+// `seriesDetalle` (array, una fila por serie) se usa eso en su lugar. Nunca
+// se borra `series`/`reps`/`peso`/`descanso` al desglosar -- quedan como el
+// valor que tenía ANTES de desglosar, así "Unificar" puede volver a mostrar
+// algo razonable sin inventar nada.
+// ---------------------------------------------------------------------------
+
+export const tieneSeriesDetalle = (it) => Array.isArray(it?.seriesDetalle) && it.seriesDetalle.length > 0;
+
+// Arma el array inicial al tocar "Desglosar": una fila por cada serie que el
+// ejercicio ya tenía, todas con el mismo peso/reps/descanso de antes -- el
+// profesor edita desde ahí, no arranca de cero.
+export const desglosarSeries = (it) => {
+    const n = Math.max(1, Math.round(Number(it?.series)) || 1);
+    return Array.from({ length: n }, () => ({
+        reps: it?.reps || '',
+        peso: it?.peso || '',
+    }));
+};
+
+// SIEMPRE devuelve un array de filas (una por serie), esté o no desglosado
+// -- así el PDF, la ficha del alumno y el plan leen todos de acá y ninguno
+// repite la lógica de "si hay seriesDetalle, uso eso; si no, repito
+// series/reps/peso". `descanso` no varía por serie (es el tiempo hasta la
+// SIGUIENTE, tiene sentido que sea uno solo para todo el ejercicio).
+export const filasDeSeries = (it) => {
+    if (tieneSeriesDetalle(it)) {
+        return it.seriesDetalle.map((s, i) => ({
+            numero: i + 1,
+            reps: s?.reps || '',
+            peso: s?.peso || '',
+        }));
+    }
+    const n = Math.max(1, Math.round(Number(it?.series)) || 1);
+    return Array.from({ length: n }, (_, i) => ({ numero: i + 1, reps: it?.reps || '', peso: it?.peso || '' }));
+};
+
+// Texto compacto para donde no entra la tabla completa (encabezados,
+// resúmenes). "4x10" de siempre si no está desglosado; si está desglosado,
+// muestra las reps de cada serie separadas por "/" -- que es lo que más
+// varía en una pirámide -- y el rango de peso si no son todos iguales.
+export const resumenSeries = (it) => {
+    if (!tieneSeriesDetalle(it)) return `${it?.series ?? '—'}x${it?.reps || '—'}`;
+    const filas = it.seriesDetalle;
+    const reps = filas.map((s) => s?.reps || '—').join('/');
+    const pesos = [...new Set(filas.map((s) => (s?.peso || '').trim()).filter(Boolean))];
+    const pesoTxt = pesos.length === 1 ? ` · ${pesos[0]}kg` : pesos.length > 1 ? ' · peso variable' : '';
+    return `${filas.length} series (${reps} reps${pesoTxt})`;
 };
 
 // ---------------------------------------------------------------------------
@@ -369,6 +558,21 @@ export const agruparCombos = (lista) => {
             descanso: combinarValor(g.map((x) => x.descanso)),
             intensidad: combinarValor(g.map((x) => x.intensidad)),
             comentario: [...new Set(g.map((x) => x.comentario).filter(Boolean))].join(' · '),
+            // Tipo de grupo (Fase 2.3, 13/09/2026): sin esto, un circuito o
+            // intervalo armado con 2+ ejercicios agregados JUNTOS (que es el
+            // caso normal -- se tildan varios y se agregan de una) perdía la
+            // etiqueta y el timer en TODAS las pantallas de solo lectura,
+            // porque tipoDeGrupo()/resumenTipoGrupo() leen del primer item
+            // del grupo, y ese primer item pasaba a ser este objeto
+            // sintético sin estos campos. Bug real, encontrado probando en
+            // vivo. Son propiedades del bloque entero, iguales en todos los
+            // ejercicios del combo -- se copian del primero, igual que
+            // `bloque` ahí arriba.
+            tipoGrupo: g[0].tipoGrupo,
+            rondas: g[0].rondas,
+            descansoRondas: g[0].descansoRondas,
+            tiempoTrabajo: g[0].tiempoTrabajo,
+            tiempoDescansoEj: g[0].tiempoDescansoEj,
             esCombo: true,
             comboItems: g,
         };

@@ -8,7 +8,18 @@ import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/Ruti
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
-import { DIAS, agruparPorBloque, fmtFecha, hoy, semanaDeItem } from '@/lib/format';
+import {
+    DIAS,
+    agruparPorBloque,
+    desglosarSeries,
+    fmtFecha,
+    hoy,
+    resumenSeries,
+    resumenTipoGrupo,
+    semanaDeItem,
+    tieneSeriesDetalle,
+    tipoDeGrupo,
+} from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
 
 // Días que ya usa una rutina, en el orden de DIAS. Si algún item tuviera un
@@ -55,6 +66,18 @@ const BLOQUES_SUGERIDOS = [
     'Zona media',
     'Cardio final',
     'Elongación',
+    // Grupos musculares (13/09/2026, Fase 2.1): pedido de Nalux para poder
+    // titular el día directamente con el grupo que se entrena ("Día 1:
+    // Espalda-Bíceps") en vez de solo fases del entrenamiento. El campo ya
+    // era de texto libre -- esto solo suma sugerencias, no cambia nada del
+    // guardado ni de cómo se agrupa (agruparPorBloque() en lib/format.js).
+    'Espalda-Bíceps',
+    'Pecho-Tríceps',
+    'Piernas',
+    'Hombro-Core',
+    'Full body',
+    'Tren superior',
+    'Tren inferior',
 ];
 
 // Vista de solo lectura de una rutina ya armada (botón "Ver" de cada
@@ -93,6 +116,11 @@ const DetalleRutina = ({ rutina }) => {
                                                 {bloque && (
                                                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                         {bloque}
+                                                        {resumenTipoGrupo(delBloque) && (
+                                                            <span className="ml-2 normal-case text-primary">
+                                                                · {resumenTipoGrupo(delBloque)}
+                                                            </span>
+                                                        )}
                                                     </p>
                                                 )}
                                                 <div className="space-y-2">
@@ -124,8 +152,8 @@ const DetalleRutina = ({ rutina }) => {
                                                                         )}
                                                                     </span>
                                                                     <span className="text-xs text-muted-foreground">
-                                                                        {it.series} x {it.reps}
-                                                                        {it.peso ? ` · ${it.peso}` : ''}
+                                                                        {resumenSeries(it)}
+                                                                        {!tieneSeriesDetalle(it) && it.peso ? ` · ${it.peso}` : ''}
                                                                         {it.descanso ? ` · ${it.descanso}` : ''}
                                                                     </span>
                                                                 </div>
@@ -203,6 +231,11 @@ const RutinasPage = () => {
     // distintos" -- eso pasa a ser una opción aparte, apagada por default,
     // en vez de algo que se prende solo por poner una duración mayor a 1.
     const [semanasDistintas, setSemanasDistintas] = useState(false);
+    // "Duplicar semana" (Fase 2.1, 13/09/2026): pedido de Nalux para no tener
+    // que recargar a mano los mismos días en cada semana de un programa de
+    // varias semanas. Solo pide confirmación si la semana destino YA tiene
+    // ejercicios -- si está vacía no hay nada que perder, se copia directo.
+    const [confirmandoDuplicarSemana, setConfirmandoDuplicarSemana] = useState(false);
     const [bloque, setBloque] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -297,6 +330,7 @@ const RutinasPage = () => {
         setDia(DIAS[0]);
         setSemana(1);
         setSemanasDistintas(false);
+        setConfirmandoDuplicarSemana(false);
         setBloque('');
         setOpen(true);
     };
@@ -319,6 +353,7 @@ const RutinasPage = () => {
         // distinta, el toggle arranca prendido -- no hay que esconder
         // contenido real que el profesor ya armó a propósito.
         setSemanasDistintas(new Set((r.items || []).map(semanaDeItem)).size > 1);
+        setConfirmandoDuplicarSemana(false);
         setBloque('');
         setOpen(true);
     };
@@ -447,6 +482,103 @@ const RutinasPage = () => {
             });
         });
 
+    // Desglose de series (Fase 2.3, 13/09/2026): pirámides, drop sets -- peso
+    // o reps distinto en cada serie. Solo para ejercicios sueltos (no
+    // superseries): una superserie ya tiene cada ejercicio en una caja de
+    // 9.5rem de ancho, no entra una tabla de series ahí sin rehacer todo ese
+    // layout, y el caso de uso real (piramidal de sentadilla, por ejemplo)
+    // es casi siempre un ejercicio solo.
+    const desglosar = (it) => editarItem(it.key, 'seriesDetalle', desglosarSeries(it));
+
+    // Al unificar, los valores que quedan en series/reps/peso son los de la
+    // PRIMERA serie del desglose (no los de antes de desglosar) -- el
+    // profesor pudo haber cambiado todo mientras estaba desglosado, y lo que
+    // ve en pantalla en ese momento es lo que espera que quede.
+    const unificar = (it) => {
+        const filas = it.seriesDetalle || [];
+        const primera = filas[0] || {};
+        setItems((prev) =>
+            prev.map((x) =>
+                x.key === it.key
+                    ? {
+                          ...x,
+                          seriesDetalle: null,
+                          series: filas.length || x.series,
+                          reps: primera.reps || x.reps,
+                          peso: primera.peso || x.peso,
+                      }
+                    : x,
+            ),
+        );
+    };
+
+    const editarFilaSerie = (it, indice, campo, valor) => {
+        const filas = [...(it.seriesDetalle || [])];
+        filas[indice] = { ...filas[indice], [campo]: valor };
+        editarItem(it.key, 'seriesDetalle', filas);
+    };
+
+    // La fila nueva repite los valores de la última -- en una piramidal es
+    // mucho más común seguir subiendo/bajando de a poco que arrancar de
+    // cero cada vez que se agrega una serie más.
+    const agregarFilaSerie = (it) => {
+        const filas = [...(it.seriesDetalle || [])];
+        const ultima = filas[filas.length - 1] || {};
+        filas.push({ reps: ultima.reps || '', peso: ultima.peso || '' });
+        editarItem(it.key, 'seriesDetalle', filas);
+    };
+
+    // No deja sacar la última fila: un desglose de 0 series no significa
+    // nada -- si el profesor quiere sacar el desglose entero, "Unificar" es
+    // el botón para eso.
+    const quitarFilaSerie = (it, indice) => {
+        const filas = (it.seriesDetalle || []).filter((_, i) => i !== indice);
+        if (filas.length === 0) return;
+        editarItem(it.key, 'seriesDetalle', filas);
+    };
+
+    // Tipo de grupo -- circuito / intervalo (Fase 2.3, 13/09/2026). Se edita
+    // a nivel del BLOQUE entero (todos los ejercicios que lo forman a la
+    // vez), no ejercicio por ejercicio, porque "rondas" y "descanso entre
+    // rondas" son propiedades del circuito, no de cada ejercicio suelto.
+    const editarConfigGrupo = (delBloque, campo, valor) => {
+        const keys = new Set(delBloque.map((it) => it.key));
+        setItems((prev) => prev.map((it) => (keys.has(it.key) ? { ...it, [campo]: valor } : it)));
+    };
+
+    // Al pasar a Circuito/Intervalo se ponen valores por default razonables
+    // (3 rondas, 90s de descanso entre rondas, 40s trabajo / 20s descanso
+    // para intervalo -- valores estándar de tabata) para no dejar el
+    // formulario con campos vacíos que el profesor tenga que llenar antes
+    // de poder guardar. Al volver a "Bloque" se BORRAN esos campos del
+    // todo (no solo se ocultan) para no dejar datos viejos colgando si en
+    // algún momento se vuelve a cambiar el tipo.
+    const cambiarTipoGrupo = (delBloque, tipo) => {
+        const keys = new Set(delBloque.map((it) => it.key));
+        const actual = delBloque[0] || {};
+        setItems((prev) =>
+            prev.map((it) => {
+                if (!keys.has(it.key)) return it;
+                if (tipo === 'bloque') {
+                    const { tipoGrupo, rondas, descansoRondas, tiempoTrabajo, tiempoDescansoEj, ...resto } = it;
+                    return resto;
+                }
+                return {
+                    ...it,
+                    tipoGrupo: tipo,
+                    rondas: actual.rondas || 3,
+                    descansoRondas: actual.descansoRondas || '90 s',
+                    ...(tipo === 'intervalo'
+                        ? {
+                              tiempoTrabajo: actual.tiempoTrabajo || 40,
+                              tiempoDescansoEj: actual.tiempoDescansoEj || 20,
+                          }
+                        : {}),
+                };
+            }),
+        );
+    };
+
     // Mueve un ejercicio dentro de su propio día (y semana): busca el vecino
     // en ese grupo y los intercambia en el array plano. Si ya es el primero
     // o el último del día, no hace nada.
@@ -487,6 +619,28 @@ const RutinasPage = () => {
     // (y filtrar los items por semana) solo aparece si además se prendió
     // "cada semana tiene ejercicios distintos" a propósito.
     const usaSemanas = totalSemanas > 1 && semanasDistintas;
+
+    // Copia TODOS los ejercicios de la semana activa (todos los días, no
+    // solo el día abierto) a la semana siguiente, reemplazando lo que esa
+    // semana destino tuviera. Todo local -- como el resto del armador, no
+    // se guarda hasta tocar "Guardar" la rutina entera, así que se puede
+    // deshacer con solo no guardar.
+    const duplicarSemanaActual = () => {
+        const semanaOrigen = Number(semana);
+        const semanaDestino = semanaOrigen + 1;
+        const delOrigen = items.filter((it) => semanaDeItem(it) === semanaOrigen);
+        if (delOrigen.length === 0) return;
+        setItems((prev) => [
+            ...prev.filter((it) => semanaDeItem(it) !== semanaDestino),
+            ...delOrigen.map((it, i) => ({
+                ...it,
+                key: `${it.ejercicioId}-sem${semanaDestino}-${Date.now()}-${i}`,
+                semana: semanaDestino,
+            })),
+        ]);
+        setConfirmandoDuplicarSemana(false);
+        setSemana(semanaDestino);
+    };
 
     const guardar = async (e) => {
         e.preventDefault();
@@ -1246,6 +1400,51 @@ const RutinasPage = () => {
                                         ))}
                                     </div>
                                 )}
+
+                                {usaSemanas && semana < totalSemanas && (
+                                    <div>
+                                        {confirmandoDuplicarSemana ? (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-xs text-muted-foreground">
+                                                    La semana {semana + 1} ya tiene ejercicios cargados. ¿Reemplazarlos
+                                                    con una copia de la semana {semana}?
+                                                </span>
+                                                <Btn
+                                                    variant="danger"
+                                                    className="px-3 py-1.5 text-xs"
+                                                    onClick={duplicarSemanaActual}
+                                                >
+                                                    Sí, reemplazar
+                                                </Btn>
+                                                <Btn
+                                                    variant="ghost"
+                                                    className="px-3 py-1.5 text-xs"
+                                                    onClick={() => setConfirmandoDuplicarSemana(false)}
+                                                >
+                                                    Cancelar
+                                                </Btn>
+                                            </div>
+                                        ) : (
+                                            <Btn
+                                                type="button"
+                                                variant="ghost"
+                                                className="px-3 py-1.5 text-xs"
+                                                disabled={
+                                                    items.filter((it) => semanaDeItem(it) === Number(semana)).length === 0
+                                                }
+                                                onClick={() => {
+                                                    const destinoTieneItems = items.some(
+                                                        (it) => semanaDeItem(it) === Number(semana) + 1,
+                                                    );
+                                                    if (destinoTieneItems) setConfirmandoDuplicarSemana(true);
+                                                    else duplicarSemanaActual();
+                                                }}
+                                            >
+                                                <Copy className="h-3.5 w-3.5" /> Duplicar semana {semana} → {semana + 1}
+                                            </Btn>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </Card>
@@ -1272,9 +1471,79 @@ const RutinasPage = () => {
                                     {agruparPorBloque(itemsDelDiaActivo).map(([nombreBloque, delBloque], iBloque) => (
                                         <div key={`${nombreBloque}-${iBloque}`} className="space-y-3">
                                             {nombreBloque && (
-                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                    {nombreBloque}
-                                                </p>
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-secondary/20 p-2.5">
+                                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        {nombreBloque}
+                                                    </p>
+                                                    {/* Tipo de grupo (Fase 2.3, 13/09/2026): circuito (rondas)
+                                                        o intervalo (rondas + timer real para el alumno). Se
+                                                        edita acá, a nivel del bloque entero -- ver el
+                                                        comentario de cambiarTipoGrupo() más arriba. */}
+                                                    <Select
+                                                        value={tipoDeGrupo(delBloque)}
+                                                        onChange={(e) => cambiarTipoGrupo(delBloque, e.target.value)}
+                                                        className="w-auto px-2 py-1 text-xs"
+                                                    >
+                                                        <option value="bloque">Bloque simple</option>
+                                                        <option value="circuito">Circuito (rondas)</option>
+                                                        <option value="intervalo">Intervalo (tabata)</option>
+                                                    </Select>
+                                                    {tipoDeGrupo(delBloque) !== 'bloque' && (
+                                                        <>
+                                                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                                Rondas
+                                                                <Input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={delBloque[0].rondas ?? 3}
+                                                                    onChange={(e) =>
+                                                                        editarConfigGrupo(delBloque, 'rondas', e.target.value)
+                                                                    }
+                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                />
+                                                            </label>
+                                                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                                Descanso entre rondas
+                                                                <Input
+                                                                    value={delBloque[0].descansoRondas || ''}
+                                                                    onChange={(e) =>
+                                                                        editarConfigGrupo(delBloque, 'descansoRondas', e.target.value)
+                                                                    }
+                                                                    placeholder="90 s"
+                                                                    className="w-20 px-2 py-1 text-xs"
+                                                                />
+                                                            </label>
+                                                        </>
+                                                    )}
+                                                    {tipoDeGrupo(delBloque) === 'intervalo' && (
+                                                        <>
+                                                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                                Seg. de trabajo
+                                                                <Input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={delBloque[0].tiempoTrabajo ?? 40}
+                                                                    onChange={(e) =>
+                                                                        editarConfigGrupo(delBloque, 'tiempoTrabajo', e.target.value)
+                                                                    }
+                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                />
+                                                            </label>
+                                                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                                Seg. de descanso
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={delBloque[0].tiempoDescansoEj ?? 20}
+                                                                    onChange={(e) =>
+                                                                        editarConfigGrupo(delBloque, 'tiempoDescansoEj', e.target.value)
+                                                                    }
+                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                />
+                                                            </label>
+                                                        </>
+                                                    )}
+                                                </div>
                                             )}
                                             {agruparPorCombo(delBloque).map((grupoCombo) =>
                                                 grupoCombo.length === 1 ? (
@@ -1300,40 +1569,67 @@ const RutinasPage = () => {
                                                                             {it.grupo}
                                                                         </p>
                                                                     </div>
-                                                                    <Field label="Series">
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={it.series}
-                                                                            onChange={(e) =>
-                                                                                editarItem(it.key, 'series', e.target.value)
-                                                                            }
-                                                                        />
-                                                                    </Field>
-                                                                    <Field label="Reps">
-                                                                        <Input
-                                                                            value={it.reps}
-                                                                            onChange={(e) =>
-                                                                                editarItem(it.key, 'reps', e.target.value)
-                                                                            }
-                                                                        />
-                                                                    </Field>
-                                                                    <Field label="Peso">
-                                                                        <Input
-                                                                            value={it.peso}
-                                                                            onChange={(e) =>
-                                                                                editarItem(it.key, 'peso', e.target.value)
-                                                                            }
-                                                                            placeholder="kg"
-                                                                        />
-                                                                    </Field>
-                                                                    <Field label="Descanso">
-                                                                        <Input
-                                                                            value={it.descanso}
-                                                                            onChange={(e) =>
-                                                                                editarItem(it.key, 'descanso', e.target.value)
-                                                                            }
-                                                                        />
-                                                                    </Field>
+                                                                    {tieneSeriesDetalle(it) ? (
+                                                                        <>
+                                                                            <div className="col-span-3 sm:col-span-2">
+                                                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                                                    {it.seriesDetalle.length} series desglosadas
+                                                                                </p>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => unificar(it)}
+                                                                                    className="text-xs font-semibold text-primary hover:underline"
+                                                                                >
+                                                                                    Unificar
+                                                                                </button>
+                                                                            </div>
+                                                                            <Field label="Descanso">
+                                                                                <Input
+                                                                                    value={it.descanso}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'descanso', e.target.value)
+                                                                                    }
+                                                                                />
+                                                                            </Field>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Field label="Series">
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    value={it.series}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'series', e.target.value)
+                                                                                    }
+                                                                                />
+                                                                            </Field>
+                                                                            <Field label="Reps">
+                                                                                <Input
+                                                                                    value={it.reps}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'reps', e.target.value)
+                                                                                    }
+                                                                                />
+                                                                            </Field>
+                                                                            <Field label="Peso">
+                                                                                <Input
+                                                                                    value={it.peso}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'peso', e.target.value)
+                                                                                    }
+                                                                                    placeholder="kg"
+                                                                                />
+                                                                            </Field>
+                                                                            <Field label="Descanso">
+                                                                                <Input
+                                                                                    value={it.descanso}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'descanso', e.target.value)
+                                                                                    }
+                                                                                />
+                                                                            </Field>
+                                                                        </>
+                                                                    )}
                                                                     <div className="col-span-4 mb-1 flex justify-end gap-1 sm:col-span-1 sm:justify-start">
                                                                         <button
                                                                             type="button"
@@ -1365,6 +1661,64 @@ const RutinasPage = () => {
                                                                         </button>
                                                                     </div>
                                                                 </div>
+
+                                                                {/* Desglose de series (Fase 2.3, 13/09/2026): pirámides,
+                                                                    drop sets. Solo para ejercicios sueltos -- ver el
+                                                                    comentario de desglosar() más arriba sobre por qué
+                                                                    no aplica a superseries. */}
+                                                                {tieneSeriesDetalle(it) ? (
+                                                                    <div className="mt-3 space-y-1.5 rounded-xl border border-border/60 bg-secondary/30 p-3">
+                                                                        {it.seriesDetalle.map((s, i) => (
+                                                                            <div key={i} className="flex items-center gap-2">
+                                                                                <span className="w-5 shrink-0 text-center text-xs font-semibold text-muted-foreground">
+                                                                                    {i + 1}
+                                                                                </span>
+                                                                                <Input
+                                                                                    value={s.reps}
+                                                                                    onChange={(e) =>
+                                                                                        editarFilaSerie(it, i, 'reps', e.target.value)
+                                                                                    }
+                                                                                    placeholder="reps"
+                                                                                    className="px-2 py-1.5 text-xs"
+                                                                                />
+                                                                                <Input
+                                                                                    value={s.peso}
+                                                                                    onChange={(e) =>
+                                                                                        editarFilaSerie(it, i, 'peso', e.target.value)
+                                                                                    }
+                                                                                    placeholder="kg"
+                                                                                    className="px-2 py-1.5 text-xs"
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    aria-label={`Quitar serie ${i + 1}`}
+                                                                                    disabled={it.seriesDetalle.length <= 1}
+                                                                                    onClick={() => quitarFilaSerie(it, i)}
+                                                                                    className="shrink-0 text-primary disabled:opacity-30"
+                                                                                >
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                        <Btn
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            className="px-3 py-1 text-xs"
+                                                                            onClick={() => agregarFilaSerie(it)}
+                                                                        >
+                                                                            <Plus className="h-3.5 w-3.5" /> Agregar serie
+                                                                        </Btn>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => desglosar(it)}
+                                                                        className="mt-2 text-xs font-semibold text-primary hover:underline"
+                                                                    >
+                                                                        Desglosar series (pirámide, drop set...)
+                                                                    </button>
+                                                                )}
+
                                                                 <div className="mt-3 grid gap-3 sm:grid-cols-[1fr,1fr,2fr]">
                                                                     <Field label="Intensidad">
                                                                         <Input
