@@ -3951,3 +3951,23 @@ sigue funcionando (lee el hash desde su función SECURITY DEFINER, que no se ve 
 GRANTs); los topes siguen cortando donde deben y agotar uno ya no agota el otro; el portal del
 alumno carga bien en producción; y en local se recorrió el panel pantalla por pantalla, con
 alta, edición y borrado real de un alumno. Todos los datos de prueba borrados, con conteos en 0.
+
+## 14/09/2026 — Hotfix: el repaso de seguridad rompió crear/quitar acceso del alumno
+
+Nalux probó en la URL real y reportó "permission denied for table alumnos" al aprobar un
+alumno autorregistrado y al guardar un acceso a mano. Causa: `crear_acceso_alumno()` y
+`quitar_acceso_alumno()` (migración 0028) **nunca fueron `SECURITY DEFINER`** -- corrían con
+los permisos del profesor logueado, a propósito, según el comentario original ("así el UPDATE
+sigue pasando por la política RLS"). El comentario de la migración 0051 (repaso de seguridad
+del día anterior) asumió mal que estas dos SÍ lo eran, y les sacó el permiso de columna sobre
+`password_hash`/`codigo_acceso` -- justo lo que necesitan escribir.
+
+**Migración 0053**: se convierten las dos a `SECURITY DEFINER` (mismo patrón que
+`regenerar_codigo_acceso_alumno`), agregando a mano `AND gimnasio_id = get_mi_gimnasio_id()`
+en el `WHERE` -- lo que RLS hacía gratis antes. Verificado con la sesión real (no el rol
+privilegiado del MCP): crear acceso, ver usuario/contraseña generados, y quitar acceso, sin
+error los tres. Alumno de prueba borrado, confirmado en 0.
+
+**Lección para la próxima**: antes de sacarle permisos a una tabla por columna, verificar
+`pg_proc.prosecdef` de CADA función que la toca, no asumir por el nombre o el comentario de
+una migración vieja.
