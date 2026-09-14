@@ -488,11 +488,6 @@ const sinAcentos = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''
 const esCodigoInvalido = (msg = '') => /codigo de acceso invalido/i.test(sinAcentos(msg));
 const esRateLimit = (msg = '') => /demasiadas consultas/i.test(sinAcentos(msg));
 
-// Misma clave que usa AlumnoLoginPage.jsx para guardar el codigo_acceso
-// después de loguearse (migración 0028) -- acá solo se borra, para
-// "Cerrar sesión".
-const CLAVE_SESION = 'kairox_alumno_codigo';
-
 // Logo del gimnasio con el mismo criterio de fallback que GimnasioMark
 // (AppLayout.jsx): si la imagen no carga (link roto, etc.) cae a un ícono
 // genérico en vez de romper el header. No se reusa GimnasioMark tal cual
@@ -832,15 +827,11 @@ const MiPlanPage = () => {
     }, [codigo]);
 
     // Por si el celular es compartido con otra persona, o el alumno quiere
-    // volver a entrar con otro usuario -- borra la sesión guardada y manda
-    // de nuevo al login (AlumnoLoginPage.jsx). No hace falta avisarle nada
-    // al servidor: la "sesión" acá es solo el codigo_acceso en localStorage.
+    // volver a entrar con otro usuario -- manda de nuevo al login
+    // (AlumnoLoginPage.jsx). Ya no hay ninguna "sesión" que borrar acá: desde
+    // el 14/09/2026 /alumno siempre pide usuario y contraseña, no queda
+    // guardado nada en localStorage (ver el comentario en AlumnoLoginPage.jsx).
     const cerrarSesion = () => {
-        try {
-            localStorage.removeItem(CLAVE_SESION);
-        } catch (_) {
-            // nada que limpiar si el navegador ya bloqueaba localStorage
-        }
         navigate('/alumno', { replace: true });
     };
 
@@ -920,17 +911,7 @@ const MiPlanPage = () => {
                         <AlertTriangle className="h-8 w-8 text-primary" strokeWidth={2} aria-hidden="true" />
                     </span>
                     <p className="max-w-sm text-xl font-bold">{error}</p>
-                    <Link
-                        to="/alumno"
-                        onClick={() => {
-                            try {
-                                localStorage.removeItem(CLAVE_SESION);
-                            } catch (_) {
-                                // nada que limpiar
-                            }
-                        }}
-                        className="text-sm font-semibold text-primary hover:underline"
-                    >
+                    <Link to="/alumno" className="text-sm font-semibold text-primary hover:underline">
                         Volver a ingresar
                     </Link>
                 </div>

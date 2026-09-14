@@ -4294,3 +4294,57 @@ se ve notablemente más grande y lleno; el logo grande de `/alumno` (login del a
 de proporcionado que antes pero sin el aire vacío alrededor. Sin distorsión -- el recorte
 mantiene la proporción original del dibujo (ancho:alto ≈ 1.28:1 antes y después), solo saca el
 margen transparente de sobra.
+
+## 14/09/2026 — El campo "Usuario" del login del alumno mostraba "nadia1" como ejemplo
+
+**Pedido de Nalux**: *"cuando el alumno ingrese en su loguin sacaese nadia1, pon alumno u otra
+cosa"* -- vio su propio usuario de prueba ("nadia1") como placeholder del campo Usuario en la
+pantalla pública `/alumno`, algo que cualquier alumno de cualquier gimnasio podía ver.
+
+**Corregido**: `placeholder="nadia1"` → `placeholder="alumno"` en `AlumnoLoginPage.jsx`. Se
+encontró el mismo placeholder también en `AlumnoPage.jsx` (el formulario del PROFESOR para
+crear usuario/contraseña de un alumno) -- se corrigió ahí también por consistencia, aunque ese
+formulario no es público (solo lo ve el profesor logueado).
+
+**Verificado en vivo** (`localhost:3001/alumno`): el campo Usuario ahora muestra "alumno" como
+ejemplo.
+
+## 14/09/2026 — El QR del alumno saltaba directo al plan de quien entró antes en ese celular
+
+**Reporte de Nalux**: *"desde el qr del alumno lo escanee y me abrió un login de jose perez como
+de ejemplo, el que tendría que llevarme directo al loguin para poner usuario y contraseña del
+alumno"*.
+
+**Investigado antes de tocar código**: no era un bug -- era una cuenta real y activa ("Juan
+Perez", de prueba, alta el 09/09 en el gimnasio "Mi GYM FIT" que se usa para probar la app) cuya
+sesión había quedado guardada en el dispositivo. Por diseño (migración 0028), `AlumnoLoginPage.jsx`
+guardaba el `codigo_acceso` en `localStorage` después de loguearse, y la próxima vez que se
+entraba a `/alumno` -- sea por el QR, por el link de WhatsApp, o escribiendo la URL -- si había
+algo guardado, saltaba derecho a `/mi-plan/:codigo` sin mostrar el formulario. El QR es el MISMO
+para cualquier alumno del gimnasio (`AccesoAlumno` en `AlumnoPage.jsx`), así que en un celular que
+ya había entrado antes como otro alumno -- el propio de prueba de Nalux, o en el futuro una
+tablet de recepción compartida -- el siguiente que lo escaneaba caía directo en el plan de la
+persona anterior, sin loguearse. Más que una molestia de UX, es un problema real de privacidad si
+el mismo dispositivo lo usa más de una persona.
+
+**Se le preguntó a Nalux cómo quería resolverlo** (afecta también a alumnos reales: sacar el
+"recordado" implica que van a tener que loguearse de nuevo cada vez que reusen el mismo link/QR,
+salvo que se guarden el link directo a su plan). Eligió: **que `/alumno` pida usuario y
+contraseña siempre**, sin excepción.
+
+**Corregido**:
+- `AlumnoLoginPage.jsx`: sacado por completo el guardado/lectura de `localStorage`
+  (`kairox_alumno_codigo`) -- ya no hay ningún chequeo al montar ni redirección automática. El
+  formulario de usuario/contraseña se muestra siempre. El login sigue funcionando igual (RPC
+  `iniciar_sesion_alumno()`, navega a `/mi-plan/:codigo`), solo que ya no queda "recordado".
+- `MiPlanPage.jsx`: sacadas las referencias a esa misma clave (ya no hay nada que limpiar en
+  "Cerrar sesión" ni en "Volver a ingresar" -- ambos ahora solo navegan a `/alumno`).
+- El alumno que quiera entrar sin escribir usuario/contraseña cada vez puede guardarse el link
+  directo a su plan (`/mi-plan/:codigo`, al que este formulario lo manda apenas se loguea) -- ese
+  camino sigue sin pedir login, no depende de `localStorage`.
+
+**Verificado en vivo** (`localhost:3001`): simulando una sesión vieja a mano en `localStorage`,
+`/alumno` ahora muestra el formulario igual (antes hubiera saltado directo al plan). Prueba
+completa de punta a punta con un alumno de prueba nuevo ("Test Verificacion Login"): login
+funciona, `localStorage` queda vacío después de loguearse, "Cerrar sesión" vuelve al formulario
+en blanco. Alumno de prueba borrado al terminar, confirmado por SQL en 0 filas.

@@ -7,33 +7,30 @@ import supabase from '@/lib/supabaseClient';
 import { KairoxFooterMark, Logo, ThemeToggle } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 
-// Clave de localStorage donde queda guardado el codigo_acceso después de un
-// login exitoso -- mismo valor que MiPlanPage.jsx lee para "Cerrar sesión"
-// (no se comparte como import porque es la única otra pantalla que la usa;
-// si en algún momento hay una tercera, vale la pena moverla a un lugar
-// común).
-const CLAVE_SESION = 'kairox_alumno_codigo';
-
 // Login del alumno (migración 0028, pedido de Nalux 04/09/2026): reemplaza
 // al QR/link -- el profesor le crea un usuario y una contraseña desde la
 // ficha (AlumnoPage.jsx, AccesoAlumno) y el alumno entra acá con eso. La
-// RPC pública iniciar_sesion_alumno() devuelve el mismo codigo_acceso que
-// ya usaba MiPlanPage.jsx (no cambia nada de cómo se pide/muestra el plan,
-// solo cómo se consigue el código) -- por eso, apenas se loguea, se guarda
-// ese código en localStorage y se navega directo a /mi-plan/:codigo. La
-// próxima vez que entre acá con la sesión guardada, ni ve el formulario:
-// pasa derecho a su plan.
+// RPC pública iniciar_sesion_alumno() devuelve el codigo_acceso que ya usa
+// MiPlanPage.jsx, y se navega directo a /mi-plan/:codigo.
+//
+// Antes (hasta el 14/09/2026) esta pantalla guardaba ese código en
+// localStorage y, si ya había uno guardado, saltaba derecho al plan sin
+// mostrar el formulario -- pensado para no pedirle usuario/contraseña al
+// alumno en cada visita. Sacado a pedido de Nalux: el QR/link es el MISMO
+// para cualquier alumno del gimnasio (AccesoAlumno en AlumnoPage.jsx), así
+// que en un celular que ya había entrado como otro alumno (el suyo propio
+// de prueba, o un dispositivo compartido como una tablet de recepción), el
+// siguiente que lo escaneaba caía directo en el plan de la persona anterior
+// sin que se le pidiera nada. Ahora /alumno SIEMPRE pide usuario y
+// contraseña -- el alumno que quiera entrar sin tipear cada vez puede
+// guardarse el link directo a su plan (/mi-plan/:codigo, al que este
+// formulario igual lo manda apenas entra), que sigue sin pedir login.
 const AlumnoLoginPage = () => {
     const navigate = useNavigate();
-    const [revisandoSesion, setRevisandoSesion] = useState(true);
     const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    // Solo informativo: el PRIMER ingreso siempre necesita conexión (hay que
-    // validar la contraseña contra el servidor). Una vez logueado una vez en
-    // este celular, las siguientes veces ni pasa por acá -- el chequeo de
-    // localStorage de arriba manda derecho a /mi-plan/:codigo sin pedir red.
     const [sinConexion, setSinConexion] = useState(!navigator.onLine);
     useEffect(() => {
         const marcarOnline = () => setSinConexion(false);
@@ -45,15 +42,6 @@ const AlumnoLoginPage = () => {
             window.removeEventListener('offline', marcarOffline);
         };
     }, []);
-
-    useEffect(() => {
-        const guardado = localStorage.getItem(CLAVE_SESION);
-        if (guardado) {
-            navigate(`/mi-plan/${guardado}`, { replace: true });
-            return;
-        }
-        setRevisandoSesion(false);
-    }, [navigate]);
 
     const onSubmit = async (e) => {
         e.preventDefault();
@@ -73,13 +61,6 @@ const AlumnoLoginPage = () => {
                 setError('Usuario o contraseña incorrectos.');
                 return;
             }
-            try {
-                localStorage.setItem(CLAVE_SESION, codigo);
-            } catch (_) {
-                // Si el navegador bloquea localStorage (modo privado, etc.) igual
-                // se puede entrar -- solo que la próxima vez va a pedir el login
-                // de nuevo, no queda "recordado".
-            }
             navigate(`/mi-plan/${codigo}`, { replace: true });
         } catch (err) {
             setError(err?.message || 'No se pudo ingresar. Intentar de nuevo.');
@@ -87,11 +68,6 @@ const AlumnoLoginPage = () => {
             setLoading(false);
         }
     };
-
-    // Mientras se revisa si ya había una sesión guardada, no se muestra
-    // nada (ni el formulario ni un spinner) -- es un chequeo instantáneo de
-    // localStorage, mostrar algo acá solo parpadearía sin aportar nada.
-    if (revisandoSesion) return null;
 
     return (
         <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
@@ -143,7 +119,7 @@ const AlumnoLoginPage = () => {
                             <Input
                                 value={usuario}
                                 onChange={(e) => setUsuario(e.target.value)}
-                                placeholder="nadia1"
+                                placeholder="alumno"
                                 required
                                 autoComplete="username"
                                 autoCapitalize="none"

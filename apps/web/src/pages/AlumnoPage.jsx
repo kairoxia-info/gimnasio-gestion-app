@@ -2097,7 +2097,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             <Input
                                 value={usuarioForm}
                                 onChange={(e) => setUsuarioForm(e.target.value)}
-                                placeholder="nadia1"
+                                placeholder="alumno"
                                 required
                                 minLength={3}
                             />
