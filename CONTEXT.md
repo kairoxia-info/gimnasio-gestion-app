@@ -4348,3 +4348,39 @@ contraseña siempre**, sin excepción.
 completa de punta a punta con un alumno de prueba nuevo ("Test Verificacion Login"): login
 funciona, `localStorage` queda vacío después de loguearse, "Cerrar sesión" vuelve al formulario
 en blanco. Alumno de prueba borrado al terminar, confirmado por SQL en 0 filas.
+
+## 14/09/2026 — Foto de progreso: la causa real del error al subir, y "Agregar foto" para reintentar sin perder el registro
+
+**Reporte de Nalux**: probando "Progreso" en la ficha de un alumno, cargó peso + medidas y trató
+de subir una foto de ejemplo -- el registro se guardó pero la foto dio error.
+
+**Investigado antes de tocar código**: se buscó el request real en los logs de Storage de
+Supabase (`storage_logs`). La respuesta fue un **429 con code `SlowDown`**:
+`"Too many connections issued to the database"` -- el servicio de Storage necesita su propia
+conexión a Postgres para validar la policy de RLS al subir (el `EXISTS` contra `progreso` en la
+policy de `storage.objects`, migración 0049), y en ese momento puntual el pool de conexiones del
+proyecto estaba saturado (coincide con mucha actividad simultánea de pruebas en esta misma
+sesión). **No era un bug de RLS ni de código**: se repitió exactamente el mismo request segundos
+después (mismo bucket, mismas policies, sin tocar nada) y subió sin problema. Confirmado también
+que otros buckets (`ejercicios-media`, `alumnos-fotos`, `gimnasio-logos`) ya tenían subidas
+exitosas previas, así que Storage en general funciona bien en este proyecto -- fue un corte
+puntual, no algo roto de fondo.
+
+**Mejora real que sí valía la pena hacer**, más allá del hecho puntual de hoy: la única forma de
+reintentar, hasta ahora, era **borrar el registro entero y cargarlo de nuevo** -- perdiendo
+también el peso y las medidas que sí se habían guardado bien, solo porque la foto falló. Eso es
+excesivo para lo que puede ser un corte de un segundo del lado del servidor. Se agregó:
+
+- Un botón **"Agregar foto"** en cualquier registro del historial que todavía no tenga una (ya
+  sea porque nunca se cargó, o porque falló al crear el registro) -- sube la foto para ESE
+  registro puntual sin tocar el resto de sus datos.
+- El mensaje de error de "Nuevo registro" ahora dice *"Se puede volver a intentar desde 'Agregar
+  foto' en el registro, sin perder lo demás"* en vez de mandar a borrar y recargar todo.
+
+**Archivo**: `apps/web/src/pages/AlumnoPage.jsx` (componente `Progreso`). Reutiliza las mismas
+validaciones (PNG/JPG/WEBP, máx. 2 MB) y el mismo bucket/policies que ya existían -- sin
+migraciones nuevas.
+
+**Verificado en vivo**: creado un registro de prueba sin foto, usado "Agregar foto" para subirle
+una después -- quedó guardada, el thumbnail aparece y el botón desaparece solo (ya no hace falta).
+Confirmado por SQL y por Storage API que no quedó ningún dato de prueba (registro ni archivo).

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
@@ -8,6 +8,7 @@ import {
     CheckCircle2,
     Copy,
     Eye,
+    ImagePlus,
     MessageCircle,
     Pencil,
     Plus,
@@ -1048,6 +1049,56 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
         setFotoPreview(URL.createObjectURL(file));
     };
 
+    // Reintentar SOLO la foto en un registro que ya existe pero se quedó sin
+    // ella (14/09/2026, probado en vivo por Nalux: subir la foto falló por
+    // un corte puntual del lado de Supabase -- el peso/medidas ya se habían
+    // guardado bien). Hasta acá, la única forma de reintentar era borrar el
+    // registro entero y cargarlo todo de nuevo, perdiendo también el peso y
+    // las medidas por un problema que era solo de la foto. Un input de
+    // archivo compartido (en vez de uno por fila) porque son N filas
+    // dinámicas -- más simple que manejar N refs.
+    const retryFotoInputRef = useRef(null);
+    const [retryFotoTargetId, setRetryFotoTargetId] = useState(null);
+    const [subiendoFotoId, setSubiendoFotoId] = useState(null);
+    const [errorFoto, setErrorFoto] = useState(null); // { id, mensaje } | null
+
+    const pedirFotoParaRegistro = (registroId) => {
+        setRetryFotoTargetId(registroId);
+        retryFotoInputRef.current?.click();
+    };
+
+    const onRetryFotoSeleccionada = async (e) => {
+        const file = e.target.files?.[0];
+        const targetId = retryFotoTargetId;
+        e.target.value = '';
+        if (!file || !targetId) return;
+        setErrorFoto(null);
+        if (!MIME_TO_EXT_PROGRESO[file.type]) {
+            setErrorFoto({ id: targetId, mensaje: 'La foto debe ser PNG, JPG o WEBP.' });
+            return;
+        }
+        if (file.size > MAX_FOTO_PROGRESO_BYTES) {
+            setErrorFoto({ id: targetId, mensaje: 'La foto no puede pesar más de 2 MB.' });
+            return;
+        }
+        if (!profile?.gimnasio_id) return;
+        setSubiendoFotoId(targetId);
+        try {
+            const ext = MIME_TO_EXT_PROGRESO[file.type];
+            const path = `${profile.gimnasio_id}/${targetId}.${ext}`;
+            const { error: uploadError } = await supabase.storage
+                .from('progreso-fotos')
+                .upload(path, file, { upsert: true });
+            if (uploadError) throw uploadError;
+            await updateRec('progreso', targetId, { foto_path: path });
+            onChange();
+        } catch (_) {
+            setErrorFoto({ id: targetId, mensaje: 'No se pudo subir. Probar de nuevo en unos minutos.' });
+        } finally {
+            setSubiendoFotoId(null);
+        }
+    };
+
     const guardar = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -1079,7 +1130,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                     await updateRec('progreso', creado.id, { foto_path: path });
                 } catch (_) {
                     setError(
-                        'El registro se guardó, pero la foto no se pudo subir. Se puede volver a intentar borrando el registro y cargándolo de nuevo.',
+                        'El registro se guardó, pero la foto no se pudo subir. Se puede volver a intentar desde "Agregar foto" en el registro, sin perder lo demás.',
                     );
                 }
             }
@@ -1129,6 +1180,17 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
 
     return (
         <div className="grid gap-5 lg:grid-cols-[1fr,1.2fr]">
+            {/* Input compartido para "Agregar foto" en un registro ya
+                existente (ver pedirFotoParaRegistro/onRetryFotoSeleccionada
+                más arriba) -- uno solo para las N filas del historial, oculto,
+                se dispara por código al tocar el botón de la fila. */}
+            <input
+                ref={retryFotoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={onRetryFotoSeleccionada}
+            />
             {error && (
                 <div className="lg:col-span-2">
                     <ErrorBox>{error}</ErrorBox>
@@ -1311,6 +1373,25 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                             );
                                         })()}
                                         {r.observaciones && <p className="mt-1 text-xs">{r.observaciones}</p>}
+                                        {/* Sin foto todavía: puede ser porque nunca se cargó
+                                            una, o porque se intentó al crear el registro y
+                                            falló (ver el mensaje de error de guardar() más
+                                            arriba) -- de cualquier manera, subirla ahora no
+                                            pierde nada de lo que ya está guardado. */}
+                                        {!r.foto_path && (
+                                            <button
+                                                type="button"
+                                                disabled={subiendoFotoId === r.id}
+                                                onClick={() => pedirFotoParaRegistro(r.id)}
+                                                className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+                                            >
+                                                <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
+                                                {subiendoFotoId === r.id ? 'Subiendo...' : 'Agregar foto'}
+                                            </button>
+                                        )}
+                                        {errorFoto?.id === r.id && (
+                                            <p className="mt-1 text-xs text-destructive">{errorFoto.mensaje}</p>
+                                        )}
                                         </div>
                                     </div>
                                     {confirmandoBorrarId === r.id ? (
