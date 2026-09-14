@@ -3886,3 +3886,68 @@ Cada fase probada en vivo (browser + SQL directo contra la base real) y con los 
 borrados después, confirmado con conteos en 0. `eslint src/` y `npm run build` limpios en todo
 el proyecto. Recién ahora, con las 7 sub-fases terminadas, se hace el primer commit/push de toda
 la Fase 2 -- Nalux pidió "cuando termines todas las fases sube todo", un solo push al final.
+
+## 14/09/2026 — Segundo repaso de seguridad, esta vez contra la URL real
+
+Pedido de Nalux: *"dale una repasada a la seguridad... más que todo en la url real, quiero que
+sea todo seguro"*. A diferencia de la auditoría del 11/09 (migraciones 0042-0046), que fue sobre
+el código, esta se hizo **atacando producción de verdad** además de revisar el código.
+
+**Lo que se probó contra `gimnasio-gestion-app-web.vercel.app` y la API real, y aguantó:**
+
+- Leer tablas sin login vía PostgREST (10 tablas, incluidas `alumnos`, `pagos`, `progreso`):
+  todas devuelven `permission denied`.
+- Inyección SQL en el código de acceso, incluido `'; DROP TABLE alumnos; --`: las funciones son
+  plpgsql con consultas parametrizadas, no hay SQL dinámico en ninguna. La tabla quedó intacta.
+- Fuerza bruta al login del alumno: corta en el intento 21 (tope de 20/5min de la 0042), y el
+  error no distingue "usuario inexistente" de "contraseña incorrecta" (no se puede enumerar).
+- Tope de escrituras nuevas de la 0050: corta exactamente en el 31 (tope de 30/5min).
+- Adivinar códigos de acceso: son `gen_random_bytes(16)` en hex = 128 bits. Verificado además
+  que los 8 alumnos reales tienen ese formato, no quedó ninguno viejo y corto.
+- Secretos en el bundle de producción: ninguno. Usa el formato nuevo de claves de Supabase y
+  solo expone la `sb_publishable_`, que es pública por diseño. (Ojo con un falso positivo:
+  `sb_secret_` aparece en el bundle, pero es la propia librería de supabase-js validando el
+  formato de las claves, no una clave.)
+- Listar los buckets de Storage sin permiso: devuelve vacío en los dos. Una foto de progreso sin
+  URL firmada da HTTP 400.
+- RLS: las 19 tablas con RLS activo y política de tenant. Las tres políticas que no filtran por
+  `gimnasio_id` son correctas (el INSERT de `ejercicios` filtra en `WITH CHECK`, y las dos de
+  `profiles` filtran por `auth.uid()`).
+- Headers: CSP estricta, HSTS, `X-Frame-Options: DENY`, nosniff, Referrer-Policy y
+  Permissions-Policy, todos presentes.
+
+**Los dos hallazgos, corregidos el mismo día (migraciones 0051 y 0052):**
+
+1. **(Media) El hash bcrypt de las contraseñas de los alumnos viajaba al navegador.** `listAll()`
+   pedía `select('*')` y el `GRANT` de la migración 0002 era sobre la tabla entera, así que
+   abrir cualquier pantalla del panel traía las 28 columnas de cada alumno -- incluidos
+   `password_hash`, los contadores internos de tope y el `dni` (vacío desde el 11/09). Ninguna
+   pantalla los usa; se verificó buscándolos uno por uno en todo `src/`. **No era fuga entre
+   gimnasios** (RLS seguía limitando a los alumnos propios) ni hacia un anónimo, pero un hash
+   que el cliente no necesita no tiene por qué llegar ahí: con un XSS futuro, una extensión de
+   navegador metida o la compu abierta, alcanzaba para llevarse hashes y romperlos offline.
+   Corregido con permisos a nivel de COLUMNA (lista blanca de 20) + `columnasDe()` en
+   `lib/data.js`.
+2. **(Baja) La 0050 compartía un contador de tope entre sus dos funciones nuevas**, justo lo que
+   su propio comentario decía que no había que hacer. Corregido con un par de columnas por
+   acción; el par compartido se dropeó para que nadie lo reutilice.
+
+**Trampa aprendida, importante para el futuro:** con permisos por columna, `SELECT *` **no
+filtra en silencio, falla entero** con "permission denied for column". Por eso la lista de
+`columnasDe()` en `lib/data.js` y la de la migración 0051 tienen que decir lo mismo: si se
+agrega una columna a `alumnos` que el panel necesite, hay que sumarla en los DOS lados.
+
+**Y un error propio, que vale documentar:** la migración 0051 se aplicó ANTES de subir el
+frontend. Como hay UNA sola base (local y producción comparten la misma), eso dejó el panel de
+producción roto unos minutos -- el sitio desplegado seguía pidiendo `select('*')` y la base ya
+lo rechazaba. Los alumnos no se vieron afectados (su portal va por funciones SECURITY DEFINER,
+que no dependen de esos permisos), pero el panel de Nalux sí. Se detectó al verificar y se
+reparó subiendo el frontend enseguida. **Para la próxima: cuando una migración cambia permisos
+de los que depende el código desplegado, el orden correcto es subir el frontend primero (que
+tolere los dos estados) o aplicar la migración inmediatamente después del deploy, nunca antes.**
+
+Verificado DESPUÉS de los dos fixes: el intento de leer el hash da 403; el login del alumno
+sigue funcionando (lee el hash desde su función SECURITY DEFINER, que no se ve afectada por los
+GRANTs); los topes siguen cortando donde deben y agotar uno ya no agota el otro; el portal del
+alumno carga bien en producción; y en local se recorrió el panel pantalla por pantalla, con
+alta, edición y borrado real de un alumno. Todos los datos de prueba borrados, con conteos en 0.
