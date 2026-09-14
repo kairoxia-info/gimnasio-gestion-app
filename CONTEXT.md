@@ -4176,3 +4176,84 @@ proporcionalmente -- lo que entraba antes sigue entrando.
 
 **Queda como posible ajuste fino** si a Nalux le sigue pareciendo chico: sumar un escalón más
 para monitores muy grandes (ej. `min-width: 1536px` -> 19/20px). Es una línea de CSS.
+
+## 14/09/2026 — Ejercicios y Alimentos: los ocultos pasan a tener su propia pestaña
+
+**Pedido de Nalux**: *"que cuando se oculte un ejercicio se puedan ver en otra pagina o
+separado, asi despues el profe ve los que tiene oculto"*.
+
+**Qué había antes**: ocultar un ejercicio/alimento de la biblioteca compartida (ver
+`biblioteca_ocultos`, migraciones 0019 y 0054) lo sacaba de la vista, y un botón "Ver ocultos"
+lo volvía a mezclar en la MISMA grilla, filtrado además por lo que hubiera quedado puesto en
+buscador/chips/grupo. Fácil de perder de vista -- si el profesor había ocultado algo con un
+filtro puesto y después cambiaba de filtro, no había garantía de volver a verlo ahí mismo.
+
+**Ahora**: `EjerciciosPage.jsx` y `AlimentosPage.jsx` tienen una pestaña "Biblioteca" /
+"Ocultos (N)" (solo aparece si hay al menos un oculto). La pestaña "Ocultos" muestra la lista
+COMPLETA de ocultos, sin pasar por ningún filtro de la biblioteca -- así el profesor siempre
+encuentra ahí todo lo que ocultó, sin depender de qué haya quedado tildado en la otra pestaña.
+Cada tarjeta/fila de esa pestaña es más simple: solo nombre + categoría/grupo + un botón
+"Mostrar de nuevo" (sin Editar/Eliminar, porque todo lo que se puede ocultar es siempre de la
+biblioteca base compartida -- lo propio de cada gimnasio se borra, no se oculta).
+
+**Bug encontrado y corregido durante la verificación en vivo**: si el profesor estaba parado en
+la pestaña "Ocultos" y destapaba el último elemento oculto, la pestaña desaparecía (solo se
+dibuja con `cantidadOcultos > 0`) pero la vista seguía en `'ocultos'` -- quedaba una pantalla
+vacía sin ningún botón para volver a "Biblioteca". Se agregó un `useEffect` en los dos archivos
+que vuelve automáticamente a `'biblioteca'` apenas `cantidadOcultos` llega a 0 estando en esa
+pestaña.
+
+**Archivos**: `apps/web/src/pages/EjerciciosPage.jsx`, `apps/web/src/pages/AlimentosPage.jsx`.
+Sin migraciones -- reusa `biblioteca_ocultos` tal cual ya existía.
+
+**Verificado en vivo** (`localhost:3001`, gimnasio de prueba): ocultar "Arroz blanco (cocido)"
+hace aparecer la pestaña "Ocultos (1)"; esa pestaña muestra el ítem con su botón "Mostrar de
+nuevo"/"Mostrar" y sin Editar/Eliminar; al destaparlo vuelve solo a "Biblioteca" con los 6
+alimentos de nuevo y sin pestañas (0 ocultos). Confirmado por SQL que `biblioteca_ocultos` quedó
+en 0 filas para `tabla = 'alimentos'` -- sin datos de prueba colgados.
+
+## 14/09/2026 — Dos ajustes de texto: "dispositivo" en vez de "celular", y sacar toda mención a que la biblioteca se comparte con otros gimnasios
+
+**Pedido de Nalux**: al ver el `ErrorBoundary` disparado en el navegador de escritorio (no en un
+celular), pidió cambiar la palabra "celular" por "dispositivo" en ese mensaje. Y por separado:
+*"la descripcion del la biblioetca de ejercicios dice que esta compartido los 500 ejercicios con
+otros gimnasios, quiero que en ninguna parte de la app diga que hay cosas en la base y esta
+compartida con otros gimnasios"*.
+
+**1. `ErrorBoundary.jsx`**: el mensaje "Puede haber quedado una versión vieja guardada en el
+celular" pasa a decir "...guardada en el dispositivo" -- el error puede saltar en cualquier
+pantalla (celular o computadora), y "celular" quedaba mal ahí. Los comentarios del archivo (no
+visibles para el usuario) mantienen "celular" porque documentan el bug original tal cual se
+reportó.
+
+**2. Sacar toda mención a la biblioteca compartida entre gimnasios**: `EjerciciosPage.jsx` y
+`AlimentosPage.jsx` tenían, en varios lugares visibles, texto que revelaba que el contenido
+predefinido (los ~500 ejercicios y los alimentos base) es una única biblioteca compartida por
+TODOS los gimnasios del SaaS -- algo que nunca debería quedar expuesto a un profesor. Se
+reescribió sin cambiar ningún comportamiento (`biblioteca_ocultos`, RLS y el resto de la
+arquitectura multi-tenant siguen exactamente igual, solo cambió el texto que se muestra):
+
+- Subtítulo de la cabecera: *"X ejercicios/alimentos vienen de la biblioteca base, compartida
+  por todos los gimnasios..."* → *"X ejercicios/alimentos ya vienen precargados..."*.
+- Párrafo de la pestaña "Ocultos": *"...de la biblioteca compartida... siguen existiendo para
+  los demás gimnasios"* → *"...que ocultaste en este gimnasio. Dejás de verlos vos, pero podés
+  volver a mostrarlos cuando quieras."*
+- Badge "Biblioteca base" / "Base" (en las tarjetas y en la tabla de Alimentos) → "Predefinido".
+- Texto junto al candado en Ejercicios: *"Es de la biblioteca compartida, no se puede editar ni
+  borrar (afectaría a todos los gimnasios)"* → *"Es un ejercicio predefinido, no se puede editar
+  ni borrar. Podés ocultarlo si no lo usás."*
+
+Los comentarios de código que sí explican la arquitectura real (que la biblioteca base es
+compartida entre tenants a nivel de base de datos) se dejaron intactos -- son documentación
+interna, nunca se muestran en la app.
+
+**Verificado en vivo** (`localhost:3001`): en Ejercicios, el subtítulo dice ahora "500 ejercicios
+ya vienen precargados..." y cada card muestra el badge "PREDEFINIDO"; en Alimentos, "4 alimentos
+ya vienen precargados, y 2 son propios de este gimnasio..." y el badge "PREDEFINIDO" tanto en
+mobile como en la tabla de escritorio. Ningún texto visible menciona "compartida" ni "otros
+gimnasios" en ninguna de las dos pantallas.
+
+**De paso**: al verificar la pestaña "Ocultos" de Ejercicios apareció un ejercicio de prueba
+("180 grados en landmine") que había quedado oculto de una verificación anterior en esta misma
+sesión, antes de un corte de contexto -- no se había destapado. Se destapó ahora y se confirmó
+por SQL que `biblioteca_ocultos` quedó en 0 filas en todo el proyecto.

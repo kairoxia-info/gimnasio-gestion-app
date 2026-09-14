@@ -67,8 +67,16 @@ const EjerciciosPage = () => {
     // la fila de nadie más) y volver a mostrarlo cuando quiera.
     // `biblioteca_ocultos` es la misma tabla que ya usa AlimentosPage.jsx.
     const [ocultosIds, setOcultosIds] = useState(() => new Set());
-    const [mostrarOcultos, setMostrarOcultos] = useState(false);
     const [ocultando, setOcultando] = useState(null);
+    // Pestaña separada para ver los ocultos (14/09/2026, segundo pedido de
+    // Nalux: "que se puedan ver en otra página o separado, así después el
+    // profe ve los que tiene oculto"). Antes "Ver ocultos" los mezclaba de
+    // vuelta en la MISMA grilla, atenuados -- y encima seguían pasando por
+    // los filtros de grupo/búsqueda, así que para ver TODOS los ocultos
+    // había que acordarse de sacar cualquier filtro puesto. Ahora es una
+    // pestaña aparte, con su propia lista completa, sin depender de qué
+    // filtro haya quedado puesto en la biblioteca.
+    const [vista, setVista] = useState('biblioteca'); // 'biblioteca' | 'ocultos'
 
     const cargar = () => {
         setLoading(true);
@@ -146,22 +154,37 @@ const EjerciciosPage = () => {
     const cantidadPropios = items.length - cantidadBase;
     const cantidadOcultos = items.filter((e) => ocultosIds.has(e.id)).length;
 
+    // Si se destapa el último oculto estando parado en esa pestaña, sin esto
+    // quedaba una pantalla vacía sin forma de volver: la pestaña "Ocultos"
+    // solo se dibuja cuando cantidadOcultos > 0, así que al llegar a 0 con
+    // vista en 'ocultos' no había ningún botón "Biblioteca" para volver.
+    useEffect(() => {
+        if (cantidadOcultos === 0 && vista === 'ocultos') setVista('biblioteca');
+    }, [cantidadOcultos, vista]);
+
     // Los 4 filtros se combinan con AND: cada uno reduce la lista, no la
     // reemplaza. El de grupo sigue siendo chips (es el que más se usa, tapa
     // grande); demostración es un select más chico (se usa menos seguido)
     // para no saturar la pantalla en el celular. El patrón de movimiento
     // (clasificacion) no tiene filtro propio a pedido de Nalux — el campo
     // sigue existiendo en el formulario y en la card, solo no hay forma de
-    // filtrar la lista por él. Los ocultos (14/09/2026) se caen de la lista
-    // por default, mismo criterio que AlimentosPage.jsx.
+    // filtrar la lista por él. Los ocultos SIEMPRE se caen de acá -- tienen
+    // su propia pestaña (ver `ocultos` más abajo), no dependen de qué
+    // filtro haya quedado puesto acá.
     const visibles = items.filter((ej) => {
-        if (!mostrarOcultos && ocultosIds.has(ej.id)) return false;
+        if (ocultosIds.has(ej.id)) return false;
         if (filtro !== 'todos' && !(ej.grupo_muscular || []).includes(filtro)) return false;
         if (filtroDemo === 'con' && !ej.media_url) return false;
         if (filtroDemo === 'sin' && ej.media_url) return false;
         if (busqueda.trim() && !ej.nombre?.toLowerCase().includes(busqueda.trim().toLowerCase())) return false;
         return true;
     });
+
+    // Lista completa de ocultos para su propia pestaña -- sin pasar por
+    // ningún filtro de la biblioteca, así el profe siempre ve TODOS los que
+    // tiene ocultos, no solo los que coinciden con el filtro que haya
+    // quedado puesto.
+    const ocultos = items.filter((ej) => ocultosIds.has(ej.id));
 
     const toggleGrupoForm = (g) =>
         setForm((f) => ({
@@ -275,7 +298,7 @@ const EjerciciosPage = () => {
                 // mano: Nalux pidió (07/09/2026) que no diga una cantidad que
                 // después no coincida con lo que hay.
                 cantidadBase > 0
-                    ? `${cantidadBase} ejercicios vienen de la biblioteca base, compartida por todos los gimnasios${
+                    ? `${cantidadBase} ejercicios ya vienen precargados${
                           cantidadPropios > 0
                               ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
                               : ''
@@ -305,72 +328,34 @@ const EjerciciosPage = () => {
                 />
             </Helmet>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
-                <div className="relative">
-                    <Search
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden="true"
-                    />
-                    <Input
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        placeholder="Buscar por nombre..."
-                        className="pl-9"
-                        aria-label="Buscar ejercicio por nombre"
-                    />
-                </div>
-                <Select
-                    value={filtroDemo}
-                    onChange={(e) => setFiltroDemo(e.target.value)}
-                    aria-label="Filtrar por demostración cargada"
-                >
-                    <option value="todos">Con o sin demostración</option>
-                    <option value="con">Con demostración</option>
-                    <option value="sin">Sin demostración</option>
-                </Select>
-            </div>
-
-            {(filtro !== 'todos' || filtroDemo !== 'todos' || busqueda.trim()) && (
-                <p className="mb-3 text-xs font-semibold text-muted-foreground">
-                    Mostrando {visibles.length} de {items.length} ejercicios
-                </p>
-            )}
-
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                    {['todos', ...grupos].map((g) => (
-                        <button
-                            key={g}
-                            type="button"
-                            onClick={() => setFiltro(g)}
-                            className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                                filtro === g
-                                    ? 'border-primary bg-primary text-primary-foreground'
-                                    : 'border-border text-muted-foreground hover:text-foreground'
-                            }`}
-                        >
-                            {g === 'todos' ? 'Todos' : g}
-                        </button>
-                    ))}
-                </div>
-                {cantidadOcultos > 0 && (
+            {/* Pestañas Biblioteca/Ocultos (14/09/2026): solo aparece si hay
+                algo oculto -- con 0 ocultos no hay nada que separar. */}
+            {cantidadOcultos > 0 && (
+                <div className="mb-4 flex gap-2 border-b border-border">
                     <button
                         type="button"
-                        onClick={() => setMostrarOcultos((v) => !v)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
+                        onClick={() => setVista('biblioteca')}
+                        className={`border-b-2 px-1 pb-2 text-sm font-semibold transition ${
+                            vista === 'biblioteca'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
                     >
-                        {mostrarOcultos ? (
-                            <>
-                                <EyeOff className="h-3.5 w-3.5" /> Ocultar los ocultos de nuevo
-                            </>
-                        ) : (
-                            <>
-                                <Eye className="h-3.5 w-3.5" /> Ver ocultos ({cantidadOcultos})
-                            </>
-                        )}
+                        Biblioteca
                     </button>
-                )}
-            </div>
+                    <button
+                        type="button"
+                        onClick={() => setVista('ocultos')}
+                        className={`border-b-2 px-1 pb-2 text-sm font-semibold transition ${
+                            vista === 'ocultos'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        Ocultos ({cantidadOcultos})
+                    </button>
+                </div>
+            )}
 
             {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
             {warning && !error && (
@@ -380,132 +365,220 @@ const EjerciciosPage = () => {
                 </div>
             )}
 
-            {loading ? (
-                <Loading rows={4} />
-            ) : visibles.length === 0 ? (
-                <Empty>No hay ejercicios que coincidan con estos filtros.</Empty>
-            ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {visibles.map((ej) => (
-                        <div
-                            key={ej.id}
-                            className={`rounded-2xl border border-border bg-card p-5 ${ocultosIds.has(ej.id) ? 'opacity-60' : ''}`}
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-                                        <Dumbbell className="h-5 w-5 text-primary" strokeWidth={2} />
-                                    </span>
-                                    <div>
-                                        <p className="font-display text-base font-bold">{ej.nombre}</p>
-                                        {!ej.gimnasio_id && (
-                                            <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                                <Lock className="h-3 w-3" /> Biblioteca base
+            {vista === 'ocultos' ? (
+                // Pestaña "Ocultos": lista completa, sin pasar por ningún
+                // filtro de la biblioteca -- acá siempre están TODOS los que
+                // el profe ocultó, sea cual sea el grupo muscular o si tenían
+                // demostración cargada. Todos son predefinidos (los propios
+                // se borran, no se ocultan), así que la tarjeta es más
+                // simple: nombre, grupo y un único botón.
+                <>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                        Ejercicios que ocultaste en este gimnasio. Dejás de verlos vos, pero podés volver a
+                        mostrarlos cuando quieras.
+                    </p>
+                    {loading ? (
+                        <Loading rows={4} />
+                    ) : (
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {ocultos.map((ej) => (
+                                <div key={ej.id} className="rounded-2xl border border-border bg-card p-5 opacity-80">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+                                                <Dumbbell className="h-5 w-5 text-primary" strokeWidth={2} />
                                             </span>
-                                        )}
+                                            <p className="font-display text-base font-bold">{ej.nombre}</p>
+                                        </div>
+                                        <div className="flex flex-wrap justify-end gap-1.5">
+                                            {ej.grupo_muscular?.length ? (
+                                                ej.grupo_muscular.map((g) => (
+                                                    <Badge key={g} className="border-border text-muted-foreground">
+                                                        {g}
+                                                    </Badge>
+                                                ))
+                                            ) : (
+                                                <Badge className="border-border text-muted-foreground">—</Badge>
+                                            )}
+                                        </div>
                                     </div>
+                                    <Btn
+                                        variant="ghost"
+                                        className="mt-4 px-3 py-2 text-xs"
+                                        disabled={ocultando === ej.id}
+                                        onClick={() => alternarOculto(ej.id, true)}
+                                    >
+                                        <Eye className="h-3.5 w-3.5" /> Mostrar de nuevo
+                                    </Btn>
                                 </div>
-                                <div className="flex flex-wrap justify-end gap-1.5">
-                                    {ej.grupo_muscular?.length ? (
-                                        ej.grupo_muscular.map((g) => (
-                                            <Badge key={g} className="border-border text-muted-foreground">
-                                                {g}
-                                            </Badge>
-                                        ))
+                            ))}
+                        </div>
+                    )}
+                </>
+            ) : (
+                <>
+                    <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
+                        <div className="relative">
+                            <Search
+                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            <Input
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                placeholder="Buscar por nombre..."
+                                className="pl-9"
+                                aria-label="Buscar ejercicio por nombre"
+                            />
+                        </div>
+                        <Select
+                            value={filtroDemo}
+                            onChange={(e) => setFiltroDemo(e.target.value)}
+                            aria-label="Filtrar por demostración cargada"
+                        >
+                            <option value="todos">Con o sin demostración</option>
+                            <option value="con">Con demostración</option>
+                            <option value="sin">Sin demostración</option>
+                        </Select>
+                    </div>
+
+                    {(filtro !== 'todos' || filtroDemo !== 'todos' || busqueda.trim()) && (
+                        <p className="mb-3 text-xs font-semibold text-muted-foreground">
+                            Mostrando {visibles.length} de {items.length - cantidadOcultos} ejercicios
+                        </p>
+                    )}
+
+                    <div className="mb-4 flex flex-wrap gap-2">
+                        {['todos', ...grupos].map((g) => (
+                            <button
+                                key={g}
+                                type="button"
+                                onClick={() => setFiltro(g)}
+                                className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                                    filtro === g
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {g === 'todos' ? 'Todos' : g}
+                            </button>
+                        ))}
+                    </div>
+
+                    {loading ? (
+                        <Loading rows={4} />
+                    ) : visibles.length === 0 ? (
+                        <Empty>No hay ejercicios que coincidan con estos filtros.</Empty>
+                    ) : (
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {visibles.map((ej) => (
+                                <div key={ej.id} className="rounded-2xl border border-border bg-card p-5">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+                                                <Dumbbell className="h-5 w-5 text-primary" strokeWidth={2} />
+                                            </span>
+                                            <div>
+                                                <p className="font-display text-base font-bold">{ej.nombre}</p>
+                                                {!ej.gimnasio_id && (
+                                                    <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        <Lock className="h-3 w-3" /> Predefinido
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap justify-end gap-1.5">
+                                            {ej.grupo_muscular?.length ? (
+                                                ej.grupo_muscular.map((g) => (
+                                                    <Badge key={g} className="border-border text-muted-foreground">
+                                                        {g}
+                                                    </Badge>
+                                                ))
+                                            ) : (
+                                                <Badge className="border-border text-muted-foreground">—</Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {ej.clasificacion && (
+                                        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-primary/80">
+                                            {ej.clasificacion}
+                                        </p>
+                                    )}
+                                    {ej.descripcion && (
+                                        <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
+                                    )}
+                                    {ej.media_url && (
+                                        tipoDePreview(ej.media_url) ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewEj(ej)}
+                                                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                                            >
+                                                Ver demostración <Play className="h-3 w-3" />
+                                            </button>
+                                        ) : (
+                                            <a
+                                                href={ej.media_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                                            >
+                                                Ver demostración <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )
+                                    )}
+                                    {ej.gimnasio_id ? (
+                                        <div className="mt-4 flex gap-2">
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-2 text-xs"
+                                                onClick={() => {
+                                                    setForm({
+                                                        nombre: ej.nombre || '',
+                                                        grupo_muscular: ej.grupo_muscular || [],
+                                                        clasificacion: ej.clasificacion || '',
+                                                        media_url: ej.media_url || '',
+                                                        descripcion: ej.descripcion || '',
+                                                    });
+                                                    setEditId(ej.id);
+                                                    limpiarMedia();
+                                                    setMediaUrlActual(ej.media_url || '');
+                                                    setWarning('');
+                                                    setGrupoError('');
+                                                    setOpen(true);
+                                                }}
+                                            >
+                                                Editar
+                                            </Btn>
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-2 text-xs"
+                                                onClick={() => borrar(ej)}
+                                            >
+                                                Eliminar
+                                            </Btn>
+                                        </div>
                                     ) : (
-                                        <Badge className="border-border text-muted-foreground">—</Badge>
+                                        <div className="mt-4 space-y-2">
+                                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                <Lock className="h-3.5 w-3.5" /> Es un ejercicio predefinido, no se
+                                                puede editar ni borrar. Podés ocultarlo si no lo usás.
+                                            </p>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-2 text-xs"
+                                                disabled={ocultando === ej.id}
+                                                onClick={() => alternarOculto(ej.id, false)}
+                                            >
+                                                <EyeOff className="h-3.5 w-3.5" /> Ocultar
+                                            </Btn>
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                            {ej.clasificacion && (
-                                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-primary/80">
-                                    {ej.clasificacion}
-                                </p>
-                            )}
-                            {ej.descripcion && (
-                                <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
-                            )}
-                            {ej.media_url && (
-                                tipoDePreview(ej.media_url) ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setPreviewEj(ej)}
-                                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
-                                    >
-                                        Ver demostración <Play className="h-3 w-3" />
-                                    </button>
-                                ) : (
-                                    <a
-                                        href={ej.media_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
-                                    >
-                                        Ver demostración <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                )
-                            )}
-                            {ej.gimnasio_id ? (
-                                <div className="mt-4 flex gap-2">
-                                    <Btn
-                                        variant="ghost"
-                                        className="px-3 py-2 text-xs"
-                                        onClick={() => {
-                                            setForm({
-                                                nombre: ej.nombre || '',
-                                                grupo_muscular: ej.grupo_muscular || [],
-                                                clasificacion: ej.clasificacion || '',
-                                                media_url: ej.media_url || '',
-                                                descripcion: ej.descripcion || '',
-                                            });
-                                            setEditId(ej.id);
-                                            limpiarMedia();
-                                            setMediaUrlActual(ej.media_url || '');
-                                            setWarning('');
-                                            setGrupoError('');
-                                            setOpen(true);
-                                        }}
-                                    >
-                                        Editar
-                                    </Btn>
-                                    <Btn
-                                        variant="danger"
-                                        className="px-3 py-2 text-xs"
-                                        onClick={() => borrar(ej)}
-                                    >
-                                        Eliminar
-                                    </Btn>
-                                </div>
-                            ) : (
-                                <div className="mt-4 space-y-2">
-                                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                        <Lock className="h-3.5 w-3.5" /> Es de la biblioteca compartida, no se puede
-                                        editar ni borrar (afectaría a todos los gimnasios).
-                                    </p>
-                                    {/* Ocultar (14/09/2026): lo que SÍ se puede hacer con un
-                                        global que no se quiere ver -- antes no había ninguna
-                                        acción posible acá, solo el aviso de arriba. */}
-                                    <Btn
-                                        variant="ghost"
-                                        className="px-3 py-2 text-xs"
-                                        disabled={ocultando === ej.id}
-                                        onClick={() => alternarOculto(ej.id, ocultosIds.has(ej.id))}
-                                    >
-                                        {ocultosIds.has(ej.id) ? (
-                                            <>
-                                                <Eye className="h-3.5 w-3.5" /> Mostrar de nuevo
-                                            </>
-                                        ) : (
-                                            <>
-                                                <EyeOff className="h-3.5 w-3.5" /> Ocultar
-                                            </>
-                                        )}
-                                    </Btn>
-                                </div>
-                            )}
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    )}
+                </>
             )}
 
             <Modal open={open} onClose={cerrarModal} title={editId ? 'Editar ejercicio' : 'Nuevo ejercicio'}>

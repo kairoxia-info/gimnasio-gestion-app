@@ -92,8 +92,15 @@ const AlimentosPage = () => {
     // usa EjerciciosPage.jsx -- una fila ahí por "este gimnasio no quiere
     // ver este ítem global", nunca se borra el ítem en sí.
     const [ocultosIds, setOcultosIds] = useState(() => new Set());
-    const [mostrarOcultos, setMostrarOcultos] = useState(false);
     const [ocultando, setOcultando] = useState(null);
+    // Pestaña separada para ver los ocultos (14/09/2026, segundo pedido de
+    // Nalux, hecho primero en EjerciciosPage.jsx: "que se puedan ver en otra
+    // página o separado, así después el profe ve los que tiene oculto").
+    // Antes "Ver ocultos" los mezclaba de vuelta en la MISMA lista,
+    // atenuados, y encima seguían pasando por categoría/búsqueda -- acá es
+    // una pestaña aparte con la lista completa, sin depender de qué filtro
+    // haya quedado puesto en la biblioteca.
+    const [vista, setVista] = useState('biblioteca'); // 'biblioteca' | 'ocultos'
 
     const cargar = () => {
         setLoading(true);
@@ -168,19 +175,30 @@ const AlimentosPage = () => {
     const cantidadPropios = items.length - cantidadBase;
     const cantidadOcultos = items.filter((a) => ocultosIds.has(a.id)).length;
 
+    // Si se destapa el último oculto estando parado en esa pestaña, sin esto
+    // quedaba una pantalla vacía sin forma de volver: la pestaña "Ocultos"
+    // solo se dibuja cuando cantidadOcultos > 0, así que al llegar a 0 con
+    // vista en 'ocultos' no había ningún botón "Biblioteca" para volver.
+    useEffect(() => {
+        if (cantidadOcultos === 0 && vista === 'ocultos') setVista('biblioteca');
+    }, [cantidadOcultos, vista]);
+
     // Los 4 filtros se combinan con AND, mismo criterio que en Ejercicios:
     // categoría sigue siendo chips (la más usada), información nutricional es
-    // un select chico, y el buscador reduce por nombre. Los ocultos se caen
-    // de la lista por default -- "mostrarOcultos" los vuelve a traer para
-    // poder destaparlos.
+    // un select chico, y el buscador reduce por nombre. Los ocultos SIEMPRE
+    // se caen de acá -- tienen su propia pestaña (ver `ocultos` más abajo).
     const visibles = items.filter((a) => {
-        if (!mostrarOcultos && ocultosIds.has(a.id)) return false;
+        if (ocultosIds.has(a.id)) return false;
         if (filtro !== 'todos' && a.categoria !== filtro) return false;
         if (filtroNutricion === 'con' && !a.calorias) return false;
         if (filtroNutricion === 'sin' && a.calorias) return false;
         if (busqueda.trim() && !a.nombre?.toLowerCase().includes(busqueda.trim().toLowerCase())) return false;
         return true;
     });
+
+    // Lista completa de ocultos para su propia pestaña -- sin pasar por
+    // ningún filtro de la biblioteca.
+    const ocultos = items.filter((a) => ocultosIds.has(a.id));
 
     const guardar = async (e) => {
         e.preventDefault();
@@ -223,7 +241,7 @@ const AlimentosPage = () => {
             }
             subtitle={
                 cantidadBase > 0
-                    ? `${cantidadBase} alimentos vienen de la biblioteca base, compartida por todos los gimnasios${
+                    ? `${cantidadBase} alimentos ya vienen precargados${
                           cantidadPropios > 0
                               ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
                               : ''
@@ -250,244 +268,214 @@ const AlimentosPage = () => {
                 />
             </Helmet>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
-                <div className="relative">
-                    <Search
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden="true"
-                    />
-                    <Input
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        placeholder="Buscar por nombre..."
-                        className="pl-9"
-                        aria-label="Buscar alimento por nombre"
-                    />
-                </div>
-                <Select
-                    value={filtroNutricion}
-                    onChange={(e) => setFiltroNutricion(e.target.value)}
-                    aria-label="Filtrar por información nutricional cargada"
-                >
-                    <option value="todos">Con o sin información nutricional</option>
-                    <option value="con">Con información nutricional</option>
-                    <option value="sin">Sin información nutricional</option>
-                </Select>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                    {['todos', ...categorias].map((c) => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => setFiltro(c)}
-                            className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                                filtro === c
-                                    ? 'border-primary bg-primary text-primary-foreground'
-                                    : 'border-border text-muted-foreground hover:text-foreground'
-                            }`}
-                        >
-                            {c === 'todos' ? 'Todos' : c}
-                        </button>
-                    ))}
-                </div>
-                {/* Ver/ocultar (14/09/2026): solo aparece si hay algo oculto --
-                    sin esto, un gimnasio que ocultó un alimento por error no
-                    tenía forma de encontrarlo de nuevo para destaparlo. */}
-                {cantidadOcultos > 0 && (
+            {/* Pestañas Biblioteca/Ocultos (14/09/2026, mismo patrón que
+                EjerciciosPage.jsx): solo aparece si hay algo oculto -- con 0
+                ocultos no hay nada que separar. */}
+            {cantidadOcultos > 0 && (
+                <div className="mb-4 flex gap-2 border-b border-border">
                     <button
                         type="button"
-                        onClick={() => setMostrarOcultos((v) => !v)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
+                        onClick={() => setVista('biblioteca')}
+                        className={`border-b-2 px-1 pb-2 text-sm font-semibold transition ${
+                            vista === 'biblioteca'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
                     >
-                        {mostrarOcultos ? (
-                            <>
-                                <EyeOff className="h-3.5 w-3.5" /> Ocultar los ocultos de nuevo
-                            </>
-                        ) : (
-                            <>
-                                <Eye className="h-3.5 w-3.5" /> Ver ocultos ({cantidadOcultos})
-                            </>
-                        )}
+                        Biblioteca
                     </button>
-                )}
-            </div>
+                    <button
+                        type="button"
+                        onClick={() => setVista('ocultos')}
+                        className={`border-b-2 px-1 pb-2 text-sm font-semibold transition ${
+                            vista === 'ocultos'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        Ocultos ({cantidadOcultos})
+                    </button>
+                </div>
+            )}
 
             {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
 
-            {loading ? (
-                <Loading rows={4} />
-            ) : visibles.length === 0 ? (
-                <Empty>No hay alimentos que coincidan con estos filtros.</Empty>
-            ) : (
+            {vista === 'ocultos' ? (
+                // Pestaña "Ocultos": lista completa, sin pasar por ningún
+                // filtro de la biblioteca -- todos son predefinidos (los
+                // propios se borran, no se ocultan), así que la tarjeta/fila
+                // es más simple: sin Editar/Eliminar.
                 <>
-                    {/* Reportado por Nalux (07/09/2026): en el celular la tabla
-                        quedaba cortada y encima no dejaba correrla al costado
-                        (el contenedor tenía overflow-hidden). Con 6 columnas no
-                        hay forma de que entre en 375px sin achicar la letra
-                        hasta lo ilegible, así que en pantalla chica se muestra
-                        una tarjeta por alimento -- se ve TODO, sin scroll
-                        horizontal -- y la tabla queda de sm para arriba. */}
-                    <div className="space-y-3 sm:hidden">
-                        {visibles.map((a) => {
-                            const esGlobal = !a.gimnasio_id;
-                            const oculto = ocultosIds.has(a.id);
-                            return (
-                            <div key={a.id} className={`rounded-2xl border border-border bg-card p-4 ${oculto ? 'opacity-60' : ''}`}>
-                                <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div className="min-w-0">
-                                        <p className="font-semibold">{a.nombre}</p>
-                                        {esGlobal && (
-                                            <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                                <Lock className="h-3 w-3" /> Biblioteca base
-                                            </span>
-                                        )}
-                                    </div>
-                                    <Badge className="border-border text-muted-foreground">
-                                        {a.categoria || '—'}
-                                    </Badge>
-                                </div>
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                    {a.unidad || '100 g'} · {a.calorias || 0} kcal
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    P {a.proteinas || 0} · C {a.carbohidratos || 0} · G {a.grasas || 0}
-                                </p>
-                                {esGlobal ? (
-                                    <div className="mt-3">
+                    <p className="mb-4 text-sm text-muted-foreground">
+                        Alimentos que ocultaste en este gimnasio. Dejás de verlos vos, pero podés volver a
+                        mostrarlos cuando quieras.
+                    </p>
+                    {loading ? (
+                        <Loading rows={4} />
+                    ) : (
+                        <>
+                            <div className="space-y-3 sm:hidden">
+                                {ocultos.map((a) => (
+                                    <div key={a.id} className="rounded-2xl border border-border bg-card p-4 opacity-80">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <p className="min-w-0 font-semibold">{a.nombre}</p>
+                                            <Badge className="border-border text-muted-foreground">
+                                                {a.categoria || '—'}
+                                            </Badge>
+                                        </div>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            {a.unidad || '100 g'} · {a.calorias || 0} kcal
+                                        </p>
                                         <Btn
                                             variant="ghost"
-                                            className="w-full px-3 py-1.5 text-xs"
+                                            className="mt-3 w-full px-3 py-1.5 text-xs"
                                             disabled={ocultando === a.id}
-                                            onClick={() => alternarOculto(a.id, oculto)}
+                                            onClick={() => alternarOculto(a.id, true)}
                                         >
-                                            {oculto ? (
-                                                <>
-                                                    <Eye className="h-3.5 w-3.5" /> Mostrar de nuevo
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <EyeOff className="h-3.5 w-3.5" /> Ocultar
-                                                </>
-                                            )}
+                                            <Eye className="h-3.5 w-3.5" /> Mostrar de nuevo
                                         </Btn>
                                     </div>
-                                ) : (
-                                <div className="mt-3 flex gap-2">
-                                    <Btn
-                                        variant="ghost"
-                                        className="flex-1 px-3 py-1.5 text-xs"
-                                        onClick={() => {
-                                            setForm({
-                                                nombre: a.nombre || '',
-                                                categoria: a.categoria || CATEGORIAS[0],
-                                                ...descomponerUnidad(a.unidad),
-                                                calorias: a.calorias ?? '',
-                                                proteinas: a.proteinas ?? '',
-                                                carbohidratos: a.carbohidratos ?? '',
-                                                grasas: a.grasas ?? '',
-                                            });
-                                            setEditId(a.id);
-                                            setOpen(true);
-                                        }}
-                                    >
-                                        Editar
-                                    </Btn>
-                                    {confirmandoBorrarId === a.id ? (
-                                        <>
-                                            <Btn
-                                                variant="danger"
-                                                className="flex-1 px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => borrar(a.id)}
-                                            >
-                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                            </Btn>
-                                            <Btn
-                                                variant="ghost"
-                                                className="flex-1 px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => setConfirmandoBorrarId(null)}
-                                            >
-                                                Cancelar
-                                            </Btn>
-                                        </>
-                                    ) : (
-                                        <Btn
-                                            variant="danger"
-                                            className="flex-1 px-3 py-1.5 text-xs"
-                                            onClick={() => setConfirmandoBorrarId(a.id)}
-                                        >
-                                            Eliminar
-                                        </Btn>
-                                    )}
-                                </div>
-                                )}
+                                ))}
                             </div>
-                            );
-                        })}
+                            <div className="hidden overflow-x-auto rounded-2xl border border-border sm:block">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-secondary text-xs uppercase tracking-wide text-muted-foreground">
+                                        <tr>
+                                            <th className="px-4 py-3">Alimento</th>
+                                            <th className="px-4 py-3">Categoría</th>
+                                            <th className="px-4 py-3">Porción</th>
+                                            <th className="px-4 py-3">Kcal</th>
+                                            <th className="px-4 py-3" />
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border bg-card">
+                                        {ocultos.map((a) => (
+                                            <tr key={a.id}>
+                                                <td className="px-4 py-3 font-semibold">{a.nombre}</td>
+                                                <td className="px-4 py-3">
+                                                    <Badge className="border-border text-muted-foreground">
+                                                        {a.categoria || '—'}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3 text-muted-foreground">{a.unidad || '100 g'}</td>
+                                                <td className="px-4 py-3">{a.calorias || 0}</td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex justify-end">
+                                                        <Btn
+                                                            variant="ghost"
+                                                            className="px-3 py-1.5 text-xs"
+                                                            disabled={ocultando === a.id}
+                                                            onClick={() => alternarOculto(a.id, true)}
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5" /> Mostrar
+                                                        </Btn>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                </>
+            ) : (
+                <>
+                    <div className="mb-4 grid gap-3 sm:grid-cols-[2fr,1fr]">
+                        <div className="relative">
+                            <Search
+                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            <Input
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                placeholder="Buscar por nombre..."
+                                className="pl-9"
+                                aria-label="Buscar alimento por nombre"
+                            />
+                        </div>
+                        <Select
+                            value={filtroNutricion}
+                            onChange={(e) => setFiltroNutricion(e.target.value)}
+                            aria-label="Filtrar por información nutricional cargada"
+                        >
+                            <option value="todos">Con o sin información nutricional</option>
+                            <option value="con">Con información nutricional</option>
+                            <option value="sin">Sin información nutricional</option>
+                        </Select>
                     </div>
 
-                    <div className="hidden overflow-x-auto rounded-2xl border border-border sm:block">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-secondary text-xs uppercase tracking-wide text-muted-foreground">
-                            <tr>
-                                <th className="px-4 py-3">Alimento</th>
-                                <th className="px-4 py-3">Categoría</th>
-                                <th className="px-4 py-3">Porción</th>
-                                <th className="px-4 py-3">Kcal</th>
-                                <th className="hidden px-4 py-3 sm:table-cell">P / C / G</th>
-                                <th className="px-4 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border bg-card">
-                            {visibles.map((a) => {
-                                const esGlobal = !a.gimnasio_id;
-                                const oculto = ocultosIds.has(a.id);
-                                return (
-                                <tr key={a.id} className={oculto ? 'opacity-60' : ''}>
-                                    <td className="px-4 py-3 font-semibold">
-                                        {a.nombre}
-                                        {esGlobal && (
-                                            <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                                <Lock className="h-3 w-3" /> Base
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <Badge className="border-border text-muted-foreground">{a.categoria || '—'}</Badge>
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">{a.unidad || '100 g'}</td>
-                                    <td className="px-4 py-3">{a.calorias || 0}</td>
-                                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                                        {a.proteinas || 0} / {a.carbohidratos || 0} / {a.grasas || 0}
-                                    </td>
-                                    <td className="px-4 py-3">
+                    <div className="mb-4 flex flex-wrap gap-2">
+                        {['todos', ...categorias].map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setFiltro(c)}
+                                className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                                    filtro === c
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                                {c === 'todos' ? 'Todos' : c}
+                            </button>
+                        ))}
+                    </div>
+
+                    {loading ? (
+                        <Loading rows={4} />
+                    ) : visibles.length === 0 ? (
+                        <Empty>No hay alimentos que coincidan con estos filtros.</Empty>
+                    ) : (
+                        <>
+                            {/* Reportado por Nalux (07/09/2026): en el celular la tabla
+                                quedaba cortada y encima no dejaba correrla al costado
+                                (el contenedor tenía overflow-hidden). Con 6 columnas no
+                                hay forma de que entre en 375px sin achicar la letra
+                                hasta lo ilegible, así que en pantalla chica se muestra
+                                una tarjeta por alimento -- se ve TODO, sin scroll
+                                horizontal -- y la tabla queda de sm para arriba. */}
+                            <div className="space-y-3 sm:hidden">
+                                {visibles.map((a) => {
+                                    const esGlobal = !a.gimnasio_id;
+                                    return (
+                                    <div key={a.id} className="rounded-2xl border border-border bg-card p-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold">{a.nombre}</p>
+                                                {esGlobal && (
+                                                    <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        <Lock className="h-3 w-3" /> Predefinido
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <Badge className="border-border text-muted-foreground">
+                                                {a.categoria || '—'}
+                                            </Badge>
+                                        </div>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            {a.unidad || '100 g'} · {a.calorias || 0} kcal
+                                        </p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            P {a.proteinas || 0} · C {a.carbohidratos || 0} · G {a.grasas || 0}
+                                        </p>
                                         {esGlobal ? (
-                                            <div className="flex justify-end">
+                                            <div className="mt-3">
                                                 <Btn
                                                     variant="ghost"
-                                                    className="px-3 py-1.5 text-xs"
+                                                    className="w-full px-3 py-1.5 text-xs"
                                                     disabled={ocultando === a.id}
-                                                    onClick={() => alternarOculto(a.id, oculto)}
+                                                    onClick={() => alternarOculto(a.id, false)}
                                                 >
-                                                    {oculto ? (
-                                                        <>
-                                                            <Eye className="h-3.5 w-3.5" /> Mostrar
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <EyeOff className="h-3.5 w-3.5" /> Ocultar
-                                                        </>
-                                                    )}
+                                                    <EyeOff className="h-3.5 w-3.5" /> Ocultar
                                                 </Btn>
                                             </div>
                                         ) : (
-                                        <div className="flex justify-end gap-2">
+                                        <div className="mt-3 flex gap-2">
                                             <Btn
                                                 variant="ghost"
-                                                className="px-3 py-1.5 text-xs"
+                                                className="flex-1 px-3 py-1.5 text-xs"
                                                 onClick={() => {
                                                     setForm({
                                                         nombre: a.nombre || '',
@@ -508,7 +496,7 @@ const AlimentosPage = () => {
                                                 <>
                                                     <Btn
                                                         variant="danger"
-                                                        className="px-3 py-1.5 text-xs"
+                                                        className="flex-1 px-3 py-1.5 text-xs"
                                                         disabled={borrando}
                                                         onClick={() => borrar(a.id)}
                                                     >
@@ -516,7 +504,7 @@ const AlimentosPage = () => {
                                                     </Btn>
                                                     <Btn
                                                         variant="ghost"
-                                                        className="px-3 py-1.5 text-xs"
+                                                        className="flex-1 px-3 py-1.5 text-xs"
                                                         disabled={borrando}
                                                         onClick={() => setConfirmandoBorrarId(null)}
                                                     >
@@ -526,7 +514,7 @@ const AlimentosPage = () => {
                                             ) : (
                                                 <Btn
                                                     variant="danger"
-                                                    className="px-3 py-1.5 text-xs"
+                                                    className="flex-1 px-3 py-1.5 text-xs"
                                                     onClick={() => setConfirmandoBorrarId(a.id)}
                                                 >
                                                     Eliminar
@@ -534,13 +522,116 @@ const AlimentosPage = () => {
                                             )}
                                         </div>
                                         )}
-                                    </td>
-                                </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                    </div>
+                                    </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="hidden overflow-x-auto rounded-2xl border border-border sm:block">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-secondary text-xs uppercase tracking-wide text-muted-foreground">
+                                    <tr>
+                                        <th className="px-4 py-3">Alimento</th>
+                                        <th className="px-4 py-3">Categoría</th>
+                                        <th className="px-4 py-3">Porción</th>
+                                        <th className="px-4 py-3">Kcal</th>
+                                        <th className="hidden px-4 py-3 sm:table-cell">P / C / G</th>
+                                        <th className="px-4 py-3" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border bg-card">
+                                    {visibles.map((a) => {
+                                        const esGlobal = !a.gimnasio_id;
+                                        return (
+                                        <tr key={a.id}>
+                                            <td className="px-4 py-3 font-semibold">
+                                                {a.nombre}
+                                                {esGlobal && (
+                                                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        <Lock className="h-3 w-3" /> Predefinido
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Badge className="border-border text-muted-foreground">{a.categoria || '—'}</Badge>
+                                            </td>
+                                            <td className="px-4 py-3 text-muted-foreground">{a.unidad || '100 g'}</td>
+                                            <td className="px-4 py-3">{a.calorias || 0}</td>
+                                            <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                                                {a.proteinas || 0} / {a.carbohidratos || 0} / {a.grasas || 0}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {esGlobal ? (
+                                                    <div className="flex justify-end">
+                                                        <Btn
+                                                            variant="ghost"
+                                                            className="px-3 py-1.5 text-xs"
+                                                            disabled={ocultando === a.id}
+                                                            onClick={() => alternarOculto(a.id, false)}
+                                                        >
+                                                            <EyeOff className="h-3.5 w-3.5" /> Ocultar
+                                                        </Btn>
+                                                    </div>
+                                                ) : (
+                                                <div className="flex justify-end gap-2">
+                                                    <Btn
+                                                        variant="ghost"
+                                                        className="px-3 py-1.5 text-xs"
+                                                        onClick={() => {
+                                                            setForm({
+                                                                nombre: a.nombre || '',
+                                                                categoria: a.categoria || CATEGORIAS[0],
+                                                                ...descomponerUnidad(a.unidad),
+                                                                calorias: a.calorias ?? '',
+                                                                proteinas: a.proteinas ?? '',
+                                                                carbohidratos: a.carbohidratos ?? '',
+                                                                grasas: a.grasas ?? '',
+                                                            });
+                                                            setEditId(a.id);
+                                                            setOpen(true);
+                                                        }}
+                                                    >
+                                                        Editar
+                                                    </Btn>
+                                                    {confirmandoBorrarId === a.id ? (
+                                                        <>
+                                                            <Btn
+                                                                variant="danger"
+                                                                className="px-3 py-1.5 text-xs"
+                                                                disabled={borrando}
+                                                                onClick={() => borrar(a.id)}
+                                                            >
+                                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
+                                                            </Btn>
+                                                            <Btn
+                                                                variant="ghost"
+                                                                className="px-3 py-1.5 text-xs"
+                                                                disabled={borrando}
+                                                                onClick={() => setConfirmandoBorrarId(null)}
+                                                            >
+                                                                Cancelar
+                                                            </Btn>
+                                                        </>
+                                                    ) : (
+                                                        <Btn
+                                                            variant="danger"
+                                                            className="px-3 py-1.5 text-xs"
+                                                            onClick={() => setConfirmandoBorrarId(a.id)}
+                                                        >
+                                                            Eliminar
+                                                        </Btn>
+                                                    )}
+                                                </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            </div>
+                        </>
+                    )}
                 </>
             )}
 
