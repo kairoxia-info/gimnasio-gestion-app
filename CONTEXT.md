@@ -4025,3 +4025,64 @@ editar (`descomponerUnidad()`, best-effort: si el texto viejo no calza con el pa
 todo queda en la aclaración en vez de perderse). Probado en vivo: creado "1 unidad (150 g)"
 desde los tres campos, confirmado en la base, reabierto en edición y los tres campos volvieron
 a poblarse bien. Alimento de prueba borrado después.
+
+## 14/09/2026 — Rebranding: la app pasa a llamarse RutNail
+
+Pedido de Nalux: reemplazar el nombre "Gestión GYM Kairox IA" y su wordmark de texto por un
+logo nuevo que mandó (letras doradas "RutNail" + mancuerna, dentro de un círculo, fondo
+transparente), y agregar en el pie de la app "Creado por Kairox IA" con el nombre linkeado a
+`https://kairox-ia.vercel.app/#inicio`.
+
+**Logo**: guardado en `apps/web/public/logo-rutnail.png` (1254×1254, RGBA con transparencia
+real verificada -- se comprobó decodificando el PNG a mano, no solo mirándolo, porque un fondo
+"blanco" podía ser opaco o transparente y a simple vista no se nota la diferencia). El
+componente `Logo` en `AppLayout.jsx` -- antes un wordmark de texto armado a mano (ícono de
+mancuerna + "Gestión GYM" / "Kairox IA" en dos líneas, con una tabla de tamaños por cada
+contexto) -- ahora es simplemente `<img src="/logo-rutnail.png">`. Usado en las 3 pantallas sin
+sesión que lo mostraban grande: login del profesor, onboarding ("crear el gimnasio") y
+restablecer contraseña. Quedó espectacular sobre la tarjeta oscura del login -- la paleta
+dorada que esa pantalla ya tenía (`#d8b876`, botón "Ingresar" en degradé dorado) combina
+justo con el logo nuevo, pura coincidencia de que ya estaba así de antes.
+
+**Ojo, esto es solo la marca de la APP, no la del gimnasio**: `GimnasioMark` (el logo + nombre
+que cada profesor carga en Configuración, ej. "Full GYM NT") no se tocó -- sigue siendo lo que
+resalta *adentro* de la app, en el header de cada pantalla. RutNail es la marca de la
+plataforma en sí (login, pestaña del navegador, favicon), Full GYM NT sigue siendo la marca de
+ESE gimnasio en particular.
+
+**"Creado por Kairox IA"**: `KairoxFooterMark` (antes un texto fijo sin link, ni siquiera
+exportado) ahora exporta y arma un link real (`target="_blank" rel="noopener noreferrer"`, va a
+un sitio externo). Se usa en 3 lugares: el pie del menú lateral (adentro de la app, con sesión),
+el login del alumno y el autorregistro público -- las dos últimas tenían el mismo texto
+duplicado a mano en vez de importar el componente compartido; se dejó de duplicar.
+
+**Título de pestaña + favicon**: `index.html` (`<title>RutNail</title>`, favicon apuntando al
+mismo PNG -- antes seguía siendo `/vite.svg`, el ícono de fábrica de Vite, nunca se había
+reemplazado) + las 18 pantallas con `<Helmet><title>X | Gestión GYM Kairox IA</title></Helmet>`
+pasaron a `X | RutNail`.
+
+Verificado en vivo contra `localhost:3001`: el logo grande se ve bien en el login (cerrando
+sesión de prueba para verlo -- sin afectar ninguna sesión real, es un navegador aparte), el
+favicon/pestaña dicen RutNail, y "Creado por Kairox IA" aparece con el link correcto
+(`https://kairox-ia.vercel.app/#inicio`, confirmado en el árbol de accesibilidad) en las 3
+pantallas donde debía aparecer. `eslint src/` y `npm run build` limpios -- el PNG (452 KB) se
+copia bien a `dist/apps/web/`.
+
+**Agregado el mismo día**: logo de RutNail más grande a pedido de Nalux -- `h-24` -> `h-36` en
+login y restablecer contraseña, `h-20` -> `h-28` en onboarding (mismo incremento relativo, la
+proporción entre pantallas se mantiene -- onboarding sigue siendo la más chica de las tres
+porque tiene más contenido apilado debajo). Verificado en vivo en login/reset (idéntico código,
+mismo tamaño); onboarding no se pudo abrir en vivo sin crear una cuenta real (la Decisión 16 ya
+prohíbe signups de prueba, disparan mails reales) -- confiado en el cálculo de espacio
+disponible en la tarjeta (`max-w-md` menos padding), no en una captura.
+
+**Pedido pendiente, no se puede hacer desde acá**: Nalux pidió volver a desactivar "Confirm
+email" (Decisión 17/18 -- hoy está ACTIVADO desde el 08/09). Sigue siendo, como ya está anotado
+más arriba en este archivo, una configuración del servicio de Auth de Supabase (GoTrue), no una
+tabla ni función de Postgres -- ninguna herramienta disponible llega a ese nivel. Se le explicó
+el camino exacto para apagarlo a mano: `Authentication → Sign In / Providers → Email → "Confirm
+email"`. El código de `LoginPage.jsx` ya está preparado para los dos estados desde el 08/09 (mira
+si `signUp()` devuelve sesión o no) -- apenas lo apague en el Dashboard, el signup vuelve a
+entrar directo sin mandar ningún mail, sin que haga falta tocar una sola línea de código. "Olvidé
+mi contraseña" es un flujo completamente aparte (`ResetPasswordPage.jsx`/`resetPasswordForEmail`)
+y no se tocó -- pedido explícito de Nalux de no tocarlo.

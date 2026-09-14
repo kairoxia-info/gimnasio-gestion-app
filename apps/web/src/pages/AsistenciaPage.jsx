@@ -336,7 +336,7 @@ const AsistenciaPage = () => {
             }
         >
             <Helmet>
-                <title>Control de asistencia | Gestión GYM Kairox IA</title>
+                <title>Control de asistencia | RutNail</title>
                 <meta
                     name="description"
                     content="Grilla semanal de asistencia de todos los alumnos activos del gimnasio, con conteo de presentes y ausentes."

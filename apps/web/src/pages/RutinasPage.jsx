@@ -973,7 +973,7 @@ const RutinasPage = () => {
             }
         >
             <Helmet>
-                <title>Biblioteca de rutinas de ejercicios | Gestión GYM Kairox IA</title>
+                <title>Biblioteca de rutinas de ejercicios | RutNail</title>
                 <meta
                     name="description"
                     content="Rutinas de entrenamiento reutilizables por gimnasio, con asignación masiva a alumnos."

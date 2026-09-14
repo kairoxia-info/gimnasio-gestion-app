@@ -436,7 +436,7 @@ const ConfiguracionPage = () => {
             subtitle="Los datos y las reglas del gimnasio. Los planes y precios se configuran en su propia pantalla."
         >
             <Helmet>
-                <title>Configuración | Gestión GYM Kairox IA</title>
+                <title>Configuración | RutNail</title>
                 <meta
                     name="description"
                     content="Datos del gimnasio, logo y color, comprobante y reglas de vencimiento de cuotas."

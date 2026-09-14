@@ -52,8 +52,8 @@ const ResetPasswordPage = () => {
     return (
         <AuthBackdrop>
             <Helmet>
-                <title>Restablecer contraseña | Gestión GYM Kairox IA</title>
-                <meta name="description" content="Definí una nueva contraseña para tu cuenta de Gestión GYM Kairox IA." />
+                <title>Restablecer contraseña | RutNail</title>
+                <meta name="description" content="Definí una nueva contraseña para tu cuenta de RutNail." />
             </Helmet>
 
             <motion.div
@@ -63,7 +63,7 @@ const ResetPasswordPage = () => {
                 className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
-                    <Logo className="h-24" />
+                    <Logo className="h-36" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         Restablecer contraseña
                     </p>

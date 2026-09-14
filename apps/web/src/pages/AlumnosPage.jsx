@@ -276,7 +276,7 @@ const AlumnosPage = () => {
             }
         >
             <Helmet>
-                <title>Alumnos | Gestión GYM Kairox IA</title>
+                <title>Alumnos | RutNail</title>
                 <meta
                     name="description"
                     content="Listado de alumnos del gimnasio con estado, antigüedad, contacto y observaciones de salud."

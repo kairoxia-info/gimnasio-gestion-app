@@ -42,47 +42,16 @@ const NAV = [
     { to: '/configuracion', label: 'Configuración', icon: Settings },
 ];
 
-// Wordmark propio (ícono + texto), a propósito sin ninguna imagen externa:
-// el LOGO_URL viejo apuntaba al logo real de otro gimnasio (asset de la
-// demo de Hostinger Horizons), no algo que podamos usar como marca propia.
-// Mapeo de tamaño porque los 6 lugares donde se usa <Logo> pasan alturas
-// fijas distintas (sidebar, header mobile, drawer, login, onboarding,
-// restablecer contraseña) — sin esto el texto no escala junto al ícono.
-// "badge" es la insignia cuadrada de fondo; "icon" siempre queda notoriamente
-// más chico que "badge" (icono con margen adentro, no pegado a los bordes).
-const LOGO_SIZES = {
-    'h-9': { badge: 'h-8 w-8', icon: 'h-4 w-4', text: 'text-sm' },
-    'h-10': { badge: 'h-9 w-9', icon: 'h-[18px] w-[18px]', text: 'text-base' },
-    'h-12': { badge: 'h-11 w-11', icon: 'h-5 w-5', text: 'text-lg' },
-    'h-20': { badge: 'h-16 w-16', icon: 'h-8 w-8', text: 'text-3xl' },
-    'h-24': { badge: 'h-[4.5rem] w-[4.5rem]', icon: 'h-9 w-9', text: 'text-4xl' },
-};
-
-export const Logo = ({ className = 'h-10' }) => {
-    const size = LOGO_SIZES[className] || LOGO_SIZES['h-10'];
-    return (
-        <div className={`${className} inline-flex w-auto items-center gap-2.5 text-foreground`}>
-            <span
-                className={`${size.badge} inline-flex shrink-0 items-center justify-center rounded-xl border border-[#8f9db2]/30 bg-[#8f9db2]/10`}
-            >
-                <Dumbbell aria-hidden="true" className={`${size.icon} text-[#aebbcf]`} strokeWidth={2.2} />
-            </span>
-            {/* Dos líneas a propósito: "Gestión GYM Kairox IA" entero no
-                entra en una sola línea sin desbordar ni la tarjeta de login
-                ni el sidebar angosto (medido: 431px de texto vs ~302px
-                disponibles en la tarjeta). Partido, cada línea es la mitad
-                de ancho y entra cómodo en cualquiera de los 6 contextos. */}
-            <span
-                className={`font-display ${size.text} whitespace-nowrap font-extrabold uppercase leading-[1.05] tracking-tight`}
-            >
-                <span className="block">Gestión GYM</span>
-                <span className="block">
-                    <span className="kx-shimmer">Kairox</span> IA
-                </span>
-            </span>
-        </div>
-    );
-};
+// Marca propia de la app: RutNail (14/09/2026, reemplaza al wordmark de
+// texto "Gestión GYM Kairox IA" + ícono de mancuerna que había antes). Nalux
+// mandó el archivo del logo ya armado (fondo transparente, letras doradas +
+// mancuerna adentro del círculo) -- acá solo se muestra como imagen, sin
+// reconstruir nada de eso a mano. Usado en LoginPage/OnboardingPage/
+// ResetPasswordPage con alturas fijas distintas; w-auto + object-contain
+// hace que el ancho escale solo, sin deformar el logo ni recortarlo.
+export const Logo = ({ className = 'h-10' }) => (
+    <img src="/logo-rutnail.png" alt="RutNail" className={`${className} w-auto object-contain`} />
+);
 
 // Marca del GIMNASIO del profe logueado (logo + nombre, cargados en el
 // onboarding/Configuración) — esto es lo que tiene que resaltar *adentro* de
@@ -147,12 +116,26 @@ const GimnasioMark = ({ className = 'h-10' }) => {
     );
 };
 
-// Firma chica de la plataforma, para adentro de la app — a propósito discreta:
-// "Gestión GYM Kairox IA" tiene que resaltar en el login, no acá, donde el
-// protagonista es el gimnasio de cada profe (GimnasioMark, arriba).
-const KairoxFooterMark = () => (
+// Firma chica de la plataforma, para adentro de la app y para las pantallas
+// públicas sin sesión (autorregistro, login del alumno) — a propósito
+// discreta: el logo de RutNail tiene que resaltar en el login del
+// profesor, no acá, donde el protagonista es el gimnasio de cada profe
+// (GimnasioMark, arriba) o directamente no hay ninguna marca de gimnasio
+// todavía que mostrar. "Kairox IA" (14/09/2026, pedido de Nalux) lleva a la
+// página oficial del creador -- se abre en pestaña nueva porque saca al
+// visitante de la app a un sitio externo, mismo criterio que cualquier otro
+// link externo de esta app (ej. WhatsApp).
+export const KairoxFooterMark = () => (
     <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        Gestión GYM Kairox IA
+        Creado por{' '}
+        <a
+            href="https://kairox-ia.vercel.app/#inicio"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-dotted underline-offset-2 transition hover:text-foreground"
+        >
+            Kairox IA
+        </a>
     </p>
 );
 

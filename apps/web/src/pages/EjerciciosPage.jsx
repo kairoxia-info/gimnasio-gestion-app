@@ -298,7 +298,7 @@ const EjerciciosPage = () => {
             }
         >
             <Helmet>
-                <title>Biblioteca de ejercicios | Gestión GYM Kairox IA</title>
+                <title>Biblioteca de ejercicios | RutNail</title>
                 <meta
                     name="description"
                     content="Biblioteca de ejercicios por grupo muscular con descripción y video demostrativo para armar planes de entrenamiento."

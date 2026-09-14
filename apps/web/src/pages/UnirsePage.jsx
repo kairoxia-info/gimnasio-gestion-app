@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-import { ThemeToggle } from '@/components/AppLayout';
+import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, FechaInput, Input } from '@/components/ui-kit';
 
 // Alcance definido por Nalux (09/09/2026): el alumno carga SOLO sus datos
@@ -101,7 +101,7 @@ const UnirsePage = () => {
     return (
         <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
             <Helmet>
-                <title>Unirse al gimnasio | Gestión GYM Kairox IA</title>
+                <title>Unirse al gimnasio | RutNail</title>
                 <meta
                     name="description"
                     content="Autorregistro rápido de alumnos: dejar los datos para que el profesor active la cuenta."
@@ -264,9 +264,9 @@ const UnirsePage = () => {
                     </form>
                 )}
 
-                <p className="mt-6 text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-                    Gestión GYM Kairox IA
-                </p>
+                <div className="mt-6">
+                    <KairoxFooterMark />
+                </div>
             </motion.div>
         </div>
     );

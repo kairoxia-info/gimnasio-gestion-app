@@ -197,7 +197,7 @@ const AvisosPage = () => {
             }
         >
             <Helmet>
-                <title>Avisos | Gestión GYM Kairox IA</title>
+                <title>Avisos | RutNail</title>
                 <meta
                     name="description"
                     content="Avisos segmentados por estado de cuota para los alumnos del gimnasio."

@@ -252,7 +252,7 @@ const PreciosPage = () => {
             }
         >
             <Helmet>
-                <title>Planes y precios | Gestión GYM Kairox IA</title>
+                <title>Planes y precios | RutNail</title>
                 <meta
                     name="description"
                     content="Planes, precios, descuentos e interés por mora del gimnasio, con períodos configurables."

@@ -85,10 +85,10 @@ const LoginPage = () => {
     return (
         <AuthBackdrop>
             <Helmet>
-                <title>Ingresar | Gestión GYM Kairox IA</title>
+                <title>Ingresar | RutNail</title>
                 <meta
                     name="description"
-                    content="Acceso del entrenador a Gestión GYM Kairox IA: gestión de alumnos, planes, asistencia y pagos."
+                    content="Acceso del entrenador a RutNail: gestión de alumnos, planes, asistencia y pagos."
                 />
             </Helmet>
 
@@ -99,7 +99,7 @@ const LoginPage = () => {
                 className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#141210]/85 p-8 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
-                    <Logo className="h-24" />
+                    <Logo className="h-36" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         Panel del entrenador
                     </p>

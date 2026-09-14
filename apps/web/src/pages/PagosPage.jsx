@@ -505,7 +505,7 @@ const PagosPage = () => {
             }
         >
             <Helmet>
-                <title>Pagos y caja | Gestión GYM Kairox IA</title>
+                <title>Pagos y caja | RutNail</title>
                 <meta
                     name="description"
                     content="Resumen de caja mensual, estado de cuota de cada alumno e historial completo de pagos registrados."

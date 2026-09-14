@@ -611,7 +611,7 @@ const PlanesAlimentacionPage = () => {
             }
         >
             <Helmet>
-                <title>Planes de alimentación | Gestión GYM Kairox IA</title>
+                <title>Planes de alimentación | RutNail</title>
                 <meta
                     name="description"
                     content="Biblioteca de planes de comidas reutilizables para armar el plan de cualquier alumno."

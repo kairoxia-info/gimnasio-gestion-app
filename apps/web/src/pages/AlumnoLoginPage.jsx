@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Dumbbell, Loader2, Lock, User } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-import { ThemeToggle } from '@/components/AppLayout';
+import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 
 // Clave de localStorage donde queda guardado el codigo_acceso después de un
@@ -96,7 +96,7 @@ const AlumnoLoginPage = () => {
     return (
         <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background px-4 py-12">
             <Helmet>
-                <title>Entrar | Gestión GYM Kairox IA</title>
+                <title>Entrar | RutNail</title>
                 <meta name="description" content="Entrar con usuario y contraseña para ver la rutina y el plan de alimentación." />
             </Helmet>
 
@@ -178,9 +178,9 @@ const AlumnoLoginPage = () => {
                     </Btn>
                 </form>
 
-                <p className="mt-6 text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-                    Gestión GYM Kairox IA
-                </p>
+                <div className="mt-6">
+                    <KairoxFooterMark />
+                </div>
             </motion.div>
         </div>
     );

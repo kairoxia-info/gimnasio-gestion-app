@@ -292,10 +292,10 @@ const DashboardPage = () => {
             subtitle="Todo el estado del gimnasio en una sola pantalla: alumnos, asistencia y caja del mes."
         >
             <Helmet>
-                <title>Panel general | Gestión GYM Kairox IA</title>
+                <title>Panel general | RutNail</title>
                 <meta
                     name="description"
-                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos atrasados en Gestión GYM Kairox IA."
+                    content="Resumen de alumnos activos, asistencias de la semana, caja del mes y alumnos atrasados en RutNail."
                 />
             </Helmet>
 
