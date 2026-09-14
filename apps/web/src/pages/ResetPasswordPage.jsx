@@ -27,7 +27,13 @@ const ResetPasswordPage = () => {
     const onSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        const errorContrasena = validarContrasena(password, 6);
+        // minLength 8 + exigirMinusculaYNumero (14/09/2026): mismo motivo que
+        // LoginPage.jsx -- esta cuenta pasa por Supabase Auth
+        // (updatePassword() -> updateUser()), que tiene esa política
+        // configurada del lado del servidor. Acá SIEMPRE es para una
+        // contraseña nueva (nunca para iniciar sesión), así que no hace
+        // falta la excepción de "solo al registrarse" que sí tiene LoginPage.
+        const errorContrasena = validarContrasena(password, 8, { exigirMinusculaYNumero: true });
         if (errorContrasena) {
             setError(errorContrasena);
             return;
@@ -108,13 +114,13 @@ const ResetPasswordPage = () => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
                                     required
-                                    minLength={6}
+                                    minLength={8}
                                     autoComplete="new-password"
                                     className="pl-9"
                                 />
                             </div>
                             <span className="text-xs text-muted-foreground">
-                                Mínimo 6 caracteres, con al menos una mayúscula.
+                                Mínimo 8 caracteres, con mayúscula, minúscula y número.
                             </span>
                         </Field>
                         <Field label="Confirmar contraseña">
@@ -128,7 +134,7 @@ const ResetPasswordPage = () => {
                                     onChange={(e) => setConfirm(e.target.value)}
                                     placeholder="••••••••"
                                     required
-                                    minLength={6}
+                                    minLength={8}
                                     autoComplete="new-password"
                                     className="pl-9"
                                 />

@@ -4086,3 +4086,42 @@ si `signUp()` devuelve sesión o no) -- apenas lo apague en el Dashboard, el sig
 entrar directo sin mandar ningún mail, sin que haga falta tocar una sola línea de código. "Olvidé
 mi contraseña" es un flujo completamente aparte (`ResetPasswordPage.jsx`/`resetPasswordForEmail`)
 y no se tocó -- pedido explícito de Nalux de no tocarlo.
+
+## 14/09/2026 — "Confirm email" apagado: lo que parecía el bug era otra cosa
+
+Nalux apagó "Confirm email" (pedido de arriba) y probó registrarse con su propio mail real
+(`nalux2430@gmail.com`) -- dio **"No se pudo crear la cuenta."**, un mensaje genérico sin
+explicar el motivo real. Se descartó primero la hipótesis obvia (mail ya registrado): confirmado
+por SQL que `nalux2430@gmail.com` **no existe** en `auth.users`.
+
+**Causa real, encontrada en los logs de Auth** (`query_logs`, `source = 'auth_logs'`): la
+contraseña que probó (`123456789N`) no tiene ninguna minúscula, y Supabase devolvió un 422 con
+`"Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz,
+ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789."`. El proyecto tiene, del lado del SERVIDOR, una
+política de contraseña de profesor más estricta que la que el formulario validaba del lado del
+cliente (`validacionPassword.js` solo pedía mayúscula + 6 caracteres; el servidor pide mayúscula
++ minúscula + número + 8, configurado en algún momento anterior en el mismo lugar del Dashboard
+donde vive "Confirm email" -- ver la Decisión ya anotada sobre esto en la sección de seguridad
+más arriba, quedaba como "pendiente, sin urgencia" hasta que la propia Nalux se topó con el
+límite real probando el cambio de hoy). Y encima `traducirError()` en `LoginPage.jsx` no tenía
+un caso para ese mensaje puntual de Supabase, así que caía al genérico.
+
+**Corregido, en 3 archivos:**
+- `validacionPassword.js`: `validarContrasena()` suma un parámetro opcional
+  `exigirMinusculaYNumero` (default apagado) -- las cuentas de ALUMNO
+  (`crear_acceso_alumno()`, bcrypt propio, nunca pasan por Supabase Auth) siguen pidiendo
+  solo mayúscula, sin cambios. Las de PROFESOR sí lo exigen ahora.
+- `LoginPage.jsx`: al registrarse, `validarContrasena(password, 8, { exigirMinusculaYNumero:
+  true })`; `traducirError()` suma el caso real de Supabase con un mensaje claro; el `minLength`
+  nativo del input pasa a `isLogin ? undefined : 8` -- **a propósito solo al registrarse**, para
+  no bloquear el LOGIN de una cuenta vieja con una contraseña más corta de antes de esta regla.
+- `ResetPasswordPage.jsx`: mismo `validarContrasena(password, 8, { exigirMinusculaYNumero: true
+  })` -- acá siempre es para una contraseña nueva, no hace falta la excepción de LoginPage.
+
+No se tocó "Olvidé mi contraseña" más allá de este ajuste de validación -- pedido explícito de
+Nalux de no tocar ese flujo, y el cambio es aditivo (una contraseña que ya cumplía sigue
+cumpliendo).
+
+`eslint src/` limpio. Pendiente: que Nalux reintente el registro con una contraseña que cumpla
+(ej. mayúscula + minúscula + número + 8 caracteres) para confirmar de punta a punta que con
+"Confirm email" apagado entra directo, sin pedir mail.

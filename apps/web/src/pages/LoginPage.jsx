@@ -14,7 +14,14 @@ const traducirError = (err, modo) => {
     const msg = err?.message || '';
     if (msg.includes('Invalid login credentials')) return 'Correo o contraseña incorrectos.';
     if (msg.includes('already registered') || msg.includes('already exists')) return 'Ese correo ya está registrado.';
-    if (msg.includes('Password should be at least')) return 'La contraseña debe tener al menos 6 caracteres.';
+    if (msg.includes('Password should be at least')) return 'La contraseña debe tener al menos 8 caracteres.';
+    // 14/09/2026: mensaje real que devuelve Supabase cuando falta minúscula,
+    // mayúscula o número (política del proyecto, ver validacionPassword.js)
+    // -- antes cualquier password que se colara sin pasar la validación del
+    // cliente caía acá al genérico "No se pudo crear la cuenta" sin decir
+    // el motivo real.
+    if (msg.includes('Password should contain at least one character of each'))
+        return 'La contraseña tiene que tener al menos una minúscula, una mayúscula y un número.';
     return modo === 'login' ? 'No se pudo iniciar sesión.' : 'No se pudo crear la cuenta.';
 };
 
@@ -43,7 +50,11 @@ const LoginPage = () => {
         // al REGISTRARSE, no al iniciar sesión -- una cuenta ya creada antes
         // de esta regla no tiene por qué dejar de poder entrar.
         if (!isLogin) {
-            const errorContrasena = validarContrasena(password, 6);
+            // minLength 8 + exigirMinusculaYNumero (14/09/2026): esta cuenta
+            // pasa por Supabase Auth, que tiene esa política configurada del
+            // lado del servidor -- ver el comentario largo en
+            // validacionPassword.js.
+            const errorContrasena = validarContrasena(password, 8, { exigirMinusculaYNumero: true });
             if (errorContrasena) {
                 setError(errorContrasena);
                 return;
@@ -172,14 +183,21 @@ const LoginPage = () => {
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
                                 required
-                                minLength={6}
+                                // minLength solo al registrarse (14/09/2026, mismo
+                                // criterio que el resto de la validación en esta
+                                // pantalla): una cuenta ya creada con una contraseña
+                                // más corta, de antes de esta regla, no tiene por qué
+                                // dejar de poder entrar -- el navegador bloquearía el
+                                // submit antes de llegar a signIn() si esto quedara
+                                // fijo en 8 también para el login.
+                                minLength={isLogin ? undefined : 8}
                                 autoComplete={isLogin ? 'current-password' : 'new-password'}
                                 className="pl-9"
                             />
                         </div>
                         {!isLogin && (
                             <span className="text-xs text-muted-foreground">
-                                Mínimo 6 caracteres, con al menos una mayúscula.
+                                Mínimo 8 caracteres, con mayúscula, minúscula y número.
                             </span>
                         )}
                     </Field>
