@@ -4861,3 +4861,47 @@ cierra al tocarlo de nuevo, sin que pasar el mouse por la lista dispare nada. To
 guardar la rutina (Cancelar), sin dejar datos de prueba. Lint y build sin errores.
 
 **Archivo**: apps/web/src/pages/RutinasPage.jsx.
+
+
+## 15/09/2026 — Que Chrome recuerde la contraseña del profesor (investigado)
+
+**Pregunta de Nalux**: "quisiera que el profe cuando lo habra ponga la contraseña una vez y
+despues que google le guarde la contraseña, asi no esta a cada rato que cierre la web y entre y
+tenga que volver a poner correo y contraseña, eso se puede hacer?"
+
+**Investigado antes de tocar nada**:
+1. La SESIÓN del profesor ya persiste sola entre cierres del navegador -- supabaseClient.js usa
+   la config por default de Supabase (persistSession/autoRefreshToken activados, guardado en
+   localStorage), y AuthContext.jsx no tiene ningún signOut automático ni límite propio. Probado
+   en vivo: navegar a /login con una sesión ya guardada redirige derecho a /panel sin pedir nada
+   -- confirma que el mecanismo de persistencia funciona como está. Si en la práctica Nalux o el
+   profe tienen que volver a loguearse seguido, lo más probable es que sea por cerrar sesión a
+   propósito, un navegador/dispositivo que borra datos de sitio al cerrar, o usar más de un
+   dispositivo -- no un bug de la app.
+2. Lo que SÍ es un tema real de la app: LoginPage.jsx no tenía `name="email"`/`name="password"`
+   en los campos -- solo `autoComplete`. La mayoría de los navegadores ya alcanza con
+   autoComplete para ofrecer guardar la contraseña, pero agregar `name` es gratis y ayuda a que
+   el reconocimiento del campo sea más confiable en más navegadores.
+
+**Corregido**: agregado `name="email"` y `name="password"` a los dos campos de LoginPage.jsx.
+El resto (formulario real con onSubmit, type="email"/type="password" correctos,
+autoComplete="email"/"current-password") ya estaba bien armado de antes.
+
+**Importante -- esto es una función de CHROME, no de la app**: la app no puede forzar el cartel
+de "¿Guardar contraseña?" -- eso lo decide el navegador. Con el formulario ya bien armado (como
+está), Chrome debería ofrecerlo solo después de un login que funcione. Si no aparece, hay que
+revisar del lado del navegador: chrome://settings/passwords → "Ofrecer guardar contraseñas"
+activado, y que el sitio no haya quedado en la lista de "Nunca guardadas" (pasa si alguna vez se
+tocó "Nunca" en el cartel).
+
+**No se construyó** ningún mecanismo propio de "recordar sesión para siempre" tipo el que se
+sacó del lado del alumno esta misma semana (localStorage remember-me, sacado por el bug real del
+QR compartido) -- para la cuenta del profesor, que es personal y no se comparte por QR, confiar
+en el guardado de contraseña del propio navegador es la forma correcta y más segura de resolver
+esto, no hace falta duplicar esa lógica del lado de la app.
+
+**Verificado**: lint y build sin errores. No se cerró la sesión de prueba para no perder el
+acceso (no hay contraseña real a mano para volver a entrar), pero el cambio es mínimo (un
+atributo `name` en dos inputs que ya funcionaban) y de bajísimo riesgo.
+
+**Archivo**: apps/web/src/pages/LoginPage.jsx.

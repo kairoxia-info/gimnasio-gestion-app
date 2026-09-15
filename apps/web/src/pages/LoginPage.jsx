@@ -116,6 +116,19 @@ const LoginPage = () => {
                     </p>
                 </div>
 
+                {/* Pedido de Nalux (15/09/2026): que el navegador ofrezca guardar la
+                    contraseña del profesor para no tener que volver a tipearla cada vez.
+                    Eso lo decide el navegador (Chrome), no esta pantalla -- lo único que
+                    se puede hacer del lado de la app es no estorbarle: un <form> real con
+                    onSubmit (no botones sueltos por fuera del form), type="email"/
+                    type="password" en los campos correctos, autoComplete="email"/
+                    "current-password", y name="email"/"password" en cada input (agregado
+                    ahora -- antes solo tenían autoComplete, y algunos navegadores además
+                    se fijan en el name para reconocer el campo). Con eso ya puesto,
+                    Chrome debería ofrecer "¿Guardar contraseña?" solo después de un login
+                    que funcione -- si no aparece, es un ajuste del lado del navegador
+                    (chrome://settings/passwords, o el sitio quedó en la lista de "Nunca
+                    guardadas" por haber tocado "Nunca" alguna vez), no de esta pantalla. */}
                 <form onSubmit={onSubmit} className="space-y-4">
                     {!isLogin && (
                         <div className="grid grid-cols-2 gap-3">
@@ -162,6 +175,7 @@ const LoginPage = () => {
                             />
                             <Input
                                 type="email"
+                                name="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="entrenador@tugimnasio.com"
@@ -179,6 +193,7 @@ const LoginPage = () => {
                                 strokeWidth={1.8}
                             />
                             <PasswordInput
+                                name="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
