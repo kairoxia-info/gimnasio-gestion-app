@@ -322,7 +322,6 @@ const PagosPage = () => {
     // en $ 0 son activaciones sin cobrar: cubren el período y dejan la deuda
     // anotada, pero no son un comprobante de nada.
     const comprobantesEmitidos = useMemo(() => pagos.filter((p) => Number(p.monto || 0) > 0), [pagos]);
-    const activacionesSinCobrar = useMemo(() => pagos.filter((p) => Number(p.monto || 0) <= 0), [pagos]);
 
     // Pedido de Nalux (09/09/2026): "cada vez que abro algún modal para
     // cobrarle tengo que rellenar todo de nuevo" -- si el alumno ya tiene un
@@ -687,43 +686,6 @@ const PagosPage = () => {
                             )}
                         </Card>
                     </div>
-
-                    {/* Reportado por Nalux (07/09/2026): "muchos comprobantes sin
-                        cobrar, está mal eso, el comprobante saldría cuando el
-                        alumno ya paga". Las activaciones sin cobrar (monto 0) ya
-                        no se numeran (migración 0032) y acá tampoco se listan
-                        como comprobantes: se muestran aparte, como lo que son --
-                        períodos habilitados que todavía están impagos. Se filtra
-                        por monto y no por numero para que los que se numeraron
-                        ANTES de esa migración también salgan del listado, sin
-                        tener que tocar ningún dato ya cargado. */}
-                    {activacionesSinCobrar.length > 0 && (
-                        <Card className="border-warn/30">
-                            <h2 className="mb-1 font-display text-lg font-bold">Activados sin cobrar</h2>
-                            <p className="mb-3 text-sm text-muted-foreground">
-                                Se les habilitó el período pero todavía no pagaron. Cuando paguen, registrar
-                                el cobro: ahí sale el comprobante.
-                            </p>
-                            <ul className="divide-y divide-border">
-                                {activacionesSinCobrar.slice(0, 20).map((p) => (
-                                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                                        <div>
-                                            <p className="text-sm font-semibold">{nombre(p.alumno_id)}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {fmtFecha(p.fecha_pago)}
-                                                {Number(p.monto_adeudado || 0) > 0
-                                                    ? ` · debe ${money(p.monto_adeudado)}`
-                                                    : ''}
-                                            </p>
-                                        </div>
-                                        <Btn className="px-3 py-1.5 text-xs" onClick={() => abrirCobro(p.alumno_id)}>
-                                            Cobrar
-                                        </Btn>
-                                    </li>
-                                ))}
-                            </ul>
-                        </Card>
-                    )}
 
                     <Card>
                         <h2 className="mb-3 font-display text-lg font-bold">Comprobantes emitidos</h2>
