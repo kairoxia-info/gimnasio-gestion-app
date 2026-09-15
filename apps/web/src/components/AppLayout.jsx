@@ -7,6 +7,7 @@ import {
     Building2,
     CalendarCheck,
     ChefHat,
+    ChevronDown,
     ClipboardList,
     Dumbbell,
     LayoutDashboard,
@@ -27,6 +28,7 @@ import NotificacionesCampana from '@/components/NotificacionesCampana';
 import { listAll, updateRec } from '@/lib/data';
 import { estadoCuota, ultimoPagoDeAlumno } from '@/lib/format';
 import { onCambioCola, verCola } from '@/lib/offline';
+import { copiarAlPortapapeles } from '@/lib/copiar';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -136,33 +138,61 @@ const GimnasioMark = ({ className = 'h-10' }) => {
 // rutnail.png, que tenía mucho margen transparente alrededor del dibujo
 // real y lo hacía ver más chico todavía a cualquier tamaño).
 //
-// "Soporte" (mismo día): mailto directo a equipokairox.ia@gmail.com -- se
+// "Soporte" (03/09/2026): mailto directo a equipokairox.ia@gmail.com -- se
 // muestra la palabra, no la dirección entera, mismo criterio visual que
 // "Kairox IA" arriba (subrayado punteado, discreto) para que cualquiera
 // entienda de un vistazo que es un link, sin ocupar más lugar que un mail
 // escrito entero.
-export const KairoxFooterMark = () => (
-    <div className="flex flex-col items-center gap-1.5">
-        <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-            Creado por{' '}
+//
+// Reportado por Nalux (15/09/2026): "el botón soporte no anda". El link en sí
+// está bien armado (href="mailto:...") -- lo que pasa es que un mailto:
+// depende de que el sistema operativo tenga un cliente de mail configurado
+// (Outlook, Mail de Windows, etc.); si no hay ninguno, el clic no hace
+// ABSOLUTAMENTE NADA visible -- ni un error, ni una pestaña nueva, nada --
+// así que se lee exactamente como "no anda". Es el mismo problema de fondo
+// que ya se corrigió para el botón "Copiar" del link del alumno (ver
+// lib/copiar.js): una acción que puede fallar en silencio necesita un
+// respaldo con feedback en pantalla. Acá el respaldo es copiar el mail al
+// portapapeles en el mismo clic -- si el cliente de mail abre, mejor; si no
+// abre nada, igual queda la dirección copiada y un aviso confirmándolo, en
+// vez de que parezca un botón roto.
+const EMAIL_SOPORTE = 'equipokairox.ia@gmail.com';
+
+export const KairoxFooterMark = () => {
+    const [copiado, setCopiado] = useState(false);
+
+    const onSoporteClick = async () => {
+        const ok = await copiarAlPortapapeles(EMAIL_SOPORTE);
+        if (ok) {
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 2500);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center gap-1.5">
+            <p className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                Creado por{' '}
+                <a
+                    href="https://kairox-ia.vercel.app/#inicio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline decoration-dotted underline-offset-2 transition hover:text-foreground"
+                >
+                    Kairox IA
+                </a>
+            </p>
             <a
-                href="https://kairox-ia.vercel.app/#inicio"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline decoration-dotted underline-offset-2 transition hover:text-foreground"
+                href={`mailto:${EMAIL_SOPORTE}`}
+                onClick={onSoporteClick}
+                className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 underline decoration-dotted underline-offset-2 transition hover:text-foreground"
             >
-                Kairox IA
+                {copiado ? `Copiado: ${EMAIL_SOPORTE}` : 'Soporte'}
             </a>
-        </p>
-        <a
-            href="mailto:equipokairox.ia@gmail.com"
-            className="text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 underline decoration-dotted underline-offset-2 transition hover:text-foreground"
-        >
-            Soporte
-        </a>
-        <img src="/logo-rutnail.png" alt="RutNail" className="mt-0.5 h-8 w-auto object-contain opacity-90" />
-    </div>
-);
+            <img src="/logo-rutnail.png" alt="RutNail" className="mt-0.5 h-8 w-auto object-contain opacity-90" />
+        </div>
+    );
+};
 
 const ThemeToggle = () => {
     const { theme, setTheme } = useTheme();
@@ -314,6 +344,11 @@ const useEstadoOffline = () => {
 const AppLayout = ({ title, subtitle, actions, children }) => {
     const [open, setOpen] = useState(false);
     const [confirmandoSalir, setConfirmandoSalir] = useState(false);
+    // Pedido de Nalux (15/09/2026): "esa parte... ocupa mucho lugar" -- el
+    // pie del menú (mail, Cerrar sesión, marca Kairox) apilaba 5 líneas
+    // siempre visibles. Arranca plegado (lo que más se usa es navegar, no
+    // ver el propio mail) y se abre con la flechita cuando hace falta.
+    const [mostrarCuenta, setMostrarCuenta] = useState(false);
     const { signOut, user, profile } = useAuth();
     const navigate = useNavigate();
     const { sinConexion, pendientes } = useEstadoOffline();
@@ -546,40 +581,54 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             <div className="min-h-0 flex-1 overflow-y-auto px-4">
                                 <NavLinksAnimados nav={NAV} onNavegar={() => setOpen(false)} />
                             </div>
-                            <div className="shrink-0 space-y-3 px-4 pt-4">
-                                <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-                                {confirmandoSalir ? (
-                                    <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
-                                        <p className="text-xs text-muted-foreground">
-                                            Hay {pendientes} {pendientes === 1 ? 'cambio' : 'cambios'} sin mandar
-                                            (asistencia o pagos cargados sin conexión). Si se cierra sesión ahora se
-                                            pierden.
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={() => salir(true)}
-                                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition active:scale-[0.98]"
-                                        >
-                                            <LogOut className="h-4 w-4" /> Cerrar igual
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setConfirmandoSalir(false)}
-                                            className="flex w-full items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                                        >
-                                            Cancelar
-                                        </button>
+                            <div className="shrink-0 px-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarCuenta((v) => !v)}
+                                    aria-expanded={mostrarCuenta}
+                                    className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary"
+                                >
+                                    <span className="min-w-0 flex-1 truncate text-left">{user?.email}</span>
+                                    <ChevronDown
+                                        className={`h-4 w-4 shrink-0 transition-transform ${mostrarCuenta ? 'rotate-180' : ''}`}
+                                    />
+                                </button>
+                                {mostrarCuenta && (
+                                    <div className="mt-3 space-y-3">
+                                        {confirmandoSalir ? (
+                                            <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+                                                <p className="text-xs text-muted-foreground">
+                                                    Hay {pendientes} {pendientes === 1 ? 'cambio' : 'cambios'} sin
+                                                    mandar (asistencia o pagos cargados sin conexión). Si se cierra
+                                                    sesión ahora se pierden.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => salir(true)}
+                                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition active:scale-[0.98]"
+                                                >
+                                                    <LogOut className="h-4 w-4" /> Cerrar igual
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfirmandoSalir(false)}
+                                                    className="flex w-full items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => salir()}
+                                                className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                            >
+                                                <LogOut className="h-4 w-4" /> Cerrar sesión
+                                            </button>
+                                        )}
+                                        <KairoxFooterMark />
                                     </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => salir()}
-                                        className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                                    >
-                                        <LogOut className="h-4 w-4" /> Cerrar sesión
-                                    </button>
                                 )}
-                                <KairoxFooterMark />
                             </div>
                         </motion.div>
                     </div>
