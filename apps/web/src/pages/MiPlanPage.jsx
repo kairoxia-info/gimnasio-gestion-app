@@ -29,6 +29,7 @@ import {
     armarTextoAlimentos,
     esRepsPorTiempo,
     fmtFecha,
+    resumenSeries,
     resumenTipoGrupo,
     tieneSeriesDetalle,
     tipoDeGrupo,
@@ -1325,7 +1326,14 @@ const MiPlanPage = () => {
                                                     const diaCompletadoHoy = diasHechosHoy.has(claveDia);
                                                     return (
                                                     <div key={`${nroSemana}-${dia}`} className="space-y-3">
-                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                        {/* Borde inferior (15/09/2026, pedido de Nalux: "los
+                                                            diferentes días tampoco se distinguen"): antes era
+                                                            solo texto de color sin ningún límite visual propio
+                                                            -- con varios días seguidos de ejercicios (cada uno
+                                                            ya con su propio borde) el título se perdía en el
+                                                            medio del scroll. La línea marca dónde termina un
+                                                            día y arranca el siguiente. */}
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-primary/30 pb-2">
                                                             <h3 className="font-display text-xl font-bold uppercase text-primary">
                                                                 {dia}
                                                             </h3>
@@ -1444,40 +1452,23 @@ const MiPlanPage = () => {
                                                                                                                     }
                                                                                                                 </p>
                                                                                                             )}
-                                                                                                            <div className="mt-2 space-y-0.5 text-base">
-                                                                                                                <p>
-                                                                                                                    <span className="text-muted-foreground">
-                                                                                                                        Series{' '}
-                                                                                                                    </span>
-                                                                                                                    <span className="font-bold">
-                                                                                                                        {
-                                                                                                                            sub.series
-                                                                                                                        }
-                                                                                                                    </span>
-                                                                                                                </p>
-                                                                                                                <p>
-                                                                                                                    <span className="text-muted-foreground">
-                                                                                                                        Reps{' '}
-                                                                                                                    </span>
-                                                                                                                    <span className="font-bold">
-                                                                                                                        {
-                                                                                                                            sub.reps
-                                                                                                                        }
-                                                                                                                    </span>
-                                                                                                                </p>
+                                                                                                            {/* Antes: "Series 4" / "Reps 10" /
+                                                                                                                "Peso X" en tres renglones
+                                                                                                                separados -- pedido de Nalux
+                                                                                                                (15/09/2026): "se ve mejor en
+                                                                                                                una línea... asi como el pdf"
+                                                                                                                (RutinaPDF.jsx ya combina esto
+                                                                                                                en un solo "4x10" compacto vía
+                                                                                                                resumenSeries(), sin repetir la
+                                                                                                                etiqueta de cada campo). */}
+                                                                                                            <p className="mt-2 text-base font-extrabold">
+                                                                                                                {resumenSeries(sub)}
                                                                                                                 {sub.peso && (
-                                                                                                                    <p>
-                                                                                                                        <span className="text-muted-foreground">
-                                                                                                                            Peso{' '}
-                                                                                                                        </span>
-                                                                                                                        <span className="font-bold">
-                                                                                                                            {
-                                                                                                                                sub.peso
-                                                                                                                            }
-                                                                                                                        </span>
-                                                                                                                    </p>
+                                                                                                                    <span className="ml-1 font-semibold text-muted-foreground">
+                                                                                                                        · {sub.peso} kg
+                                                                                                                    </span>
                                                                                                                 )}
-                                                                                                            </div>
+                                                                                                            </p>
                                                                                                         </div>
                                                                                                     </React.Fragment>
                                                                                                 ),
