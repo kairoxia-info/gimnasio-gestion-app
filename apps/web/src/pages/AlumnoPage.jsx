@@ -43,6 +43,7 @@ import {
     money,
     resumenTipoGrupo,
     tieneSeriesDetalle,
+    ultimoPagoDeAlumno,
 } from '@/lib/format';
 
 // Carga diferida: recharts (~100 KB) recién se descarga cuando el profesor
@@ -1574,7 +1575,21 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
 // vista sin tener que leer el texto.
 const EstadoCuotaAlumno = ({ alumnoId, pagos, config }) => {
     const navigate = useNavigate();
-    const ultimo = pagos[0];
+    // Bug reportado por Nalux (15/09/2026): cobró de verdad (efectivo,
+    // comprobante numerado) y la ficha seguía mostrando el estado del pago
+    // ANTERIOR ("Sin cobrar", con deuda). Causa: `pagos` viene ordenado por
+    // fecha_pago (listAll con sort: '-fecha_pago', más abajo) y acá se
+    // asumía que pagos[0] era siempre "el último" -- pero dos pagos
+    // registrados el mismo día calendario (fecha_pago igual) quedan
+    // empatados en ese sort, y cuál gana el empate no es determinístico.
+    // Le pasó justo a un alumno con un pago viejo "Sin cobrar" y uno nuevo
+    // real, los dos con fecha_pago de hoy. DashboardPage.jsx y PagosPage.jsx
+    // ya resolvían esto bien (comparan periodo_hasta directo, no confían en
+    // el orden del array) -- ultimoPagoDeAlumno() es ese mismo criterio ya
+    // compartido, correctamente desempatado por created_at. Usarlo acá
+    // también hace que la ficha, el Dashboard y Pagos siempre coincidan en
+    // cuál es "el pago que manda".
+    const ultimo = ultimoPagoDeAlumno(alumnoId, pagos);
     const estado = estadoCuota(ultimo, config);
     const atencion = estado === 'vencido' || estado === 'con_deuda';
 

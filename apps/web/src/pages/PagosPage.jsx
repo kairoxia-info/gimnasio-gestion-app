@@ -13,7 +13,16 @@ import supabase from '@/lib/supabaseClient';
 
 // Nalux pidió estas tres formas de cobro, ni más ni menos. `pagos.metodo` es
 // texto libre en la base, así que la lista vive acá y no hace falta migración.
-const METODOS = ['Efectivo', 'Transferencia', 'Tarjeta de crédito'];
+//
+// "Tarjeta de crédito" -> "Tarjeta" (15/09/2026, pedido de Nalux, investigado
+// contra cómo lo hacen otras apps de gestión de gimnasios): para un gimnasio
+// chico no aporta nada distinguir débito de crédito a mano al cargar un pago
+// -- esa granularidad la maneja el propio posnet/Mercado Pago, no hace falta
+// duplicarla acá. Un solo "Tarjeta" genérico alcanza y es más rápido de
+// cargar. Pagos viejos que ya dicen "Tarjeta de crédito" en la base quedan
+// como texto histórico tal cual (es texto libre, no un enum) -- no hace
+// falta ni conviene reescribirlos.
+const METODOS = ['Efectivo', 'Transferencia', 'Tarjeta'];
 
 // Misma técnica que el PDF de rutinas/planes (MiPlanPage): la hoja vive
 // escondida en el DOM y en impresión se apaga TODO lo demás con visibility
