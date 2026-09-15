@@ -158,28 +158,57 @@ export const RutinaImprimiblePDF = ({
                                 {dia}
                             </div>
                             {agruparPorBloque(agruparCombos(itemsDia)).map(([bloque, delBloque], i) => (
-                                <div key={`${bloque}-${i}`} style={{ marginTop: '4pt' }}>
+                                <div key={`${bloque}-${i}`} style={{ marginTop: '8pt' }}>
+                                    {/* Reportado por Nalux (15/09/2026): "saca ejercicio de las
+                                        cajas negras que deberían ser cajas del color del gym, y
+                                        poner ahí por ejemplo movilidad, abdomen o los grupos que
+                                        arme el profe". Antes había DOS elementos separados: este
+                                        nombre de bloque como texto plano de color, y más abajo un
+                                        encabezado de tabla negro fijo que solo decía "Ejercicio".
+                                        Ahora es una sola caja, con el color del gimnasio (mismo
+                                        tratamiento que ya tiene el encabezado del día) y el
+                                        nombre real del bloque adentro -- "Movilidad", "Abdomen",
+                                        lo que el profe haya escrito en "Nombre del bloque"
+                                        (RutinasPage.jsx). Si no puso nombre (ejercicios sueltos,
+                                        sin agrupar), no hay caja: el texto sería vacío o el
+                                        genérico "Ejercicios sueltos" de agruparPorBloque(), que
+                                        no aporta nada repetido en cada hoja. */}
                                     {bloque && (
-                                        <p
+                                        <div
                                             style={{
-                                                margin: '6pt 0 2pt',
+                                                background: colorFinal,
+                                                color: '#fff',
+                                                padding: '4pt 8pt',
                                                 fontSize: '10.5pt',
                                                 fontWeight: 700,
-                                                color: colorFinal,
+                                                marginBottom: '2pt',
                                             }}
                                         >
                                             {bloque}
                                             {resumenTipoGrupo(delBloque) && (
                                                 <span style={{ fontWeight: 400 }}> · {resumenTipoGrupo(delBloque)}</span>
                                             )}
-                                        </p>
+                                        </div>
                                     )}
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+                                        {/* Encabezado de columna liviano (gris claro, no una
+                                            segunda caja de color pisando la del bloque de arriba)
+                                            -- solo aclara qué es el número de la derecha, ya no
+                                            repite la palabra "Ejercicio" en una caja negra. */}
                                         <thead>
-                                            <tr style={{ background: '#111', color: '#fff' }}>
-                                                <th style={{ textAlign: 'left', padding: '3pt 6pt' }}>Ejercicio</th>
-                                                <th style={{ textAlign: 'right', padding: '3pt 6pt' }}>
-                                                    Series x Reps
+                                            <tr style={{ background: '#eee', color: '#444' }}>
+                                                <th style={{ textAlign: 'left', padding: '3pt 6pt', fontWeight: 600 }}>
+                                                    &nbsp;
+                                                </th>
+                                                <th
+                                                    style={{
+                                                        textAlign: 'right',
+                                                        padding: '3pt 6pt',
+                                                        fontWeight: 600,
+                                                        fontSize: '8.5pt',
+                                                    }}
+                                                >
+                                                    SERIES X REPS
                                                 </th>
                                             </tr>
                                         </thead>
@@ -187,6 +216,7 @@ export const RutinaImprimiblePDF = ({
                                             {delBloque.map((it, iRow) => (
                                                 <tr
                                                     key={it.key}
+                                                    data-pdf-fila="true"
                                                     style={{ background: iRow % 2 === 1 ? '#f2f2f2' : 'transparent' }}
                                                 >
                                                     <td style={{ padding: '3pt 6pt' }}>
@@ -231,8 +261,21 @@ export const RutinaImprimiblePDF = ({
 // fondo" en el diálogo de impresión -- algo que nadie tildaría sin saber que
 // existe. print-color-adjust: exact fuerza a imprimir los fondos tal cual se
 // ven en pantalla, sin depender de ese tilde.
+// El padding vive en la regla BASE (no adentro de @media print): la
+// descarga en un clic (lib/descargarPdf.js, html2canvas) muestra la hoja
+// pisando el display:none con JS directo, fuera de cualquier contexto de
+// impresión real -- @media print nunca llega a aplicar ahí. Reportado por
+// Nalux (15/09/2026): "separa el texto de las orillas de las hojas, está
+// muy pegado, tenés que dejar un margen" -- antes el único padding vivía
+// adentro de @media print (en 0), así que la hoja fotografiada para el PDF
+// no tenía NINGÚN margen, ni siquiera ese 0 explícito era el problema real:
+// era que nada de afuera de @media print le daba margen nunca.
 export const ESTILOS_IMPRESION_RUTINA = `
-.rutina-pdf-hoja { display: none; }
+.rutina-pdf-hoja {
+  display: none;
+  padding: 20mm 15mm;
+  box-sizing: border-box;
+}
 @media print {
   #root { display: none !important; }
   html, body { height: auto !important; background: #fff !important; }
@@ -244,7 +287,6 @@ export const ESTILOS_IMPRESION_RUTINA = `
     display: block !important;
     width: 100%;
     margin: 0;
-    padding: 0;
     color: #000;
     background: #fff;
   }

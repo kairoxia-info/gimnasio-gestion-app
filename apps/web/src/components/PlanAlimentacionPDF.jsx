@@ -56,7 +56,11 @@ export const PlanAlimentacionImprimiblePDF = ({
             <EncabezadoPDF logoUrl={logoUrl} titulo={nombre} subtitulo={subtitulo} />
 
             {comidas.map((comida, i) => (
-                <div key={comida.key || i} style={{ marginTop: '12pt', pageBreakInside: 'avoid' }}>
+                <div
+                    key={comida.key || i}
+                    data-pdf-fila="true"
+                    style={{ marginTop: '12pt', pageBreakInside: 'avoid' }}
+                >
                     <div
                         style={{
                             background: colorFinal,
@@ -86,7 +90,7 @@ export const PlanAlimentacionImprimiblePDF = ({
                     </p>
                     <ul style={{ margin: 0, paddingLeft: '14pt', fontSize: '10pt' }}>
                         {observaciones.map((linea, i) => (
-                            <li key={i} style={{ margin: '2pt 0' }}>
+                            <li key={i} data-pdf-fila="true" style={{ margin: '2pt 0' }}>
                                 {linea}
                             </li>
                         ))}
@@ -105,8 +109,17 @@ export const PlanAlimentacionImprimiblePDF = ({
 // vs .rutina-pdf-hoja): si compartieran una sola clase, imprimir una
 // dejaría la otra oculta también cuando conviven montadas en la misma
 // pantalla (como en AlumnoPage.jsx, que tiene ambas pestañas).
+// Mismo motivo que RutinaPDF.jsx: el padding va en la regla BASE porque la
+// descarga en un clic (html2canvas) nunca pasa por @media print -- "separa
+// el texto de las orillas, está muy pegado" (Nalux, 15/09/2026) era esto:
+// el único padding que existía vivía adentro de @media print, así que la
+// hoja fotografiada para el PDF no tenía margen real.
 export const ESTILOS_IMPRESION_ALIMENTACION = `
-.alimentacion-pdf-hoja { display: none; }
+.alimentacion-pdf-hoja {
+  display: none;
+  padding: 20mm 15mm;
+  box-sizing: border-box;
+}
 @media print {
   #root { display: none !important; }
   html, body { height: auto !important; background: #fff !important; }
@@ -118,7 +131,6 @@ export const ESTILOS_IMPRESION_ALIMENTACION = `
     display: block !important;
     width: 100%;
     margin: 0;
-    padding: 0;
     color: #000;
     background: #fff;
   }
