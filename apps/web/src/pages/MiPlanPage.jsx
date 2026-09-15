@@ -766,7 +766,13 @@ const MiPlanPage = () => {
     // falta volver a pedir el plan entero solo para reflejar un check.
     const [diasHechosHoy, setDiasHechosHoy] = useState(() => new Set());
     const [marcandoDia, setMarcandoDia] = useState(null);
-    const [errorMarcarDia, setErrorMarcarDia] = useState('');
+    // Bug real encontrado en la auditoría final (15/09/2026): este estado se
+    // seteaba en el catch pero nunca se leía en ningún lado del render -- si
+    // al alumno le fallaba guardar "Hecho" (ej. sin señal), el botón no
+    // hacía nada y no se enteraba de nada. Guarda también DE QUÉ DÍA es el
+    // error (puede haber varios días en pantalla a la vez), para no mostrar
+    // el aviso al lado de un día que no fue el que falló.
+    const [errorMarcarDia, setErrorMarcarDia] = useState({ clave: '', mensaje: '' });
 
     useEffect(() => {
         setDiasHechosHoy(new Set(plan?.dias_completados_hoy || []));
@@ -776,7 +782,7 @@ const MiPlanPage = () => {
         const clave = `${nroSemana}|${dia}`;
         if (diasHechosHoy.has(clave) || marcandoDia) return;
         setMarcandoDia(clave);
-        setErrorMarcarDia('');
+        setErrorMarcarDia({ clave: '', mensaje: '' });
         try {
             const { error: err } = await supabase.rpc('marcar_entrenamiento_hecho', {
                 p_codigo: codigo,
@@ -793,7 +799,7 @@ const MiPlanPage = () => {
             // la primera vez que se entre.
             if (progresoYaPedidoRef.current) cargarProgreso();
         } catch (_) {
-            setErrorMarcarDia('No se pudo guardar. Probar de nuevo.');
+            setErrorMarcarDia({ clave, mensaje: 'No se pudo guardar. Probar de nuevo.' });
         } finally {
             setMarcandoDia(null);
         }
@@ -1361,6 +1367,11 @@ const MiPlanPage = () => {
                                                                     'Marcar como hecho'
                                                                 )}
                                                             </button>
+                                                            {errorMarcarDia.clave === claveDia && (
+                                                                <p className="w-full text-sm font-semibold text-destructive">
+                                                                    {errorMarcarDia.mensaje}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                         {agruparPorBloque(agruparCombos(items)).map(
                                                             ([nombreBloque, delBloque], iBloque) => (
