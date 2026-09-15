@@ -36,6 +36,7 @@ import {
     armarTextoAlimentos,
     ESTADOS_PAGO,
     antiguedad,
+    esRepsPorTiempo,
     estadoAlumno,
     estadoCuota,
     fmtFecha,
@@ -508,7 +509,17 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                         </div>
                                                     ) : (
                                                         <div key={it.key} className="rounded-xl border border-border p-3">
-                                                            <div className="grid gap-3 sm:grid-cols-[2fr,repeat(5,minmax(0,1fr))]">
+                                                            {/* Un ejercicio por tiempo (bici 20 min) no muestra peso
+                                                                -- pedido de Nalux (15/09/2026), mismo criterio que en
+                                                                el editor de la rutina y en la pantalla del alumno.
+                                                                Una columna menos en la grilla, no una caja vacía. */}
+                                                            <div
+                                                                className={`grid gap-3 ${
+                                                                    esRepsPorTiempo(it.reps)
+                                                                        ? 'sm:grid-cols-[2fr,repeat(4,minmax(0,1fr))]'
+                                                                        : 'sm:grid-cols-[2fr,repeat(5,minmax(0,1fr))]'
+                                                                }`}
+                                                            >
                                                                 <div>
                                                                     <p className="text-sm font-bold">{it.nombre}</p>
                                                                     <p className="text-xs text-muted-foreground">{it.grupo}</p>
@@ -517,7 +528,7 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                                         Series
                                                                     </p>
-                                                                    <p className="text-sm font-semibold">{it.series}</p>
+                                                                    <p className="text-sm font-semibold">{it.series || '—'}</p>
                                                                 </div>
                                                                 {/* Series desglosadas (Fase 2.3, 13/09/2026): esta es la
                                                                     ficha del PROFESOR, no lo que ve el alumno (eso ya
@@ -534,16 +545,20 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                                             : it.reps}
                                                                     </p>
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                        Peso
-                                                                    </p>
-                                                                    <p className="text-sm font-semibold">
-                                                                        {tieneSeriesDetalle(it)
-                                                                            ? it.seriesDetalle.map((s) => s.peso || '—').join('/')
-                                                                            : it.peso || '—'}
-                                                                    </p>
-                                                                </div>
+                                                                {!esRepsPorTiempo(it.reps) && (
+                                                                    <div>
+                                                                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                                            Peso
+                                                                        </p>
+                                                                        <p className="text-sm font-semibold">
+                                                                            {tieneSeriesDetalle(it)
+                                                                                ? it.seriesDetalle
+                                                                                      .map((s) => s.peso || '—')
+                                                                                      .join('/')
+                                                                                : it.peso || '—'}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
                                                                 <div>
                                                                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                                                         Descanso

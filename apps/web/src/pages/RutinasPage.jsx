@@ -10,8 +10,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
     DIAS,
+    UNIDADES_REPS,
     agruparPorBloque,
+    armarReps,
+    descomponerReps,
     desglosarSeries,
+    esRepsPorTiempo,
     fmtFecha,
     hoy,
     resumenSeries,
@@ -22,35 +26,10 @@ import {
 } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
 
-// "Reps" acepta repeticiones O una duración -- pedido de Nalux (15/09/2026):
-// "cuando agrego bicicleta o algún ejercicio que en vez de hacer
-// repeticiones es por segundos o minutos, hay que poder poner esa opción".
-// La columna `reps` sigue siendo texto libre en la base (sin migración,
-// técnicamente ya aceptaba escribir "30 seg" a mano) -- lo que faltaba era
-// que el formulario lo ofreciera como una opción real en vez de depender de
-// que el profesor se acuerde de escribirlo así. Mismo criterio que
-// armarUnidad/descomponerUnidad de AlimentosPage.jsx: un número + una
-// unidad elegida arman ese mismo texto libre, y decodificarlo de vuelta
-// alcanza para que el formulario recuerde qué había elegido la vez pasada
-// (incluida una rutina ya guardada antes de este cambio, cuyo reps es un
-// número piso sin unidad -> se decodifica como "Reps" normal).
-const UNIDADES_REPS = [
-    { valor: 'reps', sufijo: '', label: 'Reps' },
-    { valor: 'seg', sufijo: ' seg', label: 'Seg' },
-    { valor: 'min', sufijo: ' min', label: 'Min' },
-];
-
-const descomponerReps = (texto) => {
-    const m = String(texto ?? '').trim().match(/^(\d+(?:[.,]\d+)?)\s*(seg|min)?$/i);
-    if (!m) return { cantidad: String(texto ?? ''), unidad: 'reps' };
-    return { cantidad: m[1], unidad: m[2] ? m[2].toLowerCase() : 'reps' };
-};
-
-const armarReps = (cantidad, unidad) => {
-    const sufijo = UNIDADES_REPS.find((u) => u.valor === unidad)?.sufijo ?? '';
-    return `${cantidad}${sufijo}`;
-};
-
+// UNIDADES_REPS/descomponerReps/armarReps viven en lib/format.js: la
+// pantalla del alumno y la ficha del profesor también necesitan saber si un
+// ejercicio se mide en tiempo (para no mostrarle kilos a una bici).
+//
 // Número arriba, selector de unidad abajo -- APILADOS, no lado a lado.
 // Primer intento fue en una sola fila (número + selector) y, probado en
 // vivo, la columna "Reps" de esta grilla mide apenas ~53px de ancho total
@@ -118,34 +97,6 @@ const agruparPorCombo = (lista) => {
 };
 
 const vacio = { nombre: '', descripcion: '', duracion_semanas: 4 };
-
-// Bloques sugeridos dentro de un día (entrada en calor, bloque principal,
-// etc.). Es solo un <datalist>: el campo es de texto libre, esto nada más
-// evita tener que tipear los cuatro o cinco de siempre.
-const BLOQUES_SUGERIDOS = [
-    'Entrada en calor',
-    'Movilidad',
-    'Activación',
-    'Bloque principal',
-    'Bloque 1',
-    'Bloque 2',
-    'Superserie',
-    'Zona media',
-    'Cardio final',
-    'Elongación',
-    // Grupos musculares (13/09/2026, Fase 2.1): pedido de Nalux para poder
-    // titular el día directamente con el grupo que se entrena ("Día 1:
-    // Espalda-Bíceps") en vez de solo fases del entrenamiento. El campo ya
-    // era de texto libre -- esto solo suma sugerencias, no cambia nada del
-    // guardado ni de cómo se agrupa (agruparPorBloque() en lib/format.js).
-    'Espalda-Bíceps',
-    'Pecho-Tríceps',
-    'Piernas',
-    'Hombro-Core',
-    'Full body',
-    'Tren superior',
-    'Tren inferior',
-];
 
 // Vista de solo lectura de una rutina ya armada (botón "Ver" de cada
 // tarjeta, pedido de Nalux el 07/09/2026). Respeta el mismo agrupamiento que
@@ -485,6 +436,20 @@ const RutinasPage = () => {
 
     const ocultarPreview = () => setPreviewHover(null);
 
+    // Antes se mostraba solo pasando el mouse por encima de la fila --
+    // cambiado a un botón por ejercicio (pedido de Nalux 15/09/2026: "para
+    // que no interrumpa cada vez que se pasa el cursor por encima"). Un
+    // click alterna: si ya está abierto el preview de ESE ejercicio, lo
+    // cierra; si no, lo abre (y reemplaza el de cualquier otro que
+    // estuviera abierto).
+    const alternarPreview = (ev, ej) => {
+        if (previewHover?.ej?.id === ej.id) {
+            ocultarPreview();
+        } else {
+            mostrarPreview(ev, ej);
+        }
+    };
+
     // Agrega de una todos los ejercicios tildados, en el orden en que se ven
     // en la lista (alfabético) para que sea predecible; después se pueden
     // reordenar con las flechas. El índice va en la key porque Date.now()
@@ -526,9 +491,15 @@ const RutinasPage = () => {
                 comentario: '',
             })),
         ]);
-        // Se limpia la selección para no agregar dos veces sin querer, pero se
-        // dejan semana/día/bloque: lo normal es seguir cargando el mismo día.
+        // Se limpia la selección para no agregar dos veces sin querer.
+        // Semana/día se dejan (lo normal es seguir cargando el mismo día),
+        // pero el nombre del bloque SÍ se vacía (pedido de Nalux 15/09/2026:
+        // "no quiero que después ese mismo texto quede escrito... para que
+        // el profe pueda escribir lo que quiera") -- antes quedaba puesto y
+        // era fácil no darse cuenta y seguir agregando ejercicios sueltos
+        // como si fueran parte del bloque anterior.
         setEjsElegidos(new Set());
+        setBloque('');
     };
     // Descanso/intensidad/bloque/comentario son del combo entero, no de cada
     // ejercicio (el descanso pasa una sola vez, al terminar los dos
@@ -1632,6 +1603,11 @@ const RutinasPage = () => {
                                                         const enGrupo = itemsDelDiaActivo.findIndex(
                                                             (x) => x.key === it.key,
                                                         );
+                                                        // Pedido de Nalux (15/09/2026): un ejercicio medido en
+                                                        // segundos/minutos (bici, plancha) no lleva peso -- se saca
+                                                        // la caja entera, no se deja vacía -- y las series pasan a
+                                                        // ser opcionales (20 min de bici puede ser una sola vez).
+                                                        const porTiempo = esRepsPorTiempo(it.reps);
                                                         return (
                                                             <div key={it.key} className="rounded-xl border border-border p-3">
                                                                 {/* En el celular (menos de sm) el grid colapsaba a una
@@ -1641,8 +1617,18 @@ const RutinasPage = () => {
                                                                     chicas pero los cuatro datos en la misma línea,
                                                                     como se ven en la computadora. Con grid-cols-4 el
                                                                     nombre y los botones ocupan su propia fila
-                                                                    (col-span-4) y los cuatro campos entran en una. */}
-                                                                <div className="grid grid-cols-4 items-end gap-2 sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto] sm:gap-3">
+                                                                    (col-span-4) y los cuatro campos entran en una.
+                                                                    Sin la caja de peso (ejercicio por tiempo) la
+                                                                    grilla de escritorio pasa a 3 columnas de campos,
+                                                                    si no los botones de mover/borrar caerían en el
+                                                                    lugar angosto que dejó el peso. */}
+                                                                <div
+                                                                    className={`grid grid-cols-4 items-end gap-2 sm:gap-3 ${
+                                                                        porTiempo
+                                                                            ? 'sm:grid-cols-[2fr,repeat(3,minmax(0,1fr)),auto]'
+                                                                            : 'sm:grid-cols-[2fr,repeat(4,minmax(0,1fr)),auto]'
+                                                                    }`}
+                                                                >
                                                                     <div className="col-span-4 min-w-0 sm:col-span-1">
                                                                         <p className="text-base font-bold">{it.nombre}</p>
                                                                         <p className="text-sm text-muted-foreground">
@@ -1675,12 +1661,19 @@ const RutinasPage = () => {
                                                                     ) : (
                                                                         <>
                                                                             <Field label="Series">
+                                                                                {/* "(opcional)" en la etiqueta no entra en
+                                                                                    esta columna angosta y se corta -- el
+                                                                                    guión de placeholder ya avisa que se
+                                                                                    puede dejar vacío, mismo criterio que
+                                                                                    "Peso" (nunca tuvo "(opcional)" en su
+                                                                                    label pese a serlo desde siempre). */}
                                                                                 <Input
                                                                                     type="number"
                                                                                     value={it.series}
                                                                                     onChange={(e) =>
                                                                                         editarItem(it.key, 'series', e.target.value)
                                                                                     }
+                                                                                    placeholder={porTiempo ? '—' : ''}
                                                                                 />
                                                                             </Field>
                                                                             <Field label="Reps">
@@ -1689,15 +1682,17 @@ const RutinasPage = () => {
                                                                                     onChange={(v) => editarItem(it.key, 'reps', v)}
                                                                                 />
                                                                             </Field>
-                                                                            <Field label="Peso">
-                                                                                <Input
-                                                                                    value={it.peso}
-                                                                                    onChange={(e) =>
-                                                                                        editarItem(it.key, 'peso', e.target.value)
-                                                                                    }
-                                                                                    placeholder="kg"
-                                                                                />
-                                                                            </Field>
+                                                                            {!porTiempo && (
+                                                                                <Field label="Peso">
+                                                                                    <Input
+                                                                                        value={it.peso}
+                                                                                        onChange={(e) =>
+                                                                                            editarItem(it.key, 'peso', e.target.value)
+                                                                                        }
+                                                                                        placeholder="kg"
+                                                                                    />
+                                                                                </Field>
+                                                                            )}
                                                                             <Field label="Descanso">
                                                                                 <Input
                                                                                     value={it.descanso}
@@ -1829,7 +1824,6 @@ const RutinasPage = () => {
                                                                     </Field>
                                                                     <Field label="Bloque">
                                                                         <Input
-                                                                            list="bloques-sugeridos"
                                                                             value={it.bloque || ''}
                                                                             onChange={(e) =>
                                                                                 editarItem(it.key, 'bloque', e.target.value)
@@ -2031,12 +2025,18 @@ const RutinasPage = () => {
                                 aparece en cuanto hay algo escrito, para vaciar el campo a
                                 propósito antes de armar el próximo grupo. A propósito vive acá
                                 abajo de la lista ya cargada, no arriba de todo el formulario: es
-                                lo que se toca una y otra vez mientras se arma el día. */}
-                            <div className="space-y-3 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/[0.02] p-3">
+                                lo que se toca una y otra vez mientras se arma el día.
+
+                                Borde sólido en vez de punteado (pedido de Nalux 15/09/2026: "para
+                                distinguir bien el bloque creado con el de abajo que no tiene
+                                nada... que esté marcado con blanco si está en modo oscuro o negro
+                                si está en modo claro"). border-foreground resuelve solo a esos dos
+                                colores -- son literalmente --foreground en claro/oscuro (index.css)
+                                -- sin necesitar un dark: aparte. */}
+                            <div className="space-y-3 rounded-2xl border-2 border-foreground bg-primary/[0.02] p-3">
                                 <Field label="Nombre del bloque (ej: Espalda-Bícep)">
                                     <div className="flex gap-2">
                                         <Input
-                                            list="bloques-sugeridos"
                                             value={bloque}
                                             onChange={(e) => setBloque(e.target.value)}
                                             placeholder="Espalda-Bícep, Abdomen, Entrada en calor..."
@@ -2052,11 +2052,6 @@ const RutinasPage = () => {
                                             </button>
                                         )}
                                     </div>
-                                    <datalist id="bloques-sugeridos">
-                                        {BLOQUES_SUGERIDOS.map((b) => (
-                                            <option key={b} value={b} />
-                                        ))}
-                                    </datalist>
                                     <span className="text-sm text-muted-foreground">
                                         {bloque
                                             ? `Los ejercicios que agregues abajo van a la caja "${bloque}".`
@@ -2072,7 +2067,13 @@ const RutinasPage = () => {
                                         />
                                         <input
                                             value={filtroEj}
-                                            onChange={(e) => setFiltroEj(e.target.value)}
+                                            onChange={(e) => {
+                                                setFiltroEj(e.target.value);
+                                                // Si la fila del ejercicio que se estaba
+                                                // previsualizando desaparece de la lista al
+                                                // filtrar, no dejarlo flotando huérfano.
+                                                ocultarPreview();
+                                            }}
                                             placeholder="Buscar ejercicio"
                                             aria-label="Buscar ejercicio en la biblioteca"
                                             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -2085,34 +2086,55 @@ const RutinasPage = () => {
                                             </p>
                                         ) : (
                                             <ul className="divide-y divide-border">
-                                                {ejerciciosFiltrados.map((e) => (
-                                                    <li
-                                                        key={e.id}
-                                                        className="flex items-center gap-3 px-3 py-2"
-                                                        onMouseEnter={(ev) => mostrarPreview(ev, e)}
-                                                        onMouseLeave={ocultarPreview}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            id={`ej-${e.id}`}
-                                                            checked={ejsElegidos.has(e.id)}
-                                                            onChange={() => toggleEjercicio(e.id)}
-                                                            className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
-                                                        />
-                                                        <label
-                                                            htmlFor={`ej-${e.id}`}
-                                                            className="flex-1 cursor-pointer text-sm"
+                                                {ejerciciosFiltrados.map((e) => {
+                                                    const tipoMedia = tipoDePreview(e.media_url);
+                                                    return (
+                                                        <li
+                                                            key={e.id}
+                                                            className="flex items-center gap-3 px-3 py-2"
                                                         >
-                                                            {e.nombre}
-                                                            {(e.grupo_muscular || []).length > 0 && (
-                                                                <span className="text-muted-foreground">
-                                                                    {' · '}
-                                                                    {(e.grupo_muscular || []).join(', ')}
-                                                                </span>
+                                                            <input
+                                                                type="checkbox"
+                                                                id={`ej-${e.id}`}
+                                                                checked={ejsElegidos.has(e.id)}
+                                                                onChange={() => toggleEjercicio(e.id)}
+                                                                className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                                            />
+                                                            <label
+                                                                htmlFor={`ej-${e.id}`}
+                                                                className="flex-1 cursor-pointer text-sm"
+                                                            >
+                                                                {e.nombre}
+                                                                {(e.grupo_muscular || []).length > 0 && (
+                                                                    <span className="text-muted-foreground">
+                                                                        {' · '}
+                                                                        {(e.grupo_muscular || []).join(', ')}
+                                                                    </span>
+                                                                )}
+                                                            </label>
+                                                            {/* Antes se mostraba solo con el mouse
+                                                                encima de la fila -- pedido de Nalux
+                                                                (15/09/2026): "que no interrumpa cada
+                                                                vez que se pasa el cursor por encima".
+                                                                Un botón por ejercicio, solo si tiene
+                                                                foto/video cargado. */}
+                                                            {tipoMedia && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(ev) => alternarPreview(ev, e)}
+                                                                    aria-label={`Ver ${tipoMedia} de ${e.nombre}`}
+                                                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
+                                                                        previewHover?.ej?.id === e.id
+                                                                            ? 'border-primary text-primary'
+                                                                            : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                                                                    }`}
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </button>
                                                             )}
-                                                        </label>
-                                                    </li>
-                                                ))}
+                                                        </li>
+                                                    );
+                                                })}
                                             </ul>
                                         )}
                                     </div>

@@ -27,6 +27,7 @@ import {
     agruparItemsRutina,
     agruparPorBloque,
     armarTextoAlimentos,
+    esRepsPorTiempo,
     fmtFecha,
     resumenTipoGrupo,
     tieneSeriesDetalle,
@@ -556,6 +557,30 @@ const DatoEjercicio = ({ label, valor }) => (
         </p>
     </div>
 );
+
+// La fila de datos del ejercicio. Eran cuatro cajas fijas (series, reps,
+// peso, descanso); desde el 15/09/2026 (pedido de Nalux) un ejercicio medido
+// en segundos/minutos no muestra peso -- a una bicicleta de 20 minutos no le
+// corresponden kilos -- y las series solo aparecen si el profesor puso
+// alguna, porque ahí pasaron a ser opcionales. La cantidad de columnas sale
+// de cuántas cajas quedan: si no, las que sobreviven se estiran raro o queda
+// un hueco en la fila.
+const COLUMNAS_DATOS = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
+
+const DatosDelEjercicio = ({ it }) => {
+    const datos = [];
+    if (String(it.series ?? '').trim()) datos.push({ label: 'Series', valor: it.series });
+    datos.push({ label: 'Reps', valor: it.reps });
+    if (!esRepsPorTiempo(it.reps)) datos.push({ label: 'Peso', valor: it.peso || '—' });
+    datos.push({ label: 'Descanso', valor: it.descanso || '—' });
+    return (
+        <div className={`mt-4 grid gap-1.5 sm:gap-3 ${COLUMNAS_DATOS[datos.length] || 'grid-cols-4'}`}>
+            {datos.map((d) => (
+                <DatoEjercicio key={d.label} label={d.label} valor={d.valor} />
+            ))}
+        </div>
+    );
+};
 
 // Botón/link de "Ver demostración" de un ejercicio. Se reusa tal cual para
 // un ejercicio suelto y, dentro de un combo (superserie), una vez por cada
@@ -1514,34 +1539,14 @@ const MiPlanPage = () => {
                                                                                                 </p>
                                                                                             </div>
                                                                                         ) : (
-                                                                                            <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-3">
-                                                                                                <DatoEjercicio
-                                                                                                    label="Series"
-                                                                                                    valor={
-                                                                                                        it.series
-                                                                                                    }
-                                                                                                />
-                                                                                                <DatoEjercicio
-                                                                                                    label="Reps"
-                                                                                                    valor={
-                                                                                                        it.reps
-                                                                                                    }
-                                                                                                />
-                                                                                                <DatoEjercicio
-                                                                                                    label="Peso"
-                                                                                                    valor={
-                                                                                                        it.peso ||
-                                                                                                        '—'
-                                                                                                    }
-                                                                                                />
-                                                                                                <DatoEjercicio
-                                                                                                    label="Descanso"
-                                                                                                    valor={
-                                                                                                        it.descanso ||
-                                                                                                        '—'
-                                                                                                    }
-                                                                                                />
-                                                                                            </div>
+                                                                                            // Un ejercicio por tiempo (bici 20
+                                                                                            // min, plancha 30 seg) no muestra
+                                                                                            // peso, y las series solo si el
+                                                                                            // profesor puso alguna -- pedido de
+                                                                                            // Nalux (15/09/2026). Las cajas que
+                                                                                            // quedan se reparten el ancho en vez
+                                                                                            // de dejar un hueco.
+                                                                                            <DatosDelEjercicio it={it} />
                                                                                         )}
                                                                                     </>
                                                                                 )}

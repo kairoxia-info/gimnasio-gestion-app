@@ -529,6 +529,43 @@ export const agruparItemsRutina = (items) => {
 // algo razonable sin inventar nada.
 // ---------------------------------------------------------------------------
 
+// "Reps" acepta repeticiones O una duración -- pedido de Nalux (15/09/2026):
+// "cuando agrego bicicleta o algún ejercicio que en vez de hacer
+// repeticiones es por segundos o minutos, hay que poder poner esa opción".
+// La columna `reps` sigue siendo texto libre en la base (sin migración,
+// técnicamente ya aceptaba escribir "30 seg" a mano) -- un número + una
+// unidad elegida arman ese mismo texto libre, y decodificarlo de vuelta
+// alcanza para que el formulario recuerde qué había elegido la vez pasada
+// (incluida una rutina guardada antes de este cambio, cuyo reps es un número
+// pelado sin unidad -> se decodifica como "Reps" normal).
+//
+// Vive acá y no en RutinasPage.jsx (donde nació) porque la pantalla del
+// alumno, la ficha del profesor y el PDF también necesitan saber si un
+// ejercicio se mide en tiempo, para no mostrarle un peso en kg a una
+// bicicleta de 20 minutos.
+export const UNIDADES_REPS = [
+    { valor: 'reps', sufijo: '', label: 'Reps' },
+    { valor: 'seg', sufijo: ' seg', label: 'Seg' },
+    { valor: 'min', sufijo: ' min', label: 'Min' },
+];
+
+export const descomponerReps = (texto) => {
+    const m = String(texto ?? '').trim().match(/^(\d+(?:[.,]\d+)?)\s*(seg|min)?$/i);
+    if (!m) return { cantidad: String(texto ?? ''), unidad: 'reps' };
+    return { cantidad: m[1], unidad: m[2] ? m[2].toLowerCase() : 'reps' };
+};
+
+export const armarReps = (cantidad, unidad) => {
+    const sufijo = UNIDADES_REPS.find((u) => u.valor === unidad)?.sufijo ?? '';
+    return `${cantidad}${sufijo}`;
+};
+
+// Un ejercicio "por tiempo" (bici 20 min, plancha 30 seg) no lleva kilos:
+// pedido de Nalux (15/09/2026), "sacar peso en estas opciones". Se decide
+// leyendo el propio texto de reps, sin columna nueva en la base -- así una
+// rutina vieja que ya tenía "30 seg" escrito a mano también entra.
+export const esRepsPorTiempo = (reps) => descomponerReps(reps).unidad !== 'reps';
+
 export const tieneSeriesDetalle = (it) => Array.isArray(it?.seriesDetalle) && it.seriesDetalle.length > 0;
 
 // Arma el array inicial al tocar "Desglosar": una fila por cada serie que el
@@ -564,7 +601,13 @@ export const filasDeSeries = (it) => {
 // muestra las reps de cada serie separadas por "/" -- que es lo que más
 // varía en una pirámide -- y el rango de peso si no son todos iguales.
 export const resumenSeries = (it) => {
-    if (!tieneSeriesDetalle(it)) return `${it?.series ?? '—'}x${it?.reps || '—'}`;
+    if (!tieneSeriesDetalle(it)) {
+        const series = String(it?.series ?? '').trim();
+        const reps = it?.reps || '—';
+        // Series vacío es válido desde el 15/09/2026 (es opcional en los
+        // ejercicios por tiempo): ahí "20 min" se lee solo y "x20 min" no.
+        return series ? `${series}x${reps}` : reps;
+    }
     const filas = it.seriesDetalle;
     const reps = filas.map((s) => s?.reps || '—').join('/');
     const pesos = [...new Set(filas.map((s) => (s?.peso || '').trim()).filter(Boolean))];
