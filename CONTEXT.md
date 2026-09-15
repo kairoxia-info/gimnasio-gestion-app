@@ -4384,3 +4384,380 @@ migraciones nuevas.
 **Verificado en vivo**: creado un registro de prueba sin foto, usado "Agregar foto" para subirle
 una después -- quedó guardada, el thumbnail aparece y el botón desaparece solo (ya no hace falta).
 Confirmado por SQL y por Storage API que no quedó ningún dato de prueba (registro ni archivo).
+
+## 15/09/2026 — Ronda grande de 9 pedidos: rutinas, PDFs, pagos (parte 1)
+
+Nalux trajo una lista de 9 cosas para corregir/probar de una sola vez. Esta entrada cubre las
+primeras seis, ya resueltas y verificadas; las restantes (separar el panel del alumno en páginas
++ módulo de progreso, y las dos investigaciones de otras apps) quedan documentadas aparte.
+
+### 1. Ejercicios por tiempo (segundos/minutos), no solo repeticiones
+
+**Pedido**: "cuando agrego bicicleta o algún ejercicio que en vez de hacer repeticiones es por
+segundos o minutos, hay que poder poner esa opción". El campo `reps` YA aceptaba texto libre
+("30 seg" a mano funcionaba), pero nada en el formulario lo sugería -- de hecho, en una rutina
+real armada antes de este cambio, apareció "10" en Reps de "Bicicleta fija" y el tiempo real
+("5 minutos") terminó escrito a mano en el campo Comentario, como workaround.
+
+**Corregido**: nuevo componente `CampoReps` (`RutinasPage.jsx`) -- un número + un selector
+Reps/Seg/Min, que arma/desarma el mismo texto libre (mismo criterio que `armarUnidad` de
+Alimentos). Aplicado al editor de ejercicio suelto. En la caja de superserie (9.5rem, 3 columnas)
+no entraba un selector completo -- se probó en vivo y el número quedaba en 26px de ancho,
+ilegible -- así que ahí se dejó el campo de texto libre de siempre, con placeholder
+"10 o 30 seg" para que se sepa que acepta las dos formas.
+
+**Verificado en vivo**: cargado "Bicicleta fija" con 5 + Min -> guardó "5 min" en la base;
+reabierto el editor -> decodificó correctamente 5 y Min otra vez.
+
+### 2. Bug real: el número de "Series" no se veía en superserie (ni en otros campos angostos)
+
+**Causa encontrada**: el `Input` compartido (`ui-kit.jsx`) trae de fábrica `px-3` (12px) de
+padding. Una `className` pasada por quien lo usa para achicarlo (`px-2`) NO lo pisaba --
+Tailwind genera `.px-3` después de `.px-2` en su hoja de estilos (van en orden de escala, no en
+el orden en que se escriben las clases), así que siempre ganaba el padding de fábrica. En una
+caja de 42px de ancho (Series, superserie), eso + las flechitas nativas de `type="number"`
+dejaban el dígito prácticamente invisible -- comprobado que era literalmente esto: mostraba solo
+un punto.
+
+**Corregido**: padding forzado con `!important` (que sí gana) + quitar las flechitas nativas del
+número. Aplicado a Series (superserie), y de paso a Rondas/Seg. de trabajo/Seg. de descanso
+(circuitos/intervalos), que tenían el mismo bug sin que nadie lo hubiera reportado todavía.
+
+**Verificado en vivo**: el "4" de Series ahora se ve centrado y completo en ambas cajas de la
+superserie.
+
+### 3. Boton "Soporte" no andaba
+
+**Causa**: es un link mailto bien armado -- si el sistema no tiene un cliente de mail
+configurado (muy comun en Windows), el clic no hace NADA visible: ni error, ni pestana nueva.
+Mismo patron de bug que ya se habia corregido para el boton "Copiar" del link del alumno
+(lib/copiar.js, 09/09/2026): una accion que puede fallar en silencio necesita un respaldo con
+feedback.
+
+**Corregido**: KairoxFooterMark (AppLayout.jsx) ahora copia el mail al portapapeles en el
+mismo clic (reusa copiarAlPortapapeles) y muestra "Copiado: equipokairox.ia@gmail.com" por
+2.5s -- si el cliente de mail abre, mejor; si no abre nada, igual queda el mail copiado y hay
+confirmacion visible.
+
+### 4. Pago real no se reflejaba en el estado de cuota (alumno de prueba "nino")
+
+**Reporte**: un alumno de prueba real ya habia pagado en efectivo y la ficha lo seguia
+mostrando con el estado del pago viejo ("Sin cobrar", con deuda).
+
+**Causa encontrada**: los dos pagos de ese alumno tenian la MISMA fecha_pago (mismo dia). La
+ficha del alumno (EstadoCuotaAlumno) tomaba pagos[0] confiando en el orden de
+listAll('pagos', {sort: '-fecha_pago'}) -- con fecha empatada, cual gana el empate no es
+deterministico. Dashboard y Pagos YA resolvian esto bien (comparan periodo_hasta directo, sin
+depender del orden del array) -- pero la ficha nunca usaba ese mismo criterio, tenia su propia
+logica rota.
+
+**Corregido**: EstadoCuotaAlumno ahora usa ultimoPagoDeAlumno() (ya existia en lib/format.js,
+usado en otros lados pero no aca), que ordena por periodo_hasta con created_at como
+desempate -- mismo criterio en las tres pantallas.
+
+**Verificado en vivo y por SQL**: la ficha paso de mostrar "cubre hasta 15/09" a
+"cubre hasta 17/09" (el pago real), sin tocar ningun dato -- solo se corrigio cual de los dos
+pagos existentes se toma como vigente.
+
+### 5 y 6. PDFs: marca de agua de RutNail, cajas de color en vez de negras, margenes, y el bug real de "se cortan los renglones"
+
+**Pedido**: logo chico de RutNail en una esquina de cada hoja sin tapar texto; sacar las cajas
+negras de la tabla de ejercicios y mostrar ahi el grupo muscular (Movilidad, Abdomen, etc.) con
+el color del gimnasio; dejar margen real (el texto estaba pegado a los bordes); y el bug de que
+se cortan renglones entre paginas. Mismo tratamiento pedido para el PDF de alimentacion.
+
+**Investigado antes de tocar nada**: el PDF NO es una impresion real -- es una FOTO
+(html2canvas) de toda la hoja como una sola imagen larga, que despues lib/descargarPdf.js
+reparte en paginas cortando cada 297mm sin ninguna nocion de donde termina cada fila.
+page-break-inside: avoid (que la fila de la tabla ya tenia puesto) es una propiedad de
+impresion de verdad -- html2canvas no la lee, asi que no hacia nada. Esa es la causa real de
+"se cortan los renglones": no un detalle de CSS, sino que el mecanismo entero de paginacion no
+tenia forma de evitarlo.
+
+**Corregido**:
+- Margenes reales: .rutina-pdf-hoja/.alimentacion-pdf-hoja pasan a tener
+  padding: 20mm 15mm en la regla BASE (no solo adentro de @media print, que la descarga en
+  un clic ni pasa) -- antes el unico padding que existia nunca se aplicaba en el camino que
+  realmente se usa.
+- Cajas de bloque con color de marca: el nombre del bloque (Movilidad, Abdomen, lo que
+  escriba el profe en "Nombre del bloque") pasa a ser una caja con el color del gimnasio, mismo
+  tratamiento que ya tenia el encabezado del dia. Se saco el header de tabla negro fijo que solo
+  decia "Ejercicio" (ahora es una fila gris clara, liviana, que solo aclara la columna de la
+  derecha).
+- Filas que no se cortan: nuevo insertarSaltosDePagina() (lib/descargarPdf.js) -- antes
+  de sacar la foto, mide cada elemento marcado data-pdf-fila (una fila de la tabla de
+  ejercicios, una comida del plan de alimentacion, una observacion) y, si el proximo corte de
+  pagina caeria en el medio de una, inserta un separador invisible que la empuja entera a la
+  pagina siguiente -- el mismo efecto que el navegador lograria con page-break-inside: avoid
+  en una impresion real, hecho a mano porque html2canvas no lee esa propiedad. Los separadores
+  se sacan del DOM apenas se usa la foto, no quedan pegados en la app.
+- Marca de agua de RutNail: dibujada con la API de jsPDF directamente en cada pagina del PDF
+  (no adentro de la hoja fotografiada -- esa es una sola imagen larga, un logo puesto ahi solo
+  saldria una vez, no en cada hoja). Esquina inferior derecha, 16mm de ancho, cae siempre en el
+  margen que ahora tienen las hojas, nunca pisa texto. Opacidad reducida si el jsPDF instalado
+  soporta GState (con respaldo a opacidad completa si no).
+
+**Verificado en vivo**: PDF real generado (rutina de 12 y de 20 ejercicios) -- padding
+correcto (75.6px/56.7px = 20mm/15mm medido con getComputedStyle), cajas de bloque con el color
+configurado del gimnasio en vez de negro, estructura del PDF con las imagenes esperadas
+(contenido + logo + su canal alfa). El algoritmo de separadores se probo aparte con una
+estructura sintetica que SI fuerza el corte (30 filas de 40px, pagina de 300px): 0 filas cruzan
+un limite de pagina despues de insertar los separadores -- confirma que el bug de "se cortan
+los renglones" queda resuelto. PDF de alimentacion probado tambien, sin errores.
+
+**Archivos**: apps/web/src/lib/descargarPdf.js, apps/web/src/components/RutinaPDF.jsx,
+apps/web/src/components/PlanAlimentacionPDF.jsx. Sin migraciones.
+
+### Pendiente de esta misma ronda (parte 2, a continuacion)
+
+- Separar el panel del alumno (/mi-plan/:codigo) en paginas propias para rutina y alimentacion,
+  y sumar un modulo de progreso/motivacion.
+- Investigar como arman el plan de entrenamiento y el de alimentacion otras apps del rubro, para
+  ver si hay ideas de UX que valga la pena adoptar.
+- Investigar metodos de pago que usan apps similares y simplificar "debito/tarjeta" a "tarjeta"
+  en Pagos.
+
+## 15/09/2026 — Ronda grande de 9 pedidos: panel del alumno en pestañas + modulo de progreso, y las dos investigaciones (parte 2)
+
+Continuacion de la entrada anterior (mismo dia, misma tanda de 9 pedidos).
+
+### 5. Panel del alumno separado en pestanas + modulo de progreso/motivacion
+
+**Pedido**: "separes por paginas plan ejercicio y plan alimentacion, asi es mas correcto y no
+se mezclan en una misma hoja, y tambien... agregaras otro modulo dentro sobre progresos, algo
+que sirva como motivacion a los alumnos".
+
+**Corregido**: MiPlanPage.jsx (/mi-plan/:codigo) paso de ser una sola hoja larga (rutina arriba,
+alimentacion abajo, ya se habia intentado distinguirlas con una franja de color lateral el
+09/09/2026 pero seguian mezcladas al bajar) a tres pestanas de verdad: Rutina / Alimentacion /
+Progreso -- mismo patron que ya usa AlumnoPage.jsx del lado del profesor. Los botones "Descargar
+en PDF" siguen andando igual (generan un componente de PDF aparte, no dependen de que pestana
+este abierta en pantalla).
+
+**Pestana nueva "Progreso"**: hasta ahora el alumno SOLO podia escribir su peso de hoy
+(Fase 2.7, migracion 0050) -- nunca habia forma de que viera su propia evolucion hacia atras.
+Se agrego:
+- El campo "Tu peso de hoy" (se mudo para aca).
+- Grafico de evolucion del peso (mismo componente GraficoPeso que ya usa el profesor en su
+  propia ficha, cargado on-demand con React.lazy -- recharts no se descarga para el que solo
+  mira su rutina).
+- Una racha motivacional: cuantos entrenamientos marco como "Hecho" en los ultimos 7 dias, con
+  un mensaje que cambia segun el numero (invitacion a empezar / "vas bien" / "muy bien, seguí
+  así") -- nunca en tono de reto si todavia no hizo ninguno.
+
+**Nueva migracion 0055 (ver_progreso_alumno)**: primera funcion publica de SOLO LECTURA que le
+devuelve al alumno su propio historial -- antes solo podia escribir (cargar peso), nunca ver
+hacia atras. Devuelve los ultimos 10 pesos registrados (de cualquier origen, tanto los que cargo
+el alumno como los que midio el profesor -- tiene derecho a ver su evolucion completa) y el
+conteo de entrenamientos_completados de los ultimos 7 dias. Comparte el mismo limite de "ver el
+plan" (60 cada 5 minutos) en vez de sumar un cuarto contador -- misma accion de fondo (mirar la
+pantalla), no una escritura nueva.
+
+Se pide una sola vez por visita (recien al abrir la pestana por primera vez, no de entrada junto
+con el resto del plan) y se vuelve a pedir sola despues de guardar un peso nuevo o marcar un
+entrenamiento como hecho, para que la racha/el grafico se vean actualizados sin tener que salir
+y volver a entrar a la pestana.
+
+**Verificado en vivo** con un alumno real (codigo de "niño"): las tres pestanas cambian de
+contenido correctamente sin mezclarse; cargado un peso nuevo -> aparece en el grafico; marcado
+un entrenamiento como hecho -> la racha paso de "0 entrenamientos esta semana" a "1
+entrenamiento esta semana" con el mensaje correspondiente, sin salir de la pestana. Dato de
+prueba (el entrenamiento marcado para probar la racha) borrado despues por SQL -- los pesos que
+ya tenia cargados esa cuenta (de una prueba anterior de Nalux, no mia) se dejaron como estaban.
+
+**Archivos**: apps/web/src/pages/MiPlanPage.jsx, supabase/migrations/0055_ver_progreso_alumno.sql.
+
+### 3 y 6. Investigacion: como arman rutinas y planes de alimentacion otras apps del rubro
+
+**Rutinas** (Trainerize, Hevy Coach, FitPros): superseries/circuitos con descanso ENTRE
+ejercicios y descanso ENTRE rondas como dos campos separados (RutNail hoy tiene un solo
+"Descanso" compartido para toda la superserie); tageo de cada serie como normal/entrada en
+calor/fallo/drop-set (RutNail ya cubre esto con el "Desglose de series" de la Fase 2.3, aunque
+sin esas etiquetas explicitas); reordenar arrastrando en vez de con flechas arriba/abajo.
+Conclusion: RutNail ya cubre la mayoria de lo esencial (superseries, circuitos/intervalos,
+biblioteca con demos, desglose de series). La mejora mas concreta que valdria la pena evaluar
+mas adelante es separar "descanso entre ejercicios" de "descanso entre rondas" en una
+superserie -- no se implemento ahora por ser un cambio de alcance considerable (toca el modelo
+de datos del combo), queda para decidir con Nalux si vale la pena.
+
+**Alimentacion** (FitBudd, Nutrium, Trainerize): calculo automatico de necesidades caloricas
+(formulas de BMR) a partir de peso/objetivo del alumno; etiquetado de alergias/restricciones;
+sincronizacion con los datos de entrenamiento. RutNail ya cubre macros por alimento (proteinas/
+carbohidratos/grasas/calorias) y biblioteca compartida. El calculo automatico de necesidades
+caloricas es la idea mas valiosa para evaluar a futuro -- alcance grande (requeriria pedir
+altura/objetivo del alumno y aplicar una formula), no se implemento ahora.
+
+### 9 (segunda mitad). Metodos de pago
+
+**Investigado**: apps de gestion de gimnasios en general distinguen efectivo, tarjeta (debito/
+credito juntos o por separado segun el proveedor), transferencia/ACH y billeteras digitales
+(Mercado Pago, PayPal). Para un gimnasio chico que carga el pago a mano (no un procesador
+automatico), no aporta nada duplicar la distincion debito/credito que ya maneja el propio
+posnet.
+
+**Corregido**: en el codigo actual no existia "Debito" (la lista real era Efectivo/Transferencia/
+"Tarjeta de credito") -- se simplifico a Efectivo / Transferencia / Tarjeta (generico). Pagos
+viejos que ya dicen "Tarjeta de credito" en la base quedan como texto historico tal cual (es
+texto libre, no un enum), no se reescriben.
+
+**Archivo**: apps/web/src/pages/PagosPage.jsx. Sin migraciones.
+
+### De paso, encontrado durante la verificacion (no corregido -- es contenido real de Nalux)
+
+En la rutina real de un alumno de prueba aparece "Butt-ups (elevacion de cadera en plancha)"
+con "Series 114" en vez de un numero normal -- es exactamente el sintoma del bug de
+superserie corregido en la parte 1 de esta entrada (el numero tapado llevaba a cargar mal el
+valor sin darse cuenta). Como es contenido real que cargo Nalux, no se toco solo -- queda
+avisado para que lo corrija ella misma en el armador (ahora que el numero se ve bien, alcanza
+con abrir esa rutina y volver a escribir el valor correcto).
+
+## 15/09/2026 — Alertas cuando vencen la rutina y el plan de alimentación
+
+**Pedido**: "quiero que haya alertas cuando se vencen los planes de rutina de ejercicio y de
+alimentacion".
+
+**Investigado antes de construir nada**: ya existia una alerta de esto del lado del PROFESOR --
+la tarjeta "Planes por vencer" en DashboardPage.jsx, calculada sobre rutinas_asignadas.fecha_fin
+y planes_alimentacion.fecha_fin, mismo criterio de 7 dias que el aviso de cuota. Lo que faltaba
+de verdad:
+1. Que esto tambien avisara como ALERTA de verdad (la campanita del header), no solo como una
+   tarjeta que hay que acordarse de ir a mirar al panel general.
+2. Que el ALUMNO tambien lo viera en su propia pantalla -- hasta ahora solo se enteraba el
+   profesor.
+
+**Encontrado de paso investigando**: ver_plan_por_codigo() (la funcion que arma /mi-plan/:codigo)
+nunca devolvio ni rutina_fecha_fin ni plan_fecha_fin ni plan_fecha_inicio -- MiPlanPage.jsx ya
+tenia codigo esperando esos campos para el PDF (`fechaFin={plan?.plan_fecha_fin}`), pero como la
+funcion nunca los mandaba, siempre llegaban undefined. Efecto real: el PDF que descarga el ALUMNO
+nunca mostro ninguna fecha de vencimiento ni rango de fechas, aunque el profesor le hubiera
+puesto una -- nadie lo habia reportado todavia. Corregido de paso en la misma migracion.
+
+**Corregido**:
+- **lib/format.js**: nueva funcion compartida `planesPorVencer(alumnosActivos,
+  rutinasAsignadas, planesAlimentacion, diasAviso=7)` -- se extrajo de donde antes vivia SOLO en
+  DashboardPage.jsx (mismo criterio que ya se hizo con `ultimoPagoDeAlumno()`), para poder
+  reusarla tambien en la campanita sin duplicar el calculo.
+- **DashboardPage.jsx**: su logica inline de "planesPorVencer" se reemplazo por una llamada a
+  la funcion compartida -- mismo comportamiento, sin duplicacion.
+- **NotificacionesCampana.jsx** (campanita del header): ahora tambien pide
+  rutinas_asignadas/planes_alimentacion y muestra ahi mismo las rutinas/planes vencidos o por
+  vencer, con el mismo criterio visual que las cuotas (rojo = vencido, naranja = por vencer). El
+  contador de la campanita ahora suma tambien estos. Tocar un item lleva directo a la pestaña
+  correcta de la ficha del alumno (Entrenamiento o Nutricion), mismo patron que ya usaba
+  "?tab=pagos" para las cuotas.
+- **supabase/migrations/0056 y 0057**: ver_plan_por_codigo() ahora devuelve tambien
+  rutina_fecha_fin, plan_fecha_inicio y plan_fecha_fin (antes ninguno de los tres existia en la
+  respuesta).
+- **MiPlanPage.jsx** (lado del alumno): nuevo aviso, dentro de cada pestaña (Rutina y
+  Alimentacion por separado, no uno generico arriba de todo), con el mismo criterio de 7 dias y
+  el mismo lenguaje "Vencio el.../Vence en X dias" que ya usa la campanita del profesor. Se
+  arreglo tambien el bug encontrado: RutinaImprimiblePDF nunca recibia fechaFin (solo
+  fechaInicio+duracion), y el PDF de alimentacion nunca recibia fechaInicio -- ahora los dos PDF
+  que descarga el alumno muestran el rango de fechas real.
+
+**Verificado en vivo**: cambiada temporalmente la fecha_fin de la rutina y el plan de un alumno
+de prueba real ("nino") a fechas cercanas/vencidas -- aparecio correctamente "Tu rutina vence en
+3 dias (18/09/2026)" (naranja) en la pestana Rutina y "Tu plan de alimentacion vencio el
+14/09/2026. Pedile al profesor uno nuevo" (rojo) en la pestana Alimentacion. Revertidas las
+fechas a como estaban despues de probar. Del lado del profesor, confirmado con datos reales YA
+EXISTENTES en el gimnasio "Mi GYM FIT" (sin necesidad de tocar nada): la campanita mostro 4
+alumnos con rutina/plan vencido o por vencer, EXACTAMENTE la misma lista que ya mostraba la
+tarjeta "Planes por vencer" del panel general -- confirma que el refactor a la funcion
+compartida no cambio el comportamiento original. Tocar un item de la campanita navego
+correctamente a la pestana Entrenamiento de la ficha del alumno.
+
+**Archivos**: apps/web/src/lib/format.js, apps/web/src/pages/DashboardPage.jsx,
+apps/web/src/components/NotificacionesCampana.jsx, apps/web/src/pages/MiPlanPage.jsx,
+supabase/migrations/0056_fecha_fin_en_ver_plan_por_codigo.sql,
+supabase/migrations/0057_plan_fecha_inicio_en_ver_plan_por_codigo.sql.
+
+## 15/09/2026 — Bug real: la alerta de vencimiento no se actualizaba sola
+
+**Reporte de Nalux**: "iba bien hasta que cambie el plan vencido de comida pero la alerta sigue
+estando".
+
+**Causa encontrada**: MiPlanPage.jsx (el panel del alumno) pedía el plan UNA SOLA VEZ al montar
+la pantalla -- estaba documentado así en el propio código: "esta pantalla no tiene sesión ni
+refresco automático, es un ver y listo". Si el profesor corregía la fecha de vencimiento
+mientras el alumno (o, en este caso, Nalux probando las dos pantallas juntas) ya tenía esa
+pestaña abierta, no había ninguna forma de que se enterara sin cerrar y volver a entrar a mano.
+
+**Corregido**: mismo mecanismo que ya usa NotificacionesCampana.jsx del lado del profesor
+(visibilitychange + focus) -- cada vez que se vuelve a esta pestaña, se vuelve a pedir el plan
+en silencio (sin tapar la pantalla con "Cargando...", sin sacar al alumno de donde estaba
+parado). Si el refresco silencioso falla (sin señal justo en ese instante), no reemplaza lo que
+ya se estaba viendo por una pantalla de error.
+
+**Verificado en vivo, reproduciendo el caso exacto**: cambiada por SQL la fecha de un plan real
+a vencida mientras la pestaña ya estaba abierta (sin recargar) -> simulado "volver a la
+pestaña" -> apareció sola la alerta "Tu plan de alimentación venció el 10/09/2026". Corregida la
+fecha de nuevo -> simulado "volver a la pestaña" otra vez -> la alerta desapareció sola, sin
+recargar nada. Datos del alumno real vueltos exactamente a como Nalux los había dejado
+(fecha_fin 30/09/2026).
+
+**Archivo**: apps/web/src/pages/MiPlanPage.jsx.
+
+## 15/09/2026 — Bug: "a veces tengo que clickear dos veces" en el botón Entendido del aviso
+
+**Reporte de Nalux**: primero mencionó, sin precisar, que a veces un botón necesita dos clicks
+para funcionar; al pedirle que aclarara cuál, contestó: "fue al marcar Entendido del aviso de
+cuota" (el cartel morado de /mi-plan con el aviso manual que crea el profesor desde Avisos --
+distinto del cartel automático de cuota que no tiene botón).
+
+**Investigado**: se revisó a fondo el código del botón (marcarAvisoLeido, estado avisoOculto/
+marcandoAviso) y la RPC marcar_notificacion_leida -- ya era idempotente a propósito ("ON
+CONFLICT DO NOTHING... idempotente si el alumno toca Entendido dos veces, doble tap, red lenta y
+reintento del cliente, etc.", comentario de la propia migración 0007), así que un segundo toque
+nunca duplica ni rompe nada, pero eso no explica que el PRIMER toque no hiciera nada. Se probó en
+vivo con un aviso de prueba real (creado y borrado después de probar, sin tocar avisos reales de
+Nalux): sin superposición de elementos, sin bug de re-render por el refresco en segundo plano
+recién agregado (bug anterior), el click simple funciona siempre en un mouse. La pista real:
+index.html no tiene maximum-scale/user-scalable fijo en el viewport, así que en el celular el
+navegador espera ~300ms después de cada toque por si viene un segundo toque (para decidir si es
+gesto de zoom) antes de recién ahí disparar el click de verdad -- si en ese medio segundo el
+alumno, sin ver un cambio inmediato, vuelve a tocar, el navegador interpreta los dos toques
+juntos como intento de zoom en vez de dos clicks, y ninguno de los dos llega a marcarAvisoLeido.
+Esto puede pasar en CUALQUIER botón de la app, no solo en este, pero éste es el más propenso: es
+el primer botón con el que se puede llegar a interactuar apenas carga la pantalla (justo arriba
+de todo), momento en el que además el alumno recién venía de loguearse (teclado del celular
+recién cerrándose, pantalla todavía acomodándose).
+
+**Corregido**: agregada `touch-action: manipulation` de forma GLOBAL (apps/web/src/index.css,
+regla sobre button/[role="button"]/a) en vez de sólo en este botón -- le dice al navegador que en
+elementos con los que se interactúa así no hace falta esperar el gesto de zoom, el toque se
+procesa al toque. Protege este botón y cualquier otro de la app contra el mismo problema.
+
+**Verificado**: build sin errores; probado visualmente en el emulador de celular (375px) que los
+botones se ven y funcionan igual que antes; confirmado por JS que los botones ahora tienen
+`touch-action: manipulation` aplicado. No se pudo reproducir el bug en sí en este entorno (no hay
+forma de simular un dedo tocando una pantalla real acá), así que esto es la causa más probable
+encontrada investigando a fondo, no una reproducción exacta paso a paso.
+
+**Archivo**: apps/web/src/index.css.
+
+
+## 15/09/2026 — Menú del profesor: mail/Cerrar sesión/marca Kairox ahora se despliega con una flechita
+
+**Pedido de Nalux**: "la parte en donde esta el correo del profe cerrar sesión y demás, tenga
+como una flechita que se pueda desplegar, porque veo que ocupa mucho lugar".
+
+**Contexto**: el pie del menú lateral (el mismo cajón desplegable de AppLayout.jsx que se usa en
+celular Y en computadora desde el 10/09/2026) apilaba siempre, sin poder ocultarse, cinco líneas
+seguidas: el mail del profesor, el botón "Cerrar sesión", "Creado por Kairox IA", "Soporte" y el
+logo de RutNail (KairoxFooterMark) -- justo debajo de la lista de navegación, en una ventana que
+ya de por sí tiene que entrar todo el menú sin scroll en pantallas bajas.
+
+**Corregido**: ese bloque entero ahora arranca PLEGADO -- se ve una sola fila compacta con el
+mail truncado y una flechita (ChevronDown). Tocarla despliega hacia abajo el resto (Cerrar
+sesión/Cerrar igual si hay cambios sin mandar, y la marca de Kairox), con el ícono rotando 180°
+mientras está abierto. Nuevo estado `mostrarCuenta` en AppLayout (arranca en `false`) -- no se
+reinicia solo al cerrar y reabrir el cajón en la misma pantalla (solo con una navegación real,
+que remonta AppLayout entero), así que si el profesor lo despliega una vez no tiene que volver a
+abrirlo cada vez que abre el menú de nuevo en esa misma pantalla.
+
+**Verificado en vivo**: capturas del menú plegado (una sola fila con el mail) y desplegado
+(Cerrar sesión + marca Kairox visibles, flechita apuntando hacia arriba), y vuelto a plegar
+tocando de nuevo -- las tres capturas confirman el toggle funcionando en los dos sentidos. Lint y
+build sin errores.
+
+**Archivo**: apps/web/src/components/AppLayout.jsx.
