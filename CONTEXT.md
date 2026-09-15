@@ -4905,3 +4905,59 @@ acceso (no hay contraseña real a mano para volver a entrar), pero el cambio es 
 atributo `name` en dos inputs que ya funcionaban) y de bajísimo riesgo.
 
 **Archivo**: apps/web/src/pages/LoginPage.jsx.
+
+
+## 15/09/2026 — Título del gimnasio más grande, botón "+" por bloque, Pagos y mobile del alumno
+
+**Pedido de Nalux** (un solo mensaje con varias capturas): agrandar el título del gimnasio en el
+header, un botón "+" para seguir agregando ejercicios a un bloque ya creado, sacar la tarjeta
+"Activados sin cobrar" de Pagos porque confunde, y achicar/distinguir mejor las superseries y los
+días en la pantalla del alumno en el celular (que se vea "como el PDF").
+
+**1) Título del gimnasio más grande** (AppLayout.jsx, GimnasioMark): cuando el gimnasio tiene
+logo cargado, el nombre al lado quedaba en `text-[11px]`, gris y semi-negrita -- a propósito así
+desde el 03/09/2026 ("no tan grande, que sea chico y sutil"). Nalux pidió lo contrario ahora:
+texto grande, negro/blanco pleno y negrita, del mismo peso visual que el logo. Cambiados los
+tamaños de GIMNASIO_NOMBRE_JUNTO_A_LOGO_SIZES (11px→text-lg en el header principal, y
+proporcional en los otros dos usos) y el estilo del `<span>` (font-extrabold, text-foreground en
+vez de text-muted-foreground). Verificado en vivo: "Mi GYM FIT" ahora se lee grande y en blanco
+junto al logo.
+
+**2) Botón "+" para seguir agregando al mismo bloque** (RutinasPage.jsx): consecuencia directa
+del cambio de esta sesión que vacía "Nombre del bloque" después de cada "Agregar" (para evitar
+que un ejercicio caiga sin querer en el bloque anterior) -- pero eso hacía más difícil sumar
+ejercicios EXTRA a un bloque que ya se armó, porque había que volver a tipear su nombre a mano (y
+ya no hay datalist de sugerencias, sacado antes en esta misma sesión). Ahora cada caja ya creada
+tiene, al pie, un botón punteado "+ Agregar otro ejercicio a '{nombre}'" que precarga ese nombre
+en "Nombre del bloque" y lleva el foco al buscador de ejercicios (useRef + scrollIntoView).
+**No se pudo probar en vivo**: la sesión de profesor de prueba se cerró sola a mitad de la
+verificación (entorno local, no afecta produccion) y no tengo la contraseña real para volver a
+entrar -- verificado por lectura de código + lint + build únicamente.
+
+**3) "Activados sin cobrar" sacado de Pagos** (PagosPage.jsx): investigado ANTES de sacarlo --
+encontrado el bug real de fondo. Cuando se activa un período "sin cobrar" (fila de pagos con
+monto=0, monto_adeudado=lo que falta) y después se toca "Cobrar", abrirCobro() arma el próximo
+período a partir de la fecha_hasta MÁS RECIENTE de ese alumno (que puede ser justo la del período
+sin cobrar) y crea un pago NUEVO para ESE período siguiente -- nunca actualiza ni resuelve la
+fila vieja de $0. Confirmado con datos reales: Luciano Rosa y Alumno 4 tienen filas "Sin cobrar"
+de días sueltos que quedaron húerfanas mientras sus pagos reales del mes ya están al día. Se le
+mostró el hallazgo a Nalux con tres opciones (sacar la tarjeta nomás / arreglar el bug de fondo /
+las dos cosas) -- eligió sacar la tarjeta nomás. Sacada la tarjeta entera y la variable
+`activacionesSinCobrar` que quedaba sin uso. Los pagos en $0 siguen existiendo en la base (no se
+borra nada, es historial) -- simplemente ya no se listan en ningún lado. **No se pudo confirmar
+visualmente** por la misma pérdida de sesión que el punto 2 -- verificado por lint + build.
+
+**4) Pantalla del alumno en el celular, más compacta** (MiPlanPage.jsx): en una superserie, cada
+ejercicio del combo mostraba "Series 4" / "Reps 10" / "Peso X" en tres renglones separados --
+pedido de Nalux: "se ve mejor en una línea... así como el PDF" (RutinaPDF.jsx ya combina esto en
+un "4x10" compacto vía resumenSeries(), sin repetir la etiqueta de cada campo). Ahora usa la
+misma resumenSeries() en una sola línea, con el peso (si hay) atrás en texto más chico. Además,
+el encabezado de cada "DÍA X" no tenía ningún límite visual propio (solo texto de color, a
+diferencia de "SEMANA X" que sí tiene una caja) -- con varios días seguidos de ejercicios se
+perdía en el scroll. Agregado un borde inferior en el color de marca debajo del título del día.
+**Verificado en vivo** (esta pantalla no necesita sesión de profesor, es pública por código):
+probado con un alumno real, superserie tras superserie se ve compacta y prolija, borde debajo de
+"DÍA 2" bien visible, confirmado también en modo claro.
+
+**Archivos**: apps/web/src/components/AppLayout.jsx, apps/web/src/pages/RutinasPage.jsx,
+apps/web/src/pages/PagosPage.jsx, apps/web/src/pages/MiPlanPage.jsx.
