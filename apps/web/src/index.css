@@ -35,6 +35,25 @@ body {
   overflow-x: clip;
 }
 
+/* Reportado por Nalux (15/09/2026): "a veces tengo que clickear dos veces
+   porque no entra" al tocar el botón "Entendido" del aviso de cuota en
+   /mi-plan. El viewport (index.html) no tiene maximum-scale/user-scalable
+   fijo, así que el navegador del celular sigue esperando ~300ms después de
+   cada toque por si viene un segundo toque (gesto de zoom con doble tap)
+   antes de disparar el click real -- si en ese medio segundo el alumno,
+   sin ver un cambio inmediato, toca de nuevo, el navegador interpreta los
+   dos toques juntos como un intento de zoom en vez de dos clicks, y ninguno
+   de los dos llega a onClick. touch-action: manipulation le dice al
+   navegador que en botones/links no hace falta esperar eso -- el toque se
+   procesa al toque. Puesto acá (global) y no botón por botón porque
+   cualquier botón de la app puede sufrir lo mismo, no solo el que reportó
+   Nalux. */
+button,
+[role="button"],
+a {
+  touch-action: manipulation;
+}
+
 @layer base {
   /* Color "de fábrica" (07/09/2026): antes de que un gimnasio configure el
      suyo en Configuración, --primary/--accent/--ring usaban un rojo
