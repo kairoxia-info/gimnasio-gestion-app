@@ -66,10 +66,13 @@ export const Logo = ({ className = 'h-10' }) => (
 // texto al lado) — solo se veía el nombre en el caso sin-logo, ahí sí bien
 // grande porque tenía que cargar solo con todo el peso visual de la marca.
 // Ahora el logo (o el ícono genérico de respaldo si todavía no subió uno) y
-// el nombre van siempre juntos; el tratamiento del texto cambia según el
-// caso: chico/gris/sin mayúsculas al lado de un logo real (el logo ya es la
-// marca, el nombre es apoyo), grande/en mayúsculas cuando el nombre ES la
-// única marca disponible (sin logo, tiene que sostener el peso solo).
+// el nombre van siempre juntos.
+//
+// Vuelta atrás (15/09/2026, pedido de Nalux: "poné más grande el título del
+// gimnasio... que tenga una letra más grande igual que el logo"): el
+// tratamiento chico/gris de acá arriba quedó chico de más al lado de un logo
+// real -- ahora el nombre pesa lo mismo que el logo (texto grande, color
+// pleno, negrita) tenga o no tenga logo cargado el gimnasio.
 const GIMNASIO_TEXT_SIZES = {
     'h-9': { icon: 'h-4 w-4', text: 'text-sm' },
     'h-10': { icon: 'h-[18px] w-[18px]', text: 'text-base' },
@@ -77,9 +80,9 @@ const GIMNASIO_TEXT_SIZES = {
 };
 
 const GIMNASIO_NOMBRE_JUNTO_A_LOGO_SIZES = {
-    'h-9': 'text-[11px]',
-    'h-10': 'text-xs',
-    'h-12': 'text-sm',
+    'h-9': 'text-lg',
+    'h-10': 'text-xl',
+    'h-12': 'text-2xl',
 };
 
 const GimnasioMark = ({ className = 'h-10' }) => {
@@ -98,7 +101,7 @@ const GimnasioMark = ({ className = 'h-10' }) => {
                     onError={() => setImgFailed(true)}
                     className="h-full w-auto max-w-full shrink-0 rounded-lg object-contain"
                 />
-                <span className={`min-w-0 truncate font-semibold leading-none tracking-tight text-muted-foreground ${textoSize}`}>
+                <span className={`min-w-0 truncate font-extrabold leading-none tracking-tight text-foreground ${textoSize}`}>
                     {nombre}
                 </span>
             </div>
