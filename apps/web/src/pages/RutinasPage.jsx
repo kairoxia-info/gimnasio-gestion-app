@@ -22,6 +22,73 @@ import {
 } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
 
+// "Reps" acepta repeticiones O una duración -- pedido de Nalux (15/09/2026):
+// "cuando agrego bicicleta o algún ejercicio que en vez de hacer
+// repeticiones es por segundos o minutos, hay que poder poner esa opción".
+// La columna `reps` sigue siendo texto libre en la base (sin migración,
+// técnicamente ya aceptaba escribir "30 seg" a mano) -- lo que faltaba era
+// que el formulario lo ofreciera como una opción real en vez de depender de
+// que el profesor se acuerde de escribirlo así. Mismo criterio que
+// armarUnidad/descomponerUnidad de AlimentosPage.jsx: un número + una
+// unidad elegida arman ese mismo texto libre, y decodificarlo de vuelta
+// alcanza para que el formulario recuerde qué había elegido la vez pasada
+// (incluida una rutina ya guardada antes de este cambio, cuyo reps es un
+// número piso sin unidad -> se decodifica como "Reps" normal).
+const UNIDADES_REPS = [
+    { valor: 'reps', sufijo: '', label: 'Reps' },
+    { valor: 'seg', sufijo: ' seg', label: 'Seg' },
+    { valor: 'min', sufijo: ' min', label: 'Min' },
+];
+
+const descomponerReps = (texto) => {
+    const m = String(texto ?? '').trim().match(/^(\d+(?:[.,]\d+)?)\s*(seg|min)?$/i);
+    if (!m) return { cantidad: String(texto ?? ''), unidad: 'reps' };
+    return { cantidad: m[1], unidad: m[2] ? m[2].toLowerCase() : 'reps' };
+};
+
+const armarReps = (cantidad, unidad) => {
+    const sufijo = UNIDADES_REPS.find((u) => u.valor === unidad)?.sufijo ?? '';
+    return `${cantidad}${sufijo}`;
+};
+
+// Número arriba, selector de unidad abajo -- APILADOS, no lado a lado.
+// Primer intento fue en una sola fila (número + selector) y, probado en
+// vivo, la columna "Reps" de esta grilla mide apenas ~53px de ancho total
+// (grid-cols con 4 columnas iguales) -- repartida entre dos controles
+// quedaba casi ilegible (el número a 26px de ancho, más angosto todavía que
+// el bug original que se estaba corrigiendo). Apilado, cada control usa el
+// ancho COMPLETO de la columna por separado, y entra cómodo. Mismo criterio
+// que el campo Series de más abajo: padding forzado con `!` porque el Input
+// compartido ya trae el suyo de fábrica (una className normal no lo pisa),
+// y sin las flechitas nativas de type=number, que en una columna así de
+// angosta ya se comprobó que tapan el dígito.
+const CampoReps = ({ value, onChange }) => {
+    const { cantidad, unidad } = descomponerReps(value);
+    return (
+        <div className="space-y-1">
+            <Input
+                type="number"
+                value={cantidad}
+                onChange={(e) => onChange(armarReps(e.target.value, unidad))}
+                className="!px-1.5 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                placeholder="10"
+            />
+            <Select
+                value={unidad}
+                onChange={(e) => onChange(armarReps(cantidad, e.target.value))}
+                className="!px-1.5 !py-1 text-xs"
+                aria-label="Unidad (repeticiones, segundos o minutos)"
+            >
+                {UNIDADES_REPS.map((u) => (
+                    <option key={u.valor} value={u.valor}>
+                        {u.label}
+                    </option>
+                ))}
+            </Select>
+        </div>
+    );
+};
+
 // Días que ya usa una rutina, en el orden de DIAS. Si algún item tuviera un
 // día fuera de la lista (no debería, siempre salen del selector), igual se
 // respeta y va al final en vez de desaparecer.
@@ -1512,7 +1579,7 @@ const RutinasPage = () => {
                                                                     onChange={(e) =>
                                                                         editarConfigGrupo(delBloque, 'rondas', e.target.value)
                                                                     }
-                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                    className="w-16 !px-1 !py-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                                 />
                                                             </label>
                                                             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1539,7 +1606,7 @@ const RutinasPage = () => {
                                                                     onChange={(e) =>
                                                                         editarConfigGrupo(delBloque, 'tiempoTrabajo', e.target.value)
                                                                     }
-                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                    className="w-16 !px-1 !py-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                                 />
                                                             </label>
                                                             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1551,7 +1618,7 @@ const RutinasPage = () => {
                                                                     onChange={(e) =>
                                                                         editarConfigGrupo(delBloque, 'tiempoDescansoEj', e.target.value)
                                                                     }
-                                                                    className="w-16 px-2 py-1 text-xs"
+                                                                    className="w-16 !px-1 !py-1 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                                 />
                                                             </label>
                                                         </>
@@ -1617,11 +1684,9 @@ const RutinasPage = () => {
                                                                                 />
                                                                             </Field>
                                                                             <Field label="Reps">
-                                                                                <Input
+                                                                                <CampoReps
                                                                                     value={it.reps}
-                                                                                    onChange={(e) =>
-                                                                                        editarItem(it.key, 'reps', e.target.value)
-                                                                                    }
+                                                                                    onChange={(v) => editarItem(it.key, 'reps', v)}
                                                                                 />
                                                                             </Field>
                                                                             <Field label="Peso">
@@ -1846,6 +1911,22 @@ const RutinasPage = () => {
                                                                     </div>
                                                                     <div className="grid grid-cols-3 gap-1">
                                                                         <Field label="Series" labelClassName="text-xs">
+                                                                            {/* Bug reportado por Nalux (15/09/2026): "las series no
+                                                                                se pueden ver, esta el numero tapado" -- el Input
+                                                                                compartido (ui-kit.jsx) ya trae px-3 (12px) de
+                                                                                fábrica, y una className con px-2 pasada acá NO lo
+                                                                                pisa: Tailwind genera .px-3 después de .px-2 en su
+                                                                                hoja de estilos (van en orden de escala, no en el
+                                                                                orden en que se escriben las clases), así que gana
+                                                                                el padding de fábrica pase lo que pase. En esta caja
+                                                                                de 42px de ancho, 12px+12px de padding + las flechitas
+                                                                                nativas de type=number casi no dejaban lugar para el
+                                                                                dígito -- de ahí que se viera "tapado". Con `!` se
+                                                                                fuerza el padding chico (Tailwind sí respeta la
+                                                                                bandera !important), text-center porque un solo
+                                                                                dígito centrado se lee mejor que pegado a la
+                                                                                izquierda, y [appearance:...] saca las flechitas
+                                                                                (no se extrañan en una caja tan chica). */}
                                                                             <Input
                                                                                 type="number"
                                                                                 value={it.series}
@@ -1856,16 +1937,23 @@ const RutinasPage = () => {
                                                                                         e.target.value,
                                                                                     )
                                                                                 }
-                                                                                className="px-2 py-1.5 text-xs"
+                                                                                className="!px-1 !py-1.5 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                                             />
                                                                         </Field>
                                                                         <Field label="Reps" labelClassName="text-xs">
+                                                                            {/* Acá NO entra el selector Reps/Seg/Min completo
+                                                                                (CampoReps) -- esta caja mide 9.5rem con 3
+                                                                                columnas, ~50px cada una, insuficiente para
+                                                                                número + selector. Sigue siendo texto libre
+                                                                                (ya aceptaba "30 seg" a mano) con un
+                                                                                placeholder que lo deja claro. */}
                                                                             <Input
                                                                                 value={it.reps}
                                                                                 onChange={(e) =>
                                                                                     editarItem(it.key, 'reps', e.target.value)
                                                                                 }
-                                                                                className="px-2 py-1.5 text-xs"
+                                                                                placeholder="10 o 30 seg"
+                                                                                className="!px-1 !py-1.5 text-center text-xs"
                                                                             />
                                                                         </Field>
                                                                         <Field label="Peso" labelClassName="text-xs">
