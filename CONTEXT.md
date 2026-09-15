@@ -4961,3 +4961,27 @@ probado con un alumno real, superserie tras superserie se ve compacta y prolija,
 
 **Archivos**: apps/web/src/components/AppLayout.jsx, apps/web/src/pages/RutinasPage.jsx,
 apps/web/src/pages/PagosPage.jsx, apps/web/src/pages/MiPlanPage.jsx.
+
+
+## 15/09/2026 — El botón "+" del bloque ya no vuelve a mostrar la caja de nombre
+
+**Pedido de Nalux**, probando en la URL real el botón "+" agregado antes en esta misma sesión:
+"cuando abra el botón de agregar más, quiero que solo se abra la caja de ejercicios, no quiero
+que vuelva aparecer una caja más abajo con la caja para poner título al bloque".
+
+**Corregido** (RutinasPage.jsx): nuevo estado `ocultarNombreBloque`. Al tocar el "+" de una caja
+ya armada (continuarBloque), además de precargar el nombre del bloque y llevar el foco al
+buscador, ahora también oculta el campo completo "Nombre del bloque" (input + botón "Bloque
+nuevo" + texto de ayuda) y lo reemplaza por un renglón chico: `Agregando a la caja "X"` con un
+link "Cambiar" para volver atrás si hizo falta por error. El campo completo vuelve a aparecer
+solo: al tocar "Cambiar", al tocar "Bloque nuevo" desde ese campo, o después de "Agregar" (que ya
+vacía el nombre del bloque, así que no hay nada que ocultar para la próxima).
+
+**No se pudo verificar en vivo**: la sesión de profesor de prueba local se había cerrado sola en
+el mensaje anterior y sigue sin poder recuperarse (no hay contraseña real a mano, y registrar una
+cuenta nueva de prueba no sirve porque el proyecto exige confirmar el mail antes de poder entrar).
+Revisado el flujo de estados a mano dos veces (continuarBloque → oculta; Cambiar/Bloque nuevo →
+vuelve a mostrar; agregarItems → vuelve a mostrar) -- lint y build sin errores, pero pendiente de
+que Nalux lo confirme en la URL real.
+
+**Archivo**: apps/web/src/pages/RutinasPage.jsx.

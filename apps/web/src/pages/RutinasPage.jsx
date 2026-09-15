@@ -263,9 +263,22 @@ const RutinasPage = () => {
     // esto, ahora que el campo se vacía solo después de cada "Agregar" (ver
     // más abajo), sumar un ejercicio más a una caja ya creada obligaba a
     // volver a tipear su nombre a mano.
+    //
+    // ocultarNombreBloque (mismo día, segundo pedido de Nalux probando en la
+    // URL real: "cuando abra el botón de agregar más, quiero que solo se
+    // abra la caja de ejercicios, no quiero que vuelva a aparecer una caja
+    // más abajo con la caja para poner título al bloque"): al venir del "+"
+    // ya se sabe a qué caja va, así que se oculta el campo de nombre entero
+    // (input + "Bloque nuevo") y se deja solo un renglón chico de contexto +
+    // el buscador. Vuelve a mostrarse solo, en:
+    // "Bloque nuevo" (se está armando uno de cero, a propósito),
+    // el "Cambiar" del renglón chico (mismo caso), y después de "Agregar"
+    // (bloque ya quedó vacío, no hay nada que ocultar).
+    const [ocultarNombreBloque, setOcultarNombreBloque] = useState(false);
     const buscadorEjRef = useRef(null);
     const continuarBloque = (nombreBloque) => {
         setBloque(nombreBloque);
+        setOcultarNombreBloque(true);
         buscadorEjRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         buscadorEjRef.current?.focus();
     };
@@ -513,6 +526,7 @@ const RutinasPage = () => {
         // como si fueran parte del bloque anterior.
         setEjsElegidos(new Set());
         setBloque('');
+        setOcultarNombreBloque(false);
     };
     // Descanso/intensidad/bloque/comentario son del combo entero, no de cada
     // ejercicio (el descanso pasa una sola vez, al terminar los dos
@@ -2057,30 +2071,56 @@ const RutinasPage = () => {
                                 colores -- son literalmente --foreground en claro/oscuro (index.css)
                                 -- sin necesitar un dark: aparte. */}
                             <div className="space-y-3 rounded-2xl border-2 border-foreground bg-primary/[0.02] p-3">
-                                <Field label="Nombre del bloque (ej: Espalda-Bícep)">
-                                    <div className="flex gap-2">
-                                        <Input
-                                            value={bloque}
-                                            onChange={(e) => setBloque(e.target.value)}
-                                            placeholder="Espalda-Bícep, Abdomen, Entrada en calor..."
-                                            className="flex-1"
-                                        />
-                                        {bloque && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setBloque('')}
-                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
-                                            >
-                                                <X className="h-4 w-4" /> Bloque nuevo
-                                            </button>
-                                        )}
+                                {/* Al venir del "+" de una caja ya armada (continuarBloque) se
+                                    salta directo al buscador -- pedido de Nalux (mismo día,
+                                    probando en la URL real): "quiero que solo se abra la caja de
+                                    ejercicios, no quiero que vuelva a aparecer una caja más abajo
+                                    con la caja para poner título al bloque". Un renglón chico
+                                    de contexto (a qué caja va) con un "Cambiar" para volver atrás
+                                    si hizo falta por error, en vez del campo entero. */}
+                                {ocultarNombreBloque ? (
+                                    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/30 px-3 py-2">
+                                        <span className="text-sm text-muted-foreground">
+                                            Agregando a la caja{' '}
+                                            <span className="font-semibold text-foreground">"{bloque}"</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBloque('');
+                                                setOcultarNombreBloque(false);
+                                            }}
+                                            className="shrink-0 text-sm font-semibold text-primary hover:underline"
+                                        >
+                                            Cambiar
+                                        </button>
                                     </div>
-                                    <span className="text-sm text-muted-foreground">
-                                        {bloque
-                                            ? `Los ejercicios que agregues abajo van a la caja "${bloque}".`
-                                            : 'Dejalo vacío para agregar ejercicios sueltos, sin agrupar en ninguna caja.'}
-                                    </span>
-                                </Field>
+                                ) : (
+                                    <Field label="Nombre del bloque (ej: Espalda-Bícep)">
+                                        <div className="flex gap-2">
+                                            <Input
+                                                value={bloque}
+                                                onChange={(e) => setBloque(e.target.value)}
+                                                placeholder="Espalda-Bícep, Abdomen, Entrada en calor..."
+                                                className="flex-1"
+                                            />
+                                            {bloque && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBloque('')}
+                                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+                                                >
+                                                    <X className="h-4 w-4" /> Bloque nuevo
+                                                </button>
+                                            )}
+                                        </div>
+                                        <span className="text-sm text-muted-foreground">
+                                            {bloque
+                                                ? `Los ejercicios que agregues abajo van a la caja "${bloque}".`
+                                                : 'Dejalo vacío para agregar ejercicios sueltos, sin agrupar en ninguna caja.'}
+                                        </span>
+                                    </Field>
+                                )}
 
                                 <Field label="Buscar y elegir ejercicios para esta caja">
                                     <div className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-2">
