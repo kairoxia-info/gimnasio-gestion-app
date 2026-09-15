@@ -20,6 +20,16 @@ import { getCurrentGimnasioId } from '@/lib/currentGimnasio';
 // siguiente que se loguee ahí.
 const PREFIJO_CACHE = 'kairox_cache_';
 const CLAVE_COLA = 'kairox_cola_pendiente';
+// Bug real encontrado en la auditoría final del proyecto (15/09/2026, agente
+// frontend-architect): cuando sincronizarCola() fallaba por un error que NO
+// era de red (validación, RLS, columna inválida) simplemente descartaba el
+// ítem con un console.error -- el contador de "pendientes" que ve el
+// profesor en AppLayout.jsx bajaba a 0 igual, como si se hubiera guardado
+// todo. Un pago cargado sin wifi podía perderse para siempre sin que nadie
+// se enterara: parecía cobrado y no había quedado ningún registro. Ahora esos
+// ítems se mueven a esta SEGUNDA cola en vez de tirarse -- ver
+// sincronizarCola() más abajo.
+const CLAVE_COLA_FALLIDA = 'kairox_cola_fallida';
 
 /* ---------------- Cache de lectura ---------------- */
 
@@ -115,6 +125,53 @@ const quitarDeCola = (id) => {
     avisar();
 };
 
+/* ---------------- Cola de escrituras que fallaron de verdad ---------------- */
+// Separada de la cola pendiente a propósito: esta es plata/asistencia que
+// YA NO se va a mandar sola (no es un problema de red que se arregle
+// reintentando), así que necesita que el profesor la vea y decida algo --
+// cargarla de nuevo a mano, o confirmar que no hacía falta.
+
+const leerColaFallida = () => {
+    try {
+        return JSON.parse(localStorage.getItem(CLAVE_COLA_FALLIDA) || '[]');
+    } catch (_) {
+        return [];
+    }
+};
+
+const guardarColaFallida = (cola) => {
+    try {
+        localStorage.setItem(CLAVE_COLA_FALLIDA, JSON.stringify(cola));
+    } catch (_) {
+        // sin espacio/bloqueado -- ver mismo comentario en guardarCola()
+    }
+};
+
+const listenersFallida = new Set();
+const avisarFallida = () => listenersFallida.forEach((fn) => fn(leerColaFallida()));
+
+export const onCambioColaFallida = (fn) => {
+    listenersFallida.add(fn);
+    return () => listenersFallida.delete(fn);
+};
+
+export const verColaFallida = () => leerColaFallida();
+
+const moverAFallida = (item, err) => {
+    const cola = leerColaFallida();
+    cola.push({ ...item, error: String(err?.message || err || 'Error desconocido'), falloEn: Date.now() });
+    guardarColaFallida(cola);
+    avisarFallida();
+};
+
+// El profesor tocó "Ya lo resolví" después de revisar un ítem fallido (lo
+// cargó de nuevo a mano, o confirmó que no hacía falta) -- recién ahí se
+// saca de la lista. Nunca se saca solo.
+export const descartarFallido = (id) => {
+    guardarColaFallida(leerColaFallida().filter((x) => x.id !== id));
+    avisarFallida();
+};
+
 // Se llama al cerrar sesión (AuthContext.jsx). OJO: si hay algo pendiente
 // de sincronizar todavía, se pierde -- por eso "Cerrar sesión" avisa antes
 // si hay cola sin mandar (ver AppLayout.jsx).
@@ -123,7 +180,9 @@ export const limpiarTodoOffline = () => {
         .filter((k) => k.startsWith(PREFIJO_CACHE))
         .forEach((k) => localStorage.removeItem(k));
     localStorage.removeItem(CLAVE_COLA);
+    localStorage.removeItem(CLAVE_COLA_FALLIDA);
     avisar();
+    avisarFallida();
 };
 
 /* ---------------- Sincronización ---------------- */
@@ -165,10 +224,13 @@ export const sincronizarCola = async () => {
                     break;
                 }
                 // Error real (no de red): no hay forma de que un reintento lo
-                // arregle solo. Se saca de la cola para no trabarse
-                // reintentando algo que nunca va a funcionar; queda en la
-                // consola para poder investigar qué pasó.
-                console.error('No se pudo sincronizar (se descarta):', item, err);
+                // arregle solo. Se saca de ESTA cola para no trabarse
+                // reintentando algo que nunca va a funcionar, pero YA NO se
+                // tira -- se mueve a la cola de fallidos (bug real corregido
+                // 15/09/2026, ver comentario de CLAVE_COLA_FALLIDA arriba) para
+                // que el profesor lo vea en AppLayout.jsx y decida qué hacer.
+                console.error('No se pudo sincronizar (movido a fallidos):', item, err);
+                moverAFallida(item, err);
                 quitarDeCola(item.id);
             }
         }

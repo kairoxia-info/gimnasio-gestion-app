@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import {
+    AlertTriangle,
     Apple,
     Building2,
     CalendarCheck,
@@ -26,8 +27,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
 import { listAll, updateRec } from '@/lib/data';
-import { estadoCuota, ultimoPagoDeAlumno } from '@/lib/format';
-import { onCambioCola, verCola } from '@/lib/offline';
+import { estadoCuota, fmtFecha, money, ultimoPagoDeAlumno } from '@/lib/format';
+import { descartarFallido, onCambioCola, onCambioColaFallida, verCola, verColaFallida } from '@/lib/offline';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 
 const NAV = [
@@ -327,6 +328,13 @@ const NavLinksAnimados = ({ nav, onNavegar }) => {
 const useEstadoOffline = () => {
     const [sinConexion, setSinConexion] = useState(!navigator.onLine);
     const [pendientes, setPendientes] = useState(() => verCola().length);
+    // Bug real encontrado en la auditoría final (15/09/2026): antes, si algo
+    // fallaba al sincronizar por un motivo que NO era de red, se descartaba
+    // solo -- el contador de "pendientes" bajaba a 0 igual, sin que quedara
+    // ningún rastro visible de que algo no se guardó. lib/offline.js ahora
+    // mueve esos casos a una segunda cola (fallidos) que NUNCA se vacía
+    // sola -- hace falta que el profesor la vea y la resuelva a mano.
+    const [fallidos, setFallidos] = useState(() => verColaFallida());
 
     useEffect(() => {
         const marcarOnline = () => setSinConexion(false);
@@ -334,14 +342,32 @@ const useEstadoOffline = () => {
         window.addEventListener('online', marcarOnline);
         window.addEventListener('offline', marcarOffline);
         const desuscribir = onCambioCola((cola) => setPendientes(cola.length));
+        const desuscribirFallidos = onCambioColaFallida(setFallidos);
         return () => {
             window.removeEventListener('online', marcarOnline);
             window.removeEventListener('offline', marcarOffline);
             desuscribir();
+            desuscribirFallidos();
         };
     }, []);
 
-    return { sinConexion, pendientes };
+    return { sinConexion, pendientes, fallidos };
+};
+
+// "Pago"/"Asistencia" + fecha + monto (si hay) -- lo mínimo para que el
+// profesor reconozca DE QUÉ carga se trata sin tener que abrir nada. No hay
+// nombre de alumno a mano acá (lib/offline.js es un módulo genérico, no
+// tiene la lista de alumnos cargada) -- se orienta por fecha/monto, que
+// alcanza para ubicarlo en Pagos/Asistencia de ese día.
+const resumenFallido = (item) => {
+    if (item.tipo === 'pago') {
+        const monto = item.payload?.monto;
+        return `Pago${monto ? ` de ${money(monto)}` : ''} del ${fmtFecha(item.payload?.fecha_pago)}`;
+    }
+    if (item.tipo === 'asistencia') {
+        return `Asistencia del ${fmtFecha(item.payload?.fecha)}`;
+    }
+    return 'Un cambio sin identificar';
 };
 
 const AppLayout = ({ title, subtitle, actions, children }) => {
@@ -354,7 +380,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
     const [mostrarCuenta, setMostrarCuenta] = useState(false);
     const { signOut, user, profile } = useAuth();
     const navigate = useNavigate();
-    const { sinConexion, pendientes } = useEstadoOffline();
+    const { sinConexion, pendientes, fallidos } = useEstadoOffline();
 
     // Cerrar el menú con Escape, además de la X / tocar afuera / elegir una
     // opción -- mismo criterio que el Modal de ui-kit.jsx.
@@ -384,7 +410,12 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
         // general): con el cartel nativo, un navegador que lo suprime devuelve
         // false y ahí "Cerrar sesión" dejaba de funcionar del todo, sin
         // explicación -- el mismo síntoma que Nalux reportó en Rutinas.
-        if (pendientes > 0 && !forzar) {
+        //
+        // fallidos también avisa acá (15/09/2026): limpiarTodoOffline() borra
+        // las dos colas para que un profesor distinto en el mismo celular no
+        // vea nada de este -- si hay algo que falló de verdad y todavía no se
+        // resolvió, cerrar sesión ahora lo saca de la vista para siempre.
+        if ((pendientes > 0 || fallidos.length > 0) && !forzar) {
             setConfirmandoSalir(true);
             return;
         }
@@ -519,6 +550,41 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                         </div>
                     )}
 
+                    {/* Bug real encontrado en la auditoría final (15/09/2026): antes,
+                        si un pago o asistencia cargado sin conexión fallaba al
+                        sincronizar por un motivo que NO era de red, se descartaba
+                        solo -- el profesor nunca se enteraba de que algo no se
+                        guardó. A propósito NO se cierra solo ni con un tiempo, ni al
+                        cambiar de pantalla: se queda ahí hasta que el profesor
+                        revisa cada ítem y toca "Ya lo resolví". */}
+                    {fallidos.length > 0 && (
+                        <div className="space-y-2 bg-destructive/10 px-4 py-3 text-destructive">
+                            <p className="flex items-center justify-center gap-2 text-center text-xs font-bold">
+                                <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+                                {fallidos.length === 1
+                                    ? 'Hubo un problema al guardar esto -- revisar si hace falta cargarlo de nuevo:'
+                                    : `Hubo un problema al guardar estos ${fallidos.length} cambios -- revisar si hace falta cargarlos de nuevo:`}
+                            </p>
+                            <ul className="mx-auto max-w-md space-y-1.5">
+                                {fallidos.map((item) => (
+                                    <li
+                                        key={item.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/60 px-3 py-1.5 text-xs"
+                                    >
+                                        <span className="font-semibold">{resumenFallido(item)}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => descartarFallido(item.id)}
+                                            className="shrink-0 rounded-lg border border-destructive/40 px-2 py-1 font-semibold transition hover:bg-destructive/10"
+                                        >
+                                            Ya lo resolví
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     <div className="px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
                         {(title || subtitle) && (
                             <div className="mb-7">
@@ -601,9 +667,11 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                         {confirmandoSalir ? (
                                             <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
                                                 <p className="text-xs text-muted-foreground">
-                                                    Hay {pendientes} {pendientes === 1 ? 'cambio' : 'cambios'} sin
-                                                    mandar (asistencia o pagos cargados sin conexión). Si se cierra
-                                                    sesión ahora se pierden.
+                                                    {pendientes > 0 &&
+                                                        `Hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin mandar (asistencia o pagos cargados sin conexión). `}
+                                                    {fallidos.length > 0 &&
+                                                        `Hay ${fallidos.length} ${fallidos.length === 1 ? 'cambio' : 'cambios'} que no se pudo${fallidos.length === 1 ? '' : 'n'} guardar y todavía no se resolvió. `}
+                                                    Si se cierra sesión ahora se pierden.
                                                 </p>
                                                 <button
                                                     type="button"
