@@ -4985,3 +4985,85 @@ vuelve a mostrar; agregarItems → vuelve a mostrar) -- lint y build sin errores
 que Nalux lo confirme en la URL real.
 
 **Archivo**: apps/web/src/pages/RutinasPage.jsx.
+
+
+## 15/09/2026 — Auditoría final del proyecto: seguridad, backend, frontend
+
+**Pedido de Nalux**: "haz una revisada pasada final de todo tanto backend frontend seguridad a
+nivel desarollo, todo porque vamos avanzar con los pasos finales para ir cerrando esta app y
+agregarle las ultimas cosas que faltan".
+
+**Cómo se hizo**: tres agentes especializados en paralelo (appsec-secure-coding,
+database-architect, frontend-architect), cada uno con acceso de solo lectura a todo el repo y a
+CONTEXT.md para no reportar como bug algo que ya era una decisión deliberada documentada. Más
+chequeos propios: `npm audit --production` (0 vulnerabilidades), grep de secretos hardcodeados
+(ninguno), revisión de apps/web/vercel.json (headers de seguridad ya completos: CSP, HSTS,
+X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy), `npx knip` (detector de código
+muerto), y una consulta directa a pg_proc/pg_event_trigger para confirmar que `rls_auto_enable()`
+(mencionada en 0045 pero no definida en ningún .sql del repo) es una función que instala el propio
+Supabase en todo proyecto nuevo como red de seguridad automática -- no es código hecho a mano por
+fuera de las migraciones, como parecía en un primer vistazo.
+
+**Resultado general**: proyecto sólido. Seguridad: nada crítico ni alto, los 3 agujeros reales que
+hubo en el proyecto (auto-promoción de role/gimnasio_id, enumeración del bucket de fotos,
+password_hash viajando al navegador) ya están cerrados desde antes y verificados. Quedan 2
+hallazgos menores (marcar_notificacion_leida sin rate-limit propio, mensaje de colisión de usuario
+cross-tenant) y el pendiente ya conocido del texto de privacidad Ley 25.326 en el alta manual de
+alumno.
+
+**4 bugs reales encontrados y CORREGIDOS en esta misma tanda** (los otros hallazgos -- código
+duplicado, componentes gigantes, falta de archivado en asistencias, etc. -- quedan anotados para
+más adelante, no son bloqueantes):
+
+1. **`ingresos_por_mes()` subestimaba la plata cuando un mes queda mitad archivado, mitad vivo**
+   (migración 0059). El original usaba `COALESCE(v.total, a.total_cobrado, 0)` -- elige el primero
+   que no sea nulo, no suma los dos. Como `archivar_pagos_hasta()` acepta cualquier fecha de corte
+   (no solo el día 1 de un mes), un mes con ALGUNOS pagos ya archivados y OTROS todavía vivos le
+   mostraba al profesor solo uno de los dos montos. Corregido a `COALESCE(v.total,0) +
+   COALESCE(a.total_cobrado,0)`. Verificado con datos reales de "Mi GYM FIT": insertada una fila de
+   archivo de prueba de $50.000 para septiembre 2026 (mes que ya tenía $270.000 en pagos vivos),
+   confirmado que ahora suma $320.000 en vez de mostrar solo uno de los dos -- y borrada la fila de
+   prueba después.
+
+2. **Sincronización offline perdía datos en silencio** (lib/offline.js, components/AppLayout.jsx).
+   Si un pago o asistencia cargado sin conexión fallaba al sincronizar por un motivo que NO era de
+   red (validación, RLS, columna inválida), se descartaba con solo un `console.error` -- el
+   contador de "pendientes" bajaba a 0 igual, como si se hubiera guardado todo. Ahora esos casos se
+   mueven a una SEGUNDA cola (`kairox_cola_fallida`, nunca se vacía sola) que dispara un cartel
+   ROJO PERSISTENTE debajo del header (no se cierra solo, ni con tiempo ni al cambiar de pantalla),
+   listando cada ítem fallido (tipo, fecha, monto si es un pago) con un botón "Ya lo resolví" para
+   sacarlo recién cuando el profesor lo revisó. "Cerrar sesión" ahora también avisa si hay algo en
+   esta cola sin resolver (antes solo avisaba por la cola de pendientes). Verificado en vivo:
+   inyectado un ítem fallido de prueba por localStorage, confirmado que el cartel aparece con el
+   detalle correcto, y que "Ya lo resolví" lo saca y lo persiste vacío.
+
+3. **"Marcar como hecho" del alumno no avisaba si fallaba** (MiPlanPage.jsx). El estado
+   `errorMarcarDia` se seteaba en el catch pero nunca se leía en el render -- si al alumno le
+   fallaba guardar el check (ej. sin señal), el botón no hacía nada visible. Ahora se guarda junto
+   con la clave del día que falló (puede haber varios días en pantalla a la vez) y se muestra
+   "No se pudo guardar. Probar de nuevo." debajo del botón de ESE día. Verificado en vivo forzando
+   un error 500 en la llamada real (interceptando fetch temporalmente, sin tocar la base) y
+   confirmando que el mensaje aparece.
+
+4. **Cargar el peso del alumno dos veces rápido podía crear dos registros del mismo día**
+   (migración 0058). `alumno_cargar_peso()` resolvía "¿ya cargó hoy?" con un SELECT y recién
+   después decidía INSERT o UPDATE, sin ningún lock -- dos llamadas casi simultáneas (doble toque,
+   dos pestañas) podían colarse las dos antes de que cualquiera escribiera. Agregado un índice
+   único PARCIAL `(alumno_id, fecha) WHERE origen='alumno'` (sin restringir los registros que carga
+   el profesor, que nunca tuvieron este límite) y reescrita la función como un único `INSERT ... ON
+   CONFLICT ... DO UPDATE` atómico. Verificado con un alumno real: dos llamadas seguidas con pesos
+   distintos (70.5 y 71.2) dejaron UNA sola fila con el último valor, no dos -- y borrado el
+   registro de prueba después.
+
+**Archivos**: supabase/migrations/0058_peso_alumno_sin_duplicados.sql,
+supabase/migrations/0059_fix_ingresos_por_mes_suma_archivado.sql, apps/web/src/lib/offline.js,
+apps/web/src/components/AppLayout.jsx, apps/web/src/pages/MiPlanPage.jsx.
+
+**Pendiente, anotado para más adelante (no bloqueante)**: código duplicado del patrón "¿Eliminar?"
+en 7 pantallas, componentes de 1000+ líneas (RutinasPage.jsx, PlanesAlimentacionPage.jsx,
+ConfiguracionPage.jsx) sin dividir, modales sin foco atrapado (accesibilidad), `asistencias` sin
+plan de archivado (mismo problema que tenía `pagos` antes de 0024), varias acciones que mandan un
+pedido por alumno en vez de uno solo (cerrar día completo, asignar rutina masiva, baja por
+vencimiento), columnas muertas en el esquema (`alumnos.user_id`, `pagos.estado`), archivo sin usar
+`biblioteca_ejercicios_base.js` (579 líneas) y 3 dependencias de npm sin usar (`date-fns`, `zod`,
+`@hookform/resolvers`) detectadas con `knip`.
