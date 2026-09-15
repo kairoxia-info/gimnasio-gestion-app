@@ -4761,3 +4761,103 @@ tocando de nuevo -- las tres capturas confirman el toggle funcionando en los dos
 build sin errores.
 
 **Archivo**: apps/web/src/components/AppLayout.jsx.
+
+
+## 15/09/2026 — Sacadas las opciones del desplegable de "Nombre del bloque"
+
+**Pedido de Nalux**: "quiero que le saques las opciones que tiene esa caja, deja los ejemplos
+para que sepan que poner pero saca esas opciones" (sobre el campo "Nombre del bloque" al armar
+una rutina, que abria un desplegable nativo del navegador con sugerencias como "Entrada en
+calor", "Bloque principal", "Espalda-Biceps", etc.).
+
+**Corregido**: sacado el `<datalist id="bloques-sugeridos">` y el `list="bloques-sugeridos"` de
+los dos inputs que lo usaban (el campo "Nombre del bloque" al armar el dia, y el campo "Bloque"
+al editar un ejercicio ya cargado) -- junto con el array BLOQUES_SUGERIDOS, que quedaba sin uso.
+El campo sigue siendo de texto libre igual que antes; el placeholder ("Espalda-Bicep, Abdomen,
+Entrada en calor...") y el label ("Nombre del bloque (ej: Espalda-Bicep)") se dejaron intactos
+como ejemplo de que escribir, solo se saco el desplegable de opciones.
+
+**Verificado en vivo**: tocado el campo en una rutina real -- ya no aparece ningun desplegable,
+el placeholder con los ejemplos sigue ahi. Lint y build sin errores.
+
+**Archivo**: apps/web/src/pages/RutinasPage.jsx.
+
+
+## 15/09/2026 — Peso desaparece y Series es opcional en ejercicios por tiempo
+
+**Pedido de Nalux**: "mira aca cuando pongo opcion de minutos o segundos las repeticiones cambia
+a minuto o segundos, sacar peso en estas opciones y las series ponerlas como opcional tambien"
+(sobre el selector Reps/Seg/Min agregado hoy antes en la sesión -- CampoReps).
+
+**Corregido**: cuando el reps de un ejercicio esta en Seg o Min (bicicleta, plancha, etc.) la caja
+de Peso desaparece entera (no queda vacía, se saca el espacio) y Series pasa a ser opcional (el
+campo ya no fuerza nada -- placeholder "—" cuando esta vacío). No es solo en el editor: se llevó
+el mismo criterio a los TRES lugares donde se ve un ejercicio, para que no queden inconsistentes
+entre sí:
+- **Editor de la rutina** (RutinasPage.jsx): la grilla de Series/Reps/Peso/Descanso pasa a 3
+  columnas de campos en vez de 4 cuando es por tiempo (si no, los botones de mover/borrar caerían
+  en el hueco que deja Peso). La etiqueta "Series (opcional)" no entraba en la columna angosta y
+  se cortaba -- se dejó el label fijo en "Series" (mismo criterio que "Peso", que siempre fue
+  opcional sin decirlo en el label) y el guión de placeholder avisa que se puede dejar vacío.
+- **Ficha del profesor** (AlumnoPage.jsx): mismo criterio, columna de Peso condicional.
+- **Pantalla del alumno** (MiPlanPage.jsx): nuevo componente DatosDelEjercicio que arma
+  dinámicamente cuántas cajas mostrar (2 a 4) según haya o no series cargadas y sea o no por
+  tiempo, para que las cajas que quedan se repartan el ancho en vez de dejar un hueco.
+
+Los helpers de reps (UNIDADES_REPS/descomponerReps/armarReps, que antes vivían solo en
+RutinasPage.jsx) se movieron a lib/format.js junto con la nueva `esRepsPorTiempo()`, para que los
+tres archivos usen la misma lógica sin duplicarla. `resumenSeries()` (usada en el PDF y en la
+ficha del profesor para el resumen "4x10") también se ajustó: sin series, muestra solo el reps
+("20 min") en vez de "x20 min".
+
+**Verificado en vivo con datos reales de un alumno** (Alumno 3, revertido a su valor exacto
+después): cambiado por SQL el reps del primer ejercicio de su rutina activa a "20 min" -- en la
+pantalla del alumno la caja de Peso desapareció y quedaron Series/Reps/Descanso parejas; en la
+ficha del profesor, misma fila sin columna de Peso mientras el resto de los ejercicios (con reps
+normal) siguen mostrando la suya; el PDF se generó sin errores (4.1 MB, sin cambios visuales
+rotos). Revertido el reps a `10` (número, como estaba original) y confirmado por SQL que quedó
+idéntico al dato de partida. Lint y build sin errores.
+
+**Archivos**: apps/web/src/lib/format.js, apps/web/src/pages/RutinasPage.jsx,
+apps/web/src/pages/MiPlanPage.jsx, apps/web/src/pages/AlumnoPage.jsx.
+
+
+## 15/09/2026 — Editor de rutinas: bloque se vacía solo, borde sólido, y preview por botón
+
+**Pedido de Nalux (dos mensajes seguidos)**:
+1. "cuando escriba arriba entrada en calor, no quiero que después ese mismo texto quede escrito,
+   que queden vacías las cajas par que el profe pueda escribir lo que quiera, y para distinguir
+   bien el bloque creado con el de abajo que no tiene nada, en vez de las líneas esas ------ que
+   este marcado con blanco si esta en modo oscuro la app o en negro si esta en modo claro".
+2. "y a los ejercicios en el buscador cuando se agregan quiero que tengan un boton cada uno de ver
+   imagen o video, para que no interrumpa cada vez que e pasa el cursor por encima".
+
+**Corregido** (los tres, en RutinasPage.jsx):
+- **"Nombre del bloque" se vacía solo** después de tocar "Agregar": antes quedaba con el último
+  texto escrito a propósito ("lo normal es seguir agregando al mismo bloque"), pero eso hacía
+  fácil no darse cuenta y que el próximo ejercicio cayera en el bloque anterior sin querer. Ahora
+  cada tanda de "Agregar" deja el campo en blanco -- si se quiere seguir sumando al mismo bloque,
+  hay que volver a escribir su nombre (o elegirlo del datalist... salvo que ESE datalist ya se
+  sacó en el cambio anterior de esta misma sesión).
+- **Borde sólido en vez de punteado**: la caja "Nombre del bloque" (el bloque que se está armando,
+  todavía sin ejercicios) tenía un borde punteado en el color de marca a baja opacidad --
+  parecido al borde SÓLIDO del mismo color que ya tiene un bloque ya creado con ejercicios adentro,
+  fácil de confundir cuál es cuál. Ahora usa `border-foreground`, que en este proyecto ya resuelve
+  solo a blanco en modo oscuro y negro en modo claro (son literalmente los valores de
+  --foreground en index.css) -- no hizo falta un `dark:` aparte.
+- **Preview de foto/video por botón, no por mouse encima**: la lista de "Buscar y elegir
+  ejercicios" mostraba la foto/video flotante con solo pasar el cursor por la fila (pedido de
+  Nalux del 03/09/2026) -- once molestaba al recorrer la lista para tildar varios. Ahora cada
+  ejercicio con media cargada tiene su propio botón (ícono de ojo) que ABRE el preview al
+  tocarlo y lo CIERRA si se lo vuelve a tocar; los ejercicios sin foto/video no muestran botón.
+  Se cierra también si se escribe en el buscador (para no dejarlo flotando huérfano si la fila
+  desaparece del filtro).
+
+**Verificado en vivo**: tipeado un nombre de bloque de prueba, tildado un ejercicio, tocado
+"Agregar" -- el ejercicio quedó en la caja nueva con el bloque correcto y el campo "Nombre del
+bloque" volvió a quedar vacío. Confirmado el borde sólido blanco en modo oscuro y negro en modo
+claro (toggle de tema en vivo). Probado el botón de ojo: abre el preview de foto al tocarlo y lo
+cierra al tocarlo de nuevo, sin que pasar el mouse por la lista dispare nada. Todo probado sin
+guardar la rutina (Cancelar), sin dejar datos de prueba. Lint y build sin errores.
+
+**Archivo**: apps/web/src/pages/RutinasPage.jsx.
