@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus, X } from 'lucide-react';
@@ -256,6 +256,19 @@ const RutinasPage = () => {
     const [confirmandoDuplicarSemana, setConfirmandoDuplicarSemana] = useState(false);
     const [bloque, setBloque] = useState('');
     const [saving, setSaving] = useState(false);
+    // Botón "+" al pie de cada caja ya armada (pedido de Nalux 15/09/2026:
+    // "para agregar otro ejercicio... quiero que haya un signo + para seguir
+    // agregando en el mismo bloque"). Precarga el nombre de ESA caja en
+    // "Nombre del bloque" y lleva el foco al buscador de más abajo -- sin
+    // esto, ahora que el campo se vacía solo después de cada "Agregar" (ver
+    // más abajo), sumar un ejercicio más a una caja ya creada obligaba a
+    // volver a tipear su nombre a mano.
+    const buscadorEjRef = useRef(null);
+    const continuarBloque = (nombreBloque) => {
+        setBloque(nombreBloque);
+        buscadorEjRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        buscadorEjRef.current?.focus();
+    };
 
     // Modal "Asignar a alumnos" (asignación masiva)
     const [asignarOpen, setAsignarOpen] = useState(false);
@@ -2008,6 +2021,16 @@ const RutinasPage = () => {
                                                     </div>
                                                 ),
                                             )}
+                                            {nombreBloque && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => continuarBloque(nombreBloque)}
+                                                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/40 py-2 text-xs font-semibold text-primary transition hover:border-primary hover:bg-primary/5"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" /> Agregar otro ejercicio a "
+                                                    {nombreBloque}"
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -2066,6 +2089,7 @@ const RutinasPage = () => {
                                             aria-hidden="true"
                                         />
                                         <input
+                                            ref={buscadorEjRef}
                                             value={filtroEj}
                                             onChange={(e) => {
                                                 setFiltroEj(e.target.value);
