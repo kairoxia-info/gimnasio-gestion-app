@@ -360,6 +360,65 @@ export const ultimoPagoDeAlumno = (alumnoId, pagos) => {
     })[0];
 };
 
+// Rutinas y planes de comida por vencer o ya vencidos -- extraído (15/09/2026,
+// pedido de Nalux: "que haya alertas cuando se vencen los planes de rutina
+// de ejercicio y de alimentación") desde donde antes vivía SOLO
+// DashboardPage.jsx, para poder reusarlo también en NotificacionesCampana.jsx
+// (campanita del header) sin duplicar el criterio -- mismo motivo por el que
+// ultimoPagoDeAlumno() se sacó de segmentoNotificacion() más arriba.
+//
+// Mismo criterio que ya tenía DashboardPage.jsx: sin fecha_fin cargada, ese
+// plan simplemente no entra en la cuenta (no se inventa un vencimiento para
+// algo al que nunca se le puso fecha). rutinasAsignadas/planesAlimentacion
+// pueden traer más de una fila por alumno (una vieja desactivada, o por las
+// dudas aunque en la práctica no debería) -- se toma la más reciente por
+// created_at.
+export const planesPorVencer = (alumnosActivos, rutinasAsignadas, planesAlimentacion, diasAviso = 7) => {
+    const hoyMedianoche = new Date();
+    hoyMedianoche.setHours(0, 0, 0, 0);
+    const diasHasta = (fecha) => {
+        const f = new Date(`${fecha}T00:00:00`);
+        return Math.round((f - hoyMedianoche) / 86400000);
+    };
+
+    const rutinaPorAlumno = new Map();
+    (rutinasAsignadas || []).forEach((r) => {
+        if (!r.fecha_fin) return;
+        const prev = rutinaPorAlumno.get(r.alumno_id);
+        if (!prev || String(r.created_at) > String(prev.created_at)) rutinaPorAlumno.set(r.alumno_id, r);
+    });
+    const dietaPorAlumno = new Map();
+    (planesAlimentacion || []).forEach((p) => {
+        if (!p.fecha_fin) return;
+        const prev = dietaPorAlumno.get(p.alumno_id);
+        if (!prev || String(p.created_at) > String(prev.created_at)) dietaPorAlumno.set(p.alumno_id, p);
+    });
+
+    const resultado = [];
+    (alumnosActivos || []).forEach((a) => {
+        const rutina = rutinaPorAlumno.get(a.id);
+        if (rutina) {
+            const dias = diasHasta(rutina.fecha_fin);
+            if (dias <= diasAviso) {
+                resultado.push({ alumno: a, tipo: 'Rutina', fecha: rutina.fecha_fin, vencido: dias < 0 });
+            }
+        }
+        const dieta = dietaPorAlumno.get(a.id);
+        if (dieta) {
+            const dias = diasHasta(dieta.fecha_fin);
+            if (dias <= diasAviso) {
+                resultado.push({ alumno: a, tipo: 'Plan de comida', fecha: dieta.fecha_fin, vencido: dias < 0 });
+            }
+        }
+    });
+    // Vencidos primero, y entre iguales el que vence/venció antes.
+    resultado.sort((x, y) => {
+        if (x.vencido !== y.vencido) return x.vencido ? -1 : 1;
+        return String(x.fecha).localeCompare(String(y.fecha));
+    });
+    return resultado;
+};
+
 export const segmentoNotificacion = (alumno, pagos) => {
     const pago = ultimoPagoDeAlumno(alumno.id, pagos);
     if (!pago) return 'sin_cuota';

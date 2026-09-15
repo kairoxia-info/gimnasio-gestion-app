@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell } from 'lucide-react';
+import { Bell, CalendarClock } from 'lucide-react';
 import { listAll } from '@/lib/data';
-import { ESTADOS_PAGO, estadoCuota } from '@/lib/format';
+import { ESTADOS_PAGO, estadoCuota, planesPorVencer } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
@@ -35,6 +35,14 @@ const NotificacionesCampana = () => {
     // falta"). Van arriba de todo en la campanita: son lo único que llega
     // "nuevo" desde afuera, el resto son estados que el profesor ya conoce.
     const [nuevos, setNuevos] = useState([]);
+    // Rutinas/planes de comida por vencer (15/09/2026, pedido de Nalux: "que
+    // haya alertas cuando se vencen los planes de rutina de ejercicio y de
+    // alimentación") -- mismo dato que ya calculaba DashboardPage.jsx en su
+    // tarjeta "Planes por vencer", ahora también acá para que aparezca como
+    // alerta de verdad (la campanita) y no algo que haya que acordarse de ir
+    // a mirar al panel general.
+    const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
+    const [planesAlimentacion, setPlanesAlimentacion] = useState([]);
     const [config, setConfig] = useState(null);
     const cajaRef = useRef(null);
 
@@ -46,11 +54,15 @@ const NotificacionesCampana = () => {
                 filters: { activo: false, pendiente: true, origen: 'autorregistro' },
                 sort: 'nombre',
             }),
+            listAll('rutinas_asignadas', { filters: { activa: true } }),
+            listAll('planes_alimentacion'),
         ])
-            .then(([a, p, n]) => {
+            .then(([a, p, n, ra, pa]) => {
                 setAlumnos(a);
                 setPagos(p);
                 setNuevos(n);
+                setRutinasAsignadas(ra);
+                setPlanesAlimentacion(pa);
             })
             .catch(() => {
                 // Silencioso a propósito: la campanita es un plus, no algo
@@ -155,6 +167,15 @@ const NotificacionesCampana = () => {
             });
     }, [alumnos, pagos, config]);
 
+    // Mismo criterio (7 días) y misma función que ya usa DashboardPage.jsx
+    // (lib/format.js, extraída de ahí para no duplicarlo) -- acá alumnos ya
+    // viene filtrado a activo=true desde el propio listAll() de arriba, así
+    // que se pasa directo.
+    const vencimientos = useMemo(
+        () => planesPorVencer(alumnos, rutinasAsignadas, planesAlimentacion),
+        [alumnos, rutinasAsignadas, planesAlimentacion],
+    );
+
     const irAlAlumno = (alumnoId) => {
         setAbierto(false);
         navigate(`/alumnos/${alumnoId}?tab=pagos`);
@@ -167,7 +188,15 @@ const NotificacionesCampana = () => {
         navigate(`/alumnos/${alumnoId}`);
     };
 
-    const total = nuevos.length + items.length;
+    // A la pestaña puntual (Entrenamiento o Nutrición) según qué tipo de
+    // plan sea el que está por vencer -- mismo patrón que irAlAlumno() ya
+    // usa con "?tab=pagos".
+    const irAVencimiento = (alumnoId, tipo) => {
+        setAbierto(false);
+        navigate(`/alumnos/${alumnoId}?tab=${tipo === 'Rutina' ? 'entrenamiento' : 'nutricion'}`);
+    };
+
+    const total = nuevos.length + items.length + vencimientos.length;
 
     return (
         <div ref={cajaRef} className="relative">
@@ -249,6 +278,37 @@ const NotificacionesCampana = () => {
                                             className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${ESTADOS_PAGO[estado].className}`}
                                         >
                                             {ESTADOS_PAGO[estado].label}
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+
+                            {/* Rutinas/planes de comida por vencer (15/09/2026) --
+                                mismos datos que la tarjeta "Planes por vencer" del
+                                panel general, mismo criterio visual que las cuotas
+                                de arriba (rojo = ya venció, naranja = por vencer). */}
+                            {vencimientos.slice(0, 8).map((v) => (
+                                <li key={`${v.alumno.id}-${v.tipo}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() => irAVencimiento(v.alumno.id, v.tipo)}
+                                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-secondary"
+                                    >
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-sm font-semibold">
+                                                {v.alumno.nombre}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <CalendarClock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                                {v.tipo}
+                                            </span>
+                                        </span>
+                                        <span
+                                            className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                                                v.vencido ? 'text-destructive border-current' : 'text-warn border-current'
+                                            }`}
+                                        >
+                                            {v.vencido ? 'Venció' : 'Por vencer'}
                                         </span>
                                     </button>
                                 </li>

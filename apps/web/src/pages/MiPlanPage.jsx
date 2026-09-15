@@ -3,9 +3,11 @@ import { Helmet } from 'react-helmet';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
     AlertTriangle,
+    Apple,
     CheckCircle2,
     Download,
     Dumbbell,
+    Flame,
     Lock,
     Loader2,
     LogOut,
@@ -25,6 +27,7 @@ import {
     agruparItemsRutina,
     agruparPorBloque,
     armarTextoAlimentos,
+    fmtFecha,
     resumenTipoGrupo,
     tieneSeriesDetalle,
     tipoDeGrupo,
@@ -35,11 +38,33 @@ import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
 
+// Mismo componente y mismo criterio de carga diferida que ya usa
+// AlumnoPage.jsx (Progreso, del lado del profesor): recharts pesa ~100 KB,
+// no tiene sentido bajarlo para todos los que solo miran la rutina o el
+// plan de alimentación -- recién se pide cuando el alumno abre la pestaña
+// "Progreso" (15/09/2026, pestaña nueva, ver el comentario de vista más
+// abajo).
+const GraficoPeso = React.lazy(() => import('@/components/GraficoPeso'));
+
 // El campo "descanso" de cada ejercicio es texto libre que escribe el profe
 // ("90 s", "1:30", "2 min", "60"...), no un número — así que hay que
 // interpretarlo para poder arrancar el cronómetro. Si no se entiende, se
 // devuelve null y el botón de descanso simplemente no aparece: preferimos no
 // mostrar el cronómetro antes que mostrar una cuenta regresiva equivocada.
+// Mismo cálculo de "días hasta" que ya usa DashboardPage.jsx/
+// NotificacionesCampana.jsx del lado del profesor (lib/format.js,
+// planesPorVencer()) -- acá se resuelve aparte porque el alumno ve cada
+// aviso adentro de SU PROPIA pestaña (Rutina o Alimentación), no en un
+// listado de varios alumnos como del otro lado, así que no vale la pena
+// traer la función compartida para un solo cálculo de fecha.
+const diasHastaFecha = (fecha) => {
+    if (!fecha) return null;
+    const hoyMedianoche = new Date();
+    hoyMedianoche.setHours(0, 0, 0, 0);
+    const f = new Date(`${fecha}T00:00:00`);
+    return Math.round((f - hoyMedianoche) / 86400000);
+};
+
 const parsearDescanso = (texto) => {
     if (!texto) return null;
     const t = String(texto).trim().toLowerCase();
@@ -734,6 +759,13 @@ const MiPlanPage = () => {
             });
             if (err) throw err;
             setDiasHechosHoy((prev) => new Set(prev).add(clave));
+            // Si ya se abrió "Progreso" antes en esta visita, la racha que
+            // muestra ahí quedaría vieja hasta salir y volver a entrar a la
+            // pestaña -- la actualiza de una, para que marcar "Hecho" se
+            // sienta como parte de la misma racha, no algo aparte. Si
+            // todavía no se abrió esa pestaña ni hace falta: se pide fresca
+            // la primera vez que se entre.
+            if (progresoYaPedidoRef.current) cargarProgreso();
         } catch (_) {
             setErrorMarcarDia('No se pudo guardar. Probar de nuevo.');
         } finally {
@@ -741,11 +773,12 @@ const MiPlanPage = () => {
         }
     };
 
-    // Un solo campo de peso, sin historial visible acá (ese lo ve el profe en
-    // la ficha, componente Progreso de AlumnoPage.jsx). Si el alumno ya
-    // cargó hoy, alumno_cargar_peso() actualiza esa misma fila en vez de
-    // duplicar -- por eso el botón dice siempre "Guardar", nunca hace falta
-    // distinguir "primera carga" de "corrección".
+    // Si el alumno ya cargó hoy, alumno_cargar_peso() actualiza esa misma
+    // fila en vez de duplicar -- por eso el botón dice siempre "Guardar",
+    // nunca hace falta distinguir "primera carga" de "corrección". El
+    // historial YA se ve acá también, desde que existe la pestaña
+    // "Progreso" (15/09/2026, ver vista/cargarProgreso más abajo) -- antes
+    // ese historial solo lo veía el profe en su propia ficha.
     const [pesoInput, setPesoInput] = useState('');
     const [guardandoPeso, setGuardandoPeso] = useState(false);
     const [pesoGuardado, setPesoGuardado] = useState(false);
@@ -766,12 +799,60 @@ const MiPlanPage = () => {
             });
             if (err) throw err;
             setPesoGuardado(true);
+            // El peso recién guardado tiene que aparecer en el gráfico sin
+            // tener que salir y volver a entrar a la pestaña -- se vuelve a
+            // pedir el progreso (mismo costo que ya paga "ver el plan": no
+            // suma un límite nuevo, ver el comentario de la RPC).
+            cargarProgreso();
         } catch (_) {
             setErrorPeso('No se pudo guardar. Probar de nuevo.');
         } finally {
             setGuardandoPeso(false);
         }
     };
+
+    // Pestañas del panel (15/09/2026, pedido de Nalux: "separes por paginas
+    // plan ejercicio y plan alimentacion, asi es mas correcto y no se
+    // mezclan en una misma hoja... agregaras otro modulo dentro sobre
+    // progresos, algo que sirva como motivacion"). Antes rutina y
+    // alimentación vivían una abajo de la otra en la misma hoja larga --
+    // ya se había intentado distinguirlas con una franja de color al
+    // costado (09/09/2026), pero seguían mezcladas al bajar. Mismo patrón
+    // de pestañas que ya usa AlumnoPage.jsx del lado del profesor
+    // (Entrenamiento / Nutrición / Progreso / Asistencia / Pagos), ahora
+    // también acá.
+    const [vista, setVista] = useState('rutina'); // 'rutina' | 'alimentacion' | 'progreso'
+    const [progreso, setProgreso] = useState(null); // { historial_peso, entrenamientos_ultima_semana } | null
+    const [cargandoProgreso, setCargandoProgreso] = useState(false);
+    const [errorProgreso, setErrorProgreso] = useState('');
+    // Se pide recién al abrir la pestaña por primera vez (no de entrada con
+    // el resto del plan): la mayoría de las visitas van a ser para ver la
+    // rutina de hoy, y esto es un viaje de red aparte que no todas esas
+    // visitas necesitan.
+    const progresoYaPedidoRef = useRef(false);
+
+    const cargarProgreso = async () => {
+        setCargandoProgreso(true);
+        setErrorProgreso('');
+        try {
+            const { data, error: err } = await supabase.rpc('ver_progreso_alumno', { p_codigo: codigo });
+            if (err) throw err;
+            const fila = Array.isArray(data) ? data[0] : data;
+            setProgreso(fila || { historial_peso: [], entrenamientos_ultima_semana: 0 });
+        } catch (_) {
+            setErrorProgreso('No se pudo cargar el progreso. Probar de nuevo.');
+        } finally {
+            setCargandoProgreso(false);
+        }
+    };
+
+    useEffect(() => {
+        if (vista === 'progreso' && !progresoYaPedidoRef.current) {
+            progresoYaPedidoRef.current = true;
+            cargarProgreso();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [vista]);
 
     // Pinta esta pantalla también con el color del gimnasio -- antes solo se
     // usaba en el PDF, la pantalla en vivo se quedaba siempre en el rojo de
@@ -783,46 +864,87 @@ const MiPlanPage = () => {
         aplicarColorGimnasio(plan?.gimnasio_color_principal);
     }, [plan?.gimnasio_color_principal]);
 
-    // Se llama una sola vez al montar (o si cambia el código de la URL):
-    // esta pantalla no tiene sesión ni refresco automático, es un "ver y listo".
+    // Se pide al montar (o si cambia el código de la URL) y, en silencio,
+    // cada vez que el alumno vuelve a esta pestaña -- mismo mecanismo que ya
+    // usa NotificacionesCampana.jsx del lado del profesor (visibilitychange +
+    // focus). Reportado por Nalux (15/09/2026): "cambié el plan vencido de
+    // comida pero la alerta sigue estando" -- esta pantalla decía en el
+    // comentario de acá arriba "no tiene sesión ni refresco automático, es
+    // un ver y listo", literal: se pedía UNA sola vez al montar y nunca más.
+    // Si el profesor corrige la fecha mientras el alumno ya tenía esta
+    // pestaña abierta (el caso real de probar las dos pantallas juntas, una
+    // al lado de la otra), no había forma de que se enterara sin cerrar y
+    // volver a entrar a mano.
+    //
+    // mostrarCargando=false en el refresco silencioso: no tiene sentido
+    // tapar toda la pantalla con "Cargando tu plan..." cada vez que el
+    // alumno vuelve de mirar otra app -- solo se actualiza `plan` en
+    // silencio cuando llega la respuesta nueva, sin sacarlo de donde estaba
+    // parado ni resetear nada mientras tanto.
     useEffect(() => {
         let cancelado = false;
-        setLoading(true);
-        setError('');
-        setPlan(null);
-        setAvisoOculto(false);
-        setAvisoError('');
-        supabase
-            .rpc('ver_plan_por_codigo', { p_codigo: codigo })
-            .then(({ data, error: err }) => {
-                if (cancelado) return;
-                if (err) throw err;
-                // La RPC devuelve una sola fila; según cómo esté tipada en el
-                // SQL, supabase-js puede envolverla en un array de un
-                // elemento o devolverla directo como objeto — cubrimos los
-                // dos casos en vez de asumir uno solo.
-                const fila = Array.isArray(data) ? data[0] : data;
-                if (!fila) throw new Error('Codigo de acceso invalido');
-                setPlan(fila);
-            })
-            .catch((err) => {
-                if (cancelado) return;
-                const msg = err?.message || '';
-                if (esCodigoInvalido(msg)) {
-                    setError(
-                        'Este código no es válido o ya no está activo. Pedir al profesor un código nuevo.',
-                    );
-                } else if (esRateLimit(msg)) {
-                    setError('Demasiadas consultas en poco tiempo. Intentar de nuevo en unos minutos.');
-                } else {
-                    setError('No se pudo cargar el plan en este momento. Intentar de nuevo más tarde.');
-                }
-            })
-            .finally(() => {
-                if (!cancelado) setLoading(false);
-            });
+
+        const cargarPlan = (mostrarCargando) => {
+            if (mostrarCargando) {
+                setLoading(true);
+                setError('');
+                setPlan(null);
+                setAvisoOculto(false);
+                setAvisoError('');
+            }
+            supabase
+                .rpc('ver_plan_por_codigo', { p_codigo: codigo })
+                .then(({ data, error: err }) => {
+                    if (cancelado) return;
+                    if (err) throw err;
+                    // La RPC devuelve una sola fila; según cómo esté tipada en el
+                    // SQL, supabase-js puede envolverla en un array de un
+                    // elemento o devolverla directo como objeto — cubrimos los
+                    // dos casos en vez de asumir uno solo.
+                    const fila = Array.isArray(data) ? data[0] : data;
+                    if (!fila) throw new Error('Codigo de acceso invalido');
+                    setPlan(fila);
+                    if (mostrarCargando) {
+                        setAvisoOculto(false);
+                        setAvisoError('');
+                    }
+                })
+                .catch((err) => {
+                    if (cancelado) return;
+                    // El refresco silencioso, si falla (sin señal justo en ese
+                    // instante, por ejemplo), no reemplaza el plan que ya se
+                    // estaba viendo por una pantalla de error -- eso sí sería
+                    // peor que no actualizar nada.
+                    if (!mostrarCargando) return;
+                    const msg = err?.message || '';
+                    if (esCodigoInvalido(msg)) {
+                        setError(
+                            'Este código no es válido o ya no está activo. Pedir al profesor un código nuevo.',
+                        );
+                    } else if (esRateLimit(msg)) {
+                        setError('Demasiadas consultas en poco tiempo. Intentar de nuevo en unos minutos.');
+                    } else {
+                        setError('No se pudo cargar el plan en este momento. Intentar de nuevo más tarde.');
+                    }
+                })
+                .finally(() => {
+                    if (cancelado || !mostrarCargando) return;
+                    setLoading(false);
+                });
+        };
+
+        cargarPlan(true);
+
+        const alVolver = () => {
+            if (document.visibilityState === 'visible') cargarPlan(false);
+        };
+        document.addEventListener('visibilitychange', alVolver);
+        window.addEventListener('focus', alVolver);
+
         return () => {
             cancelado = true;
+            document.removeEventListener('visibilitychange', alVolver);
+            window.removeEventListener('focus', alVolver);
         };
     }, [codigo]);
 
@@ -856,6 +978,10 @@ const MiPlanPage = () => {
 
     const tieneRutina = !!plan?.rutina_nombre;
     const tienePlan = !!plan?.plan_nombre;
+    // null = sin fecha de vencimiento cargada (no se avisa nada); negativo =
+    // ya venció; 0-7 = por vencer dentro de la semana.
+    const diasHastaRutina = diasHastaFecha(plan?.rutina_fecha_fin);
+    const diasHastaPlan = diasHastaFecha(plan?.plan_fecha_fin);
 
     return (
         <div className="mp-pagina min-h-[100dvh] bg-background text-foreground">
@@ -870,6 +996,7 @@ const MiPlanPage = () => {
                     color={plan?.gimnasio_color_principal}
                     logoUrl={plan?.gimnasio_logo_url}
                     fechaInicio={plan?.rutina_fecha_inicio}
+                    fechaFin={plan?.rutina_fecha_fin}
                     duracionSemanas={plan?.rutina_duracion_semanas}
                 />
             )}
@@ -1032,66 +1159,43 @@ const MiPlanPage = () => {
                             </p>
                         </section>
 
-                        {/* Fase 2.7 (13/09/2026): único campo de escritura fuera de la
-                            rutina -- el peso de hoy. Sin historial acá a propósito, eso
-                            lo ve el profe en la ficha del alumno. */}
-                        <section className="mp-no-imprimir rounded-2xl border border-border bg-card p-5 sm:p-6">
-                            <div className="flex items-center gap-3">
-                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                                    <Scale className="h-6 w-6 text-primary" strokeWidth={2.2} aria-hidden="true" />
-                                </span>
-                                <p className="text-xl font-extrabold">Tu peso de hoy</p>
-                            </div>
-                            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                                <div className="relative flex-1">
-                                    <input
-                                        type="number"
-                                        inputMode="decimal"
-                                        step="0.1"
-                                        min="1"
-                                        max="400"
-                                        placeholder="Ej: 72.5"
-                                        value={pesoInput}
-                                        onChange={(e) => {
-                                            setPesoInput(e.target.value);
-                                            setPesoGuardado(false);
-                                        }}
-                                        className="w-full rounded-xl border border-border bg-background px-4 py-3 pr-12 text-lg font-semibold"
-                                    />
-                                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">
-                                        kg
-                                    </span>
-                                </div>
+                        {/* Pestañas (15/09/2026): antes rutina y alimentación vivían
+                            una abajo de la otra en la misma hoja larga -- la franja
+                            de color de cada una (ver más abajo) ayudaba a distinguirlas
+                            al bajar, pero seguían mezcladas. Ahora son vistas
+                            separadas de verdad, mismo patrón que ya usa AlumnoPage.jsx
+                            del lado del profesor. mp-no-imprimir: esto no tiene
+                            sentido en el PDF, que siempre es de una sola sección
+                            (RutinaImprimiblePDF/PlanAlimentacionImprimiblePDF, más
+                            arriba, son componentes aparte -- cambiar de pestaña acá
+                            no les afecta en nada). */}
+                        <div className="mp-no-imprimir flex gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1.5">
+                            {[
+                                { valor: 'rutina', label: 'Rutina', Icono: Dumbbell },
+                                { valor: 'alimentacion', label: 'Alimentación', Icono: Apple },
+                                { valor: 'progreso', label: 'Progreso', Icono: Flame },
+                            ].map(({ valor, label, Icono }) => (
                                 <button
+                                    key={valor}
                                     type="button"
-                                    onClick={guardarPeso}
-                                    disabled={guardandoPeso || !pesoInput}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-lg font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                                    onClick={() => setVista(valor)}
+                                    className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-base font-bold transition ${
+                                        vista === valor
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
                                 >
-                                    {guardandoPeso ? (
-                                        'Guardando...'
-                                    ) : pesoGuardado ? (
-                                        <>
-                                            <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Guardado
-                                        </>
-                                    ) : (
-                                        'Guardar'
-                                    )}
+                                    <Icono className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+                                    {label}
                                 </button>
-                            </div>
-                            {errorPeso && (
-                                <p className="mt-3 text-base font-semibold text-destructive">{errorPeso}</p>
-                            )}
-                        </section>
+                            ))}
+                        </div>
 
-                        {/* Banda de encabezado con color propio por sección
-                            (09/09/2026, pedido de Nalux: "el plan de ejercicio está
-                            en la misma que a donde está el plan de alimentación y
-                            cuando bajo no distingo que después está el otro plan").
-                            Rutina va con el color del gimnasio (--primary) y
-                            alimentación con el verde de --ok: al scrollear, el
-                            cambio de color marca dónde empieza cada una. --ok
-                            existe en los dos temas, no es un color inventado. */}
+                        {/* Banda de encabezado con color propio por sección (queda
+                            igual aunque ahora estén en pestañas separadas -- Rutina
+                            con el color del gimnasio, Alimentación con --ok, mismo
+                            criterio ya aprobado el 09/09/2026). */}
+                        {vista === 'rutina' && (
                         <section aria-labelledby="mp-rutina-titulo" className="mp-seccion-rutina space-y-5">
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
                                 <h2
@@ -1112,6 +1216,49 @@ const MiPlanPage = () => {
                                     </button>
                                 )}
                             </div>
+
+                            {/* Aviso de vencimiento (15/09/2026, pedido de Nalux:
+                                "que haya alertas cuando se vencen los planes de
+                                rutina de ejercicio y de alimentación") -- mismo
+                                criterio de 7 días que ya usa el aviso de cuota más
+                                arriba y la tarjeta "Planes por vencer" del profesor
+                                (lib/format.js, planesPorVencer()). Si no hay
+                                rutina_fecha_fin cargada (plan sin fecha, o
+                                bloqueado por cuota vencida -- ver
+                                ver_plan_por_codigo(), ahí ya viene en null), no se
+                                inventa ningún vencimiento. */}
+                            {diasHastaRutina !== null && diasHastaRutina <= 7 && (
+                                <div
+                                    className={`mp-no-imprimir flex items-start gap-3 rounded-2xl border-2 p-4 sm:p-5 ${
+                                        diasHastaRutina < 0
+                                            ? 'border-destructive bg-destructive/10'
+                                            : 'border-warn bg-warn/10'
+                                    }`}
+                                >
+                                    <span
+                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                                            diasHastaRutina < 0 ? 'bg-destructive/20' : 'bg-warn/20'
+                                        }`}
+                                    >
+                                        <Dumbbell
+                                            className={`h-5 w-5 ${diasHastaRutina < 0 ? 'text-destructive' : 'text-warn'}`}
+                                            strokeWidth={2.2}
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <p
+                                        className={`text-base font-semibold sm:text-lg ${
+                                            diasHastaRutina < 0 ? 'text-destructive' : 'text-warn'
+                                        }`}
+                                    >
+                                        {diasHastaRutina < 0
+                                            ? `Tu rutina venció el ${fmtFecha(plan.rutina_fecha_fin)}. Pedile al profesor una rutina nueva.`
+                                            : diasHastaRutina === 0
+                                              ? 'Tu rutina vence hoy. Pedile al profesor una rutina nueva.'
+                                              : `Tu rutina vence en ${diasHastaRutina} ${diasHastaRutina === 1 ? 'día' : 'días'} (${fmtFecha(plan.rutina_fecha_fin)}).`}
+                                    </p>
+                                </div>
+                            )}
 
                             {plan.rutina_restringida ? (
                                 <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
@@ -1480,7 +1627,149 @@ const MiPlanPage = () => {
                                 </>
                             )}
                         </section>
+                        )}
 
+                        {/* Pestaña "Progreso" (15/09/2026, pedido de Nalux: "un módulo
+                            sobre progresos, algo que sirva como motivación") -- el
+                            campo de peso de hoy que ya existía (Fase 2.7) se mudó
+                            para acá, y se le suma lo que antes el alumno no podía
+                            ver: su propia evolución (gráfico, mismo componente que ya
+                            usa el profesor) y una racha de entrenamientos de la
+                            última semana. ver_progreso_alumno() (migración 0055) es
+                            la primera función pública de solo lectura que le muestra
+                            al alumno su propio historial -- hasta acá solo podía
+                            escribir (cargar su peso), nunca ver hacia atrás. */}
+                        {vista === 'progreso' && (
+                        <section aria-labelledby="mp-progreso-titulo" className="space-y-5">
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
+                                <h2
+                                    id="mp-progreso-titulo"
+                                    className="font-display text-2xl font-extrabold uppercase text-primary"
+                                >
+                                    Tu progreso
+                                </h2>
+                            </div>
+
+                            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                                        <Scale className="h-6 w-6 text-primary" strokeWidth={2.2} aria-hidden="true" />
+                                    </span>
+                                    <p className="text-xl font-extrabold">Tu peso de hoy</p>
+                                </div>
+                                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            step="0.1"
+                                            min="1"
+                                            max="400"
+                                            placeholder="Ej: 72.5"
+                                            value={pesoInput}
+                                            onChange={(e) => {
+                                                setPesoInput(e.target.value);
+                                                setPesoGuardado(false);
+                                            }}
+                                            className="w-full rounded-xl border border-border bg-background px-4 py-3 pr-12 text-lg font-semibold"
+                                        />
+                                        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">
+                                            kg
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={guardarPeso}
+                                        disabled={guardandoPeso || !pesoInput}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-lg font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-60 sm:w-auto"
+                                    >
+                                        {guardandoPeso ? (
+                                            'Guardando...'
+                                        ) : pesoGuardado ? (
+                                            <>
+                                                <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Guardado
+                                            </>
+                                        ) : (
+                                            'Guardar'
+                                        )}
+                                    </button>
+                                </div>
+                                {errorPeso && (
+                                    <p className="mt-3 text-base font-semibold text-destructive">{errorPeso}</p>
+                                )}
+                            </div>
+
+                            {cargandoProgreso ? (
+                                <div className="rounded-2xl border border-border bg-card p-8 text-center text-base text-muted-foreground">
+                                    Cargando tu progreso...
+                                </div>
+                            ) : errorProgreso ? (
+                                <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-5 text-base font-semibold text-destructive">
+                                    {errorProgreso}
+                                </div>
+                            ) : progreso ? (
+                                <>
+                                    {/* Racha motivacional: entrenamientos marcados como
+                                        hechos (botón "Marcar como hecho" de cada día,
+                                        Fase 2.6) en los últimos 7 días. Sin racha
+                                        todavía no es un error ni algo para lamentar --
+                                        el mensaje cambia según haya o no haya, nunca
+                                        en tono de reto. */}
+                                    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-warn/15">
+                                            <Flame className="h-7 w-7 text-warn" strokeWidth={2.2} aria-hidden="true" />
+                                        </span>
+                                        <div>
+                                            <p className="font-display text-3xl font-extrabold">
+                                                {progreso.entrenamientos_ultima_semana}{' '}
+                                                <span className="text-lg font-semibold text-muted-foreground">
+                                                    {progreso.entrenamientos_ultima_semana === 1
+                                                        ? 'entrenamiento'
+                                                        : 'entrenamientos'}{' '}
+                                                    esta semana
+                                                </span>
+                                            </p>
+                                            <p className="mt-1 text-base text-muted-foreground">
+                                                {progreso.entrenamientos_ultima_semana === 0
+                                                    ? 'Marcá "Hecho" en tu rutina de hoy para empezar la racha.'
+                                                    : progreso.entrenamientos_ultima_semana >= 4
+                                                      ? '¡Muy bien! Seguí así.'
+                                                      : 'Vas bien, un poco más y sostenés la racha.'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                        <h3 className="mb-4 font-display text-lg font-bold">Evolución del peso</h3>
+                                        {progreso.historial_peso.length < 2 ? (
+                                            <p className="text-base text-muted-foreground">
+                                                Cargá tu peso un par de veces más para empezar a ver el gráfico.
+                                            </p>
+                                        ) : (
+                                            <div className="h-56">
+                                                <React.Suspense
+                                                    fallback={
+                                                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                                                            Cargando el gráfico...
+                                                        </div>
+                                                    }
+                                                >
+                                                    <GraficoPeso
+                                                        serie={progreso.historial_peso.map((p) => ({
+                                                            fecha: fmtFecha(p.fecha).slice(0, 5),
+                                                            peso: Number(p.peso),
+                                                        }))}
+                                                    />
+                                                </React.Suspense>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : null}
+                        </section>
+                        )}
+
+                        {vista === 'alimentacion' && (
                         <section
                             aria-labelledby="mp-alimentacion-titulo"
                             className="mp-seccion-alimentacion space-y-5"
@@ -1504,6 +1793,41 @@ const MiPlanPage = () => {
                                     </button>
                                 )}
                             </div>
+
+                            {/* Mismo aviso de vencimiento que en la pestaña Rutina,
+                                acá con el plan de alimentación. */}
+                            {diasHastaPlan !== null && diasHastaPlan <= 7 && (
+                                <div
+                                    className={`mp-no-imprimir flex items-start gap-3 rounded-2xl border-2 p-4 sm:p-5 ${
+                                        diasHastaPlan < 0
+                                            ? 'border-destructive bg-destructive/10'
+                                            : 'border-warn bg-warn/10'
+                                    }`}
+                                >
+                                    <span
+                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                                            diasHastaPlan < 0 ? 'bg-destructive/20' : 'bg-warn/20'
+                                        }`}
+                                    >
+                                        <Apple
+                                            className={`h-5 w-5 ${diasHastaPlan < 0 ? 'text-destructive' : 'text-warn'}`}
+                                            strokeWidth={2.2}
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <p
+                                        className={`text-base font-semibold sm:text-lg ${
+                                            diasHastaPlan < 0 ? 'text-destructive' : 'text-warn'
+                                        }`}
+                                    >
+                                        {diasHastaPlan < 0
+                                            ? `Tu plan de alimentación venció el ${fmtFecha(plan.plan_fecha_fin)}. Pedile al profesor uno nuevo.`
+                                            : diasHastaPlan === 0
+                                              ? 'Tu plan de alimentación vence hoy. Pedile al profesor uno nuevo.'
+                                              : `Tu plan de alimentación vence en ${diasHastaPlan} ${diasHastaPlan === 1 ? 'día' : 'días'} (${fmtFecha(plan.plan_fecha_fin)}).`}
+                                    </p>
+                                </div>
+                            )}
 
                             {plan.alimentacion_restringida ? (
                                 <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
@@ -1557,6 +1881,7 @@ const MiPlanPage = () => {
                                 </>
                             )}
                         </section>
+                        )}
                     </main>
 
                     {cronometro !== null && (

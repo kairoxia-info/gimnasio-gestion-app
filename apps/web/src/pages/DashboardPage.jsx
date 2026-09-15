@@ -7,7 +7,17 @@ import { Card, Empty, Loading } from '@/components/ui-kit';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
-import { ESTADOS_PAGO, estadoAlumno, estadoCuota, fmtDiaCorto, fmtFecha, fmtMes, hoy, money } from '@/lib/format';
+import {
+    ESTADOS_PAGO,
+    estadoAlumno,
+    estadoCuota,
+    fmtDiaCorto,
+    fmtFecha,
+    fmtMes,
+    hoy,
+    money,
+    planesPorVencer as planesPorVencerHelper,
+} from '@/lib/format';
 
 // Carga diferida: saca recharts (~100 KB) del bundle principal. Los
 // gráficos están más abajo de lo que se ve al entrar al panel, así que no
@@ -157,6 +167,10 @@ const DashboardPage = () => {
         // que usa el aviso de cuota — pero acá NO hay estado por default: sin
         // fecha_fin cargada, ese plan simplemente no entra en la cuenta (no
         // se inventa un vencimiento para algo al que nunca se le puso fecha).
+        //
+        // planesPorVencer() se sacó a lib/format.js (15/09/2026) para poder
+        // reusar el mismo criterio en la campanita de notificaciones
+        // (NotificacionesCampana.jsx) -- antes vivía solo acá.
         const hoyMedianoche = new Date();
         hoyMedianoche.setHours(0, 0, 0, 0);
         const diasHasta = (fecha) => {
@@ -164,50 +178,7 @@ const DashboardPage = () => {
             return Math.round((f - hoyMedianoche) / 86400000);
         };
 
-        // rutinas_asignadas no tiene límite de una fila activa por alumno a
-        // nivel de base -- en la práctica sí lo es (RutinasPage/AlumnoPage
-        // desactivan la vieja antes de crear la nueva), pero por las dudas
-        // se toma la más reciente si hubiera más de una.
-        const rutinaPorAlumno = new Map();
-        rutinasAsignadas.forEach((r) => {
-            if (!r.fecha_fin) return;
-            const prev = rutinaPorAlumno.get(r.alumno_id);
-            if (!prev || String(r.created_at) > String(prev.created_at)) rutinaPorAlumno.set(r.alumno_id, r);
-        });
-        const dietaPorAlumno = new Map();
-        planesAlimentacion.forEach((p) => {
-            if (!p.fecha_fin) return;
-            const prev = dietaPorAlumno.get(p.alumno_id);
-            if (!prev || String(p.created_at) > String(prev.created_at)) dietaPorAlumno.set(p.alumno_id, p);
-        });
-
-        const planesPorVencer = [];
-        activos.forEach((a) => {
-            const rutina = rutinaPorAlumno.get(a.id);
-            if (rutina) {
-                const dias = diasHasta(rutina.fecha_fin);
-                if (dias <= 7) {
-                    planesPorVencer.push({ alumno: a, tipo: 'Rutina', fecha: rutina.fecha_fin, vencido: dias < 0 });
-                }
-            }
-            const dieta = dietaPorAlumno.get(a.id);
-            if (dieta) {
-                const dias = diasHasta(dieta.fecha_fin);
-                if (dias <= 7) {
-                    planesPorVencer.push({
-                        alumno: a,
-                        tipo: 'Plan de comida',
-                        fecha: dieta.fecha_fin,
-                        vencido: dias < 0,
-                    });
-                }
-            }
-        });
-        // Vencidos primero, y entre iguales el que vence/venció antes.
-        planesPorVencer.sort((x, y) => {
-            if (x.vencido !== y.vencido) return x.vencido ? -1 : 1;
-            return String(x.fecha).localeCompare(String(y.fecha));
-        });
+        const planesPorVencer = planesPorVencerHelper(activos, rutinasAsignadas, planesAlimentacion);
 
         // Alumnos activos que hace rato no aparecen. Se mide contra la última
         // fecha con presente=true — "ausente" y "sin registro" no cuentan
