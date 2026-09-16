@@ -144,17 +144,27 @@ export const AuthProvider = ({ children }) => {
                 });
                 if (authError) return { error: { message: 'La contraseña no es correcta.' } };
 
-                // Los archivos del gimnasio (logo, fotos/videos de ejercicios) no
-                // se pueden borrar por SQL -- Supabase lo bloquea a propósito
-                // (ver comentario en la migración 0035) para que nunca quede un
-                // archivo huérfano en el storage real. Se listan y remueven acá
-                // por la Storage API, con la sesión del propio admin (mismas
-                // policies de las migraciones 0003/0005), antes de borrar el
-                // resto por la RPC. Si esto falla no bloquea el borrado de la
-                // cuenta -- lo importante es que los datos salgan de la base.
+                // Los archivos del gimnasio (logo, fotos/videos de ejercicios, fotos
+                // de alumnos, fotos de progreso) no se pueden borrar por SQL --
+                // Supabase lo bloquea a propósito (ver comentario en la migración
+                // 0035) para que nunca quede un archivo huérfano en el storage
+                // real. Se listan y remueven acá por la Storage API, con la sesión
+                // del propio admin (mismas policies de las migraciones 0003/0005),
+                // antes de borrar el resto por la RPC. Si esto falla no bloquea el
+                // borrado de la cuenta -- lo importante es que los datos salgan de
+                // la base.
+                //
+                // Bug encontrado el 16/09/2026 (Nalux probó "Eliminar cuenta" en
+                // producción y pidió confirmar que no quedara nada): esta lista
+                // solo tenía 'gimnasio-logos' y 'ejercicios-media' -- las fotos de
+                // alumnos y de progreso (buckets 'alumnos-fotos'/'progreso-fotos',
+                // mismo patrón <gimnasio_id>/archivo) quedaban huérfanas en el
+                // storage real cada vez que se borraba un gimnasio con alumnos que
+                // tuvieran foto cargada. Confirmado con archivos huérfanos reales
+                // de pruebas anteriores en la base de producción.
                 if (profile?.role === 'admin' && profile?.gimnasio_id) {
                     const gimnasioId = profile.gimnasio_id;
-                    for (const bucket of ['gimnasio-logos', 'ejercicios-media']) {
+                    for (const bucket of ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos']) {
                         try {
                             const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId);
                             if (archivos?.length) {
