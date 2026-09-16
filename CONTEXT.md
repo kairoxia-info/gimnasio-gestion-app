@@ -5067,3 +5067,78 @@ pedido por alumno en vez de uno solo (cerrar día completo, asignar rutina masiv
 vencimiento), columnas muertas en el esquema (`alumnos.user_id`, `pagos.estado`), archivo sin usar
 `biblioteca_ejercicios_base.js` (579 líneas) y 3 dependencias de npm sin usar (`date-fns`, `zod`,
 `@hookform/resolvers`) detectadas con `knip`.
+
+
+## 16/09/2026 — Limpieza de código duplicado y archivos gigantes (auditoría final, parte 2)
+
+**Pedido de Nalux**: "arreglá lo de los archivos duplicados y grandes también" -- los dos hallazgos
+de mantenibilidad de la auditoría final del 15/09 que habían quedado pendientes (sin urgencia,
+pero pedidos igual).
+
+### 1) "¿Eliminar?" compartido en un solo componente
+
+El patrón "Sí, eliminar/quitar/archivar/regenerar... + Cancelar" (con label que cambia a
+"Eliminando..." mientras corre, deshabilitado durante la acción) estaba copiado a mano en 13
+lugares de 7 pantallas: AlumnosPage.jsx, PreciosPage.jsx (x3: período/descuento/plan),
+RutinasPage.jsx (x3: eliminar rutina/quitar asignación/duplicar semana), AlimentosPage.jsx (x2:
+mobile y desktop), AlumnoPage.jsx (x2: progreso/pagos), PlanesAlimentacionPage.jsx (x2: eliminar
+plan/quitar asignación), ConfiguracionPage.jsx (x2: regenerar código/archivar pagos).
+
+Nuevo `ConfirmInlineActions` en `ui-kit.jsx` -- a propósito SOLO envuelve el par de botones (no
+el mensaje "¿Seguro?" ni el botón disparador "Eliminar"/ícono, que varían bastante entre
+pantallas: mensaje inline vs. abajo vs. sin mensaje, disparador de texto vs. ícono solo, distintos
+paddings ya ajustados a mano por pantalla). `className` queda obligatorio a propósito (sin
+default) para no cambiar sin querer el tamaño de ningún botón existente.
+
+**Verificado en vivo, las 13 ocurrencias** (abriendo el estado "confirmando" de cada una y
+cancelando sin ejecutar nada): AlumnosPage, ConfiguracionPage (regenerar + archivar), PreciosPage
+(período + plan), AlumnoPage (pagos con mensaje de comprobante + progreso con disparador de
+ícono), AlimentosPage (tabla desktop), RutinasPage (asignar/quitar). Build y lint sin errores.
+
+### 2) Archivos gigantes divididos en componentes
+
+Hecho con 4 agentes en paralelo (frontend-architect), cada uno en su propio archivo, con la regla
+estricta de "cero cambio de comportamiento -- si hay duda sobre si un useState es seguro de mover,
+dejarlo en el padre y pasarlo por prop". Los primeros 4 intentos se cortaron por un límite de
+sesión (no por error de código) -- se reanudaron desde donde quedaron (dos ya habían dejado
+trabajo parcial, verificado como consistente -- compilaba y pasaba lint -- antes de continuar).
+
+- **AlumnoPage.jsx**: 2529 → 352 líneas. Los 9 sub-componentes que ya vivían en el mismo archivo
+  (`HistorialRutinas`, `PlanEntrenamiento`, `PlanAlimentacion`, `Progreso`, `AsistenciaAlumno`,
+  `EstadoCuotaAlumno`, `PagosAlumno`, `NotasPrivadas`, `AccesoAlumno`) se movieron a
+  `apps/web/src/components/alumno/`, cada uno a su propio archivo.
+- **ConfiguracionPage.jsx**: 1070 → 163 líneas. Las 7 tarjetas (`DatosGimnasio`,
+  `AltaAlumnosPorLink`, `VencimientoCuotas`, `Comprobante`, `AvisoAutomaticoCuota`,
+  `ArchivoPagos`, `EliminarCuenta`) a `apps/web/src/components/configuracion/`. El estado
+  compartido entre varias (`gimnasioFull` y los 4 formularios que llena `cargarGimnasio()` en un
+  solo fetch) se quedó en el padre y se pasa por props, sin duplicar la carga.
+- **PlanesAlimentacionPage.jsx**: 1374 → 789 líneas. Los 4 modales (`VerPlanModal`,
+  `AsignarAlumnosModal`, `GenerarPdfPlanModal`, `PlanFormModal`) a
+  `apps/web/src/components/planes-alimentacion/`. Acá NINGÚN estado se movió a los hijos a
+  propósito: cada variable usada dentro de un modal también la escribe la función que lo abre
+  (`abrirAsignar`/`abrirPdfModal`/`abrirNuevo`/`abrirEditar`), llamada desde botones FUERA del
+  modal -- moverlo hubiera roto el patrón de "resetear antes de abrir" salvo agregar un
+  `useEffect` con timing distinto. Extracción 100% presentacional (JSX + props), cero riesgo real.
+- **RutinasPage.jsx**: 2442 → 2011 líneas. Se extrajeron `CampoReps`, `VerRutinaModal`,
+  `PdfRutinaModal` y `AsignarAlumnosModal` a `apps/web/src/components/rutinas/`. El modal grande
+  "Nueva rutina"/"Editar rutina" (~900 líneas, con TODO el armado de días/bloques/ejercicios que
+  se terminó de pulir en las tandas anteriores de esta misma sesión: CampoReps, `esRepsPorTiempo`,
+  `ocultarNombreBloque`/`continuarBloque`, `border-foreground`, `alternarPreview`) se dejó
+  DELIBERADAMENTE sin tocar -- casi toda su estado la escriben `abrirNueva`/`abrirEditar`,
+  llamadas desde fuera del modal, y separarlo con certeza total hubiera significado threadear
+  ~30 props cruzadas justo sobre la funcionalidad más nueva y delicada del proyecto. Se priorizó
+  no romper nada por sobre reducir más líneas -- si en algún momento se quiere retomar, es el
+  candidato obvio que falta.
+
+**Verificado en vivo, las 4 pantallas completas**: AlumnoPage (las 5 pestañas: Entrenamiento,
+Nutrición, Progreso, Asistencia, Pagos, con datos reales de un alumno real, más el borrado de un
+pago cancelado sin ejecutar), ConfiguracionPage (Datos del gimnasio con logo/color/días
+renderizando igual que antes), PlanesAlimentacionPage (Ver/Editar/Asignar a alumnos, con datos
+reales de "Alimentación Nadia"), RutinasPage (Ver/Editar -- confirmando que el modal grande sigue
+con CampoReps, el toggle Seg/Min ocultando Peso, el borde sólido de "Nombre del bloque" -- más
+Asignar a alumnos y el modal de PDF). `npx eslint src/` y `npm run build` sobre TODO el proyecto,
+limpios los dos.
+
+**Archivos**: apps/web/src/components/ui-kit.jsx, apps/web/src/pages/{AlumnosPage,PreciosPage,
+RutinasPage,AlimentosPage,AlumnoPage,PlanesAlimentacionPage,ConfiguracionPage}.jsx, más las
+carpetas nuevas apps/web/src/components/{alumno,configuracion,planes-alimentacion,rutinas}/.
