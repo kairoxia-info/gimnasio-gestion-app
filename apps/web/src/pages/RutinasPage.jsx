@@ -3,70 +3,39 @@ import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ClipboardList, Copy, Eye, Plus, Printer, Search, Trash2, UserPlus, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
+import {
+    Badge,
+    Btn,
+    Card,
+    ConfirmInlineActions,
+    Empty,
+    ErrorBox,
+    Field,
+    Input,
+    Loading,
+    Modal,
+    Select,
+    Textarea,
+} from '@/components/ui-kit';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
+import AsignarAlumnosModal from '@/components/rutinas/AsignarAlumnosModal';
+import CampoReps from '@/components/rutinas/CampoReps';
+import PdfRutinaModal from '@/components/rutinas/PdfRutinaModal';
+import VerRutinaModal from '@/components/rutinas/VerRutinaModal';
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, snapshotRutina, updateRec } from '@/lib/data';
 import {
     DIAS,
-    UNIDADES_REPS,
     agruparPorBloque,
-    armarReps,
-    descomponerReps,
     desglosarSeries,
     esRepsPorTiempo,
-    fmtFecha,
     hoy,
-    resumenSeries,
-    resumenTipoGrupo,
     semanaDeItem,
     tieneSeriesDetalle,
     tipoDeGrupo,
 } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
-
-// UNIDADES_REPS/descomponerReps/armarReps viven en lib/format.js: la
-// pantalla del alumno y la ficha del profesor también necesitan saber si un
-// ejercicio se mide en tiempo (para no mostrarle kilos a una bici).
-//
-// Número arriba, selector de unidad abajo -- APILADOS, no lado a lado.
-// Primer intento fue en una sola fila (número + selector) y, probado en
-// vivo, la columna "Reps" de esta grilla mide apenas ~53px de ancho total
-// (grid-cols con 4 columnas iguales) -- repartida entre dos controles
-// quedaba casi ilegible (el número a 26px de ancho, más angosto todavía que
-// el bug original que se estaba corrigiendo). Apilado, cada control usa el
-// ancho COMPLETO de la columna por separado, y entra cómodo. Mismo criterio
-// que el campo Series de más abajo: padding forzado con `!` porque el Input
-// compartido ya trae el suyo de fábrica (una className normal no lo pisa),
-// y sin las flechitas nativas de type=number, que en una columna así de
-// angosta ya se comprobó que tapan el dígito.
-const CampoReps = ({ value, onChange }) => {
-    const { cantidad, unidad } = descomponerReps(value);
-    return (
-        <div className="space-y-1">
-            <Input
-                type="number"
-                value={cantidad}
-                onChange={(e) => onChange(armarReps(e.target.value, unidad))}
-                className="!px-1.5 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                placeholder="10"
-            />
-            <Select
-                value={unidad}
-                onChange={(e) => onChange(armarReps(cantidad, e.target.value))}
-                className="!px-1.5 !py-1 text-xs"
-                aria-label="Unidad (repeticiones, segundos o minutos)"
-            >
-                {UNIDADES_REPS.map((u) => (
-                    <option key={u.valor} value={u.valor}>
-                        {u.label}
-                    </option>
-                ))}
-            </Select>
-        </div>
-    );
-};
 
 // Días que ya usa una rutina, en el orden de DIAS. Si algún item tuviera un
 // día fuera de la lista (no debería, siempre salen del selector), igual se
@@ -97,110 +66,6 @@ const agruparPorCombo = (lista) => {
 };
 
 const vacio = { nombre: '', descripcion: '', duracion_semanas: 4 };
-
-// Vista de solo lectura de una rutina ya armada (botón "Ver" de cada
-// tarjeta, pedido de Nalux el 07/09/2026). Respeta el mismo agrupamiento que
-// el armador -- semana, día, bloque y superseries -- para que sea la misma
-// rutina que el profesor tiene en la cabeza, nada más que sin campos
-// editables.
-const DetalleRutina = ({ rutina }) => {
-    const items = rutina.items || [];
-    if (items.length === 0) return <Empty>Esta rutina todavía no tiene ejercicios cargados.</Empty>;
-
-    const semanas = [...new Set(items.map(semanaDeItem))].sort((a, b) => a - b);
-
-    return (
-        <div className="space-y-6">
-            {rutina.descripcion && <p className="text-sm text-muted-foreground">{rutina.descripcion}</p>}
-
-            {semanas.map((sem) => {
-                const deLaSemana = items.filter((it) => semanaDeItem(it) === sem);
-                return (
-                    <div key={sem} className="space-y-4">
-                        {semanas.length > 1 && (
-                            <p className="font-display text-sm font-bold uppercase text-primary">
-                                Semana {sem}
-                            </p>
-                        )}
-                        {diasUsados(deLaSemana).map((d) => {
-                            const delDia = deLaSemana.filter((it) => it.dia === d);
-                            if (delDia.length === 0) return null;
-                            return (
-                                <div key={d} className="rounded-2xl border border-border p-4">
-                                    <p className="font-display text-base font-bold">{d}</p>
-                                    <div className="mt-3 space-y-3">
-                                        {agruparPorBloque(delDia).map(([bloque, delBloque]) => (
-                                            <div key={bloque || 'sin-bloque'}>
-                                                {bloque && (
-                                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                        {bloque}
-                                                        {resumenTipoGrupo(delBloque) && (
-                                                            <span className="ml-2 normal-case text-primary">
-                                                                · {resumenTipoGrupo(delBloque)}
-                                                            </span>
-                                                        )}
-                                                    </p>
-                                                )}
-                                                <div className="space-y-2">
-                                                    {agruparPorCombo(delBloque).map((combo, i) => (
-                                                        <div
-                                                            key={combo[0].key || `${combo[0].nombre}-${i}`}
-                                                            className={
-                                                                combo.length > 1
-                                                                    ? 'rounded-xl border border-primary/30 bg-primary/5 p-3'
-                                                                    : ''
-                                                            }
-                                                        >
-                                                            {combo.length > 1 && (
-                                                                <p className="mb-2 text-xs font-bold uppercase text-primary">
-                                                                    Superserie
-                                                                </p>
-                                                            )}
-                                                            {combo.map((it, j) => (
-                                                                <div
-                                                                    key={it.key || `${it.nombre}-${j}`}
-                                                                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-1"
-                                                                >
-                                                                    <span className="min-w-0 text-sm font-semibold">
-                                                                        {it.nombre}
-                                                                        {it.grupo && (
-                                                                            <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                                                                {it.grupo}
-                                                                            </span>
-                                                                        )}
-                                                                    </span>
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {resumenSeries(it)}
-                                                                        {!tieneSeriesDetalle(it) && it.peso ? ` · ${it.peso}` : ''}
-                                                                        {it.descanso ? ` · ${it.descanso}` : ''}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                            {combo[0].intensidad && (
-                                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                                    Intensidad: {combo[0].intensidad}
-                                                                </p>
-                                                            )}
-                                                            {combo[0].comentario && (
-                                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                                    {combo[0].comentario}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
 
 // Biblioteca de rutinas reutilizables: se arman UNA vez acá y se asignan a
 // N alumnos (rutinas_asignadas). Reemplaza al viejo modelo "un plan por
@@ -1126,24 +991,12 @@ const RutinasPage = () => {
                                         <Printer className="h-3.5 w-3.5" /> PDF
                                     </Btn>
                                     {confirmandoBorrarId === r.id ? (
-                                        <>
-                                            <Btn
-                                                variant="danger"
-                                                className="px-3 py-2 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => borrar(r)}
-                                            >
-                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                            </Btn>
-                                            <Btn
-                                                variant="ghost"
-                                                className="px-3 py-2 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => setConfirmandoBorrarId(null)}
-                                            >
-                                                Cancelar
-                                            </Btn>
-                                        </>
+                                        <ConfirmInlineActions
+                                            className="px-3 py-2 text-xs"
+                                            ejecutando={borrando}
+                                            onConfirmar={() => borrar(r)}
+                                            onCancelar={() => setConfirmandoBorrarId(null)}
+                                        />
                                     ) : (
                                         <Btn
                                             variant="danger"
@@ -1188,152 +1041,30 @@ const RutinasPage = () => {
             {/* Vista de solo lectura de una rutina ya armada. Agrupa igual que
                 el armador (semana -> día -> superserie) pero sin ningún campo
                 editable, para poder repasarla de un vistazo. */}
-            <Modal
-                open={!!rutinaViendo}
-                onClose={() => setRutinaViendo(null)}
-                title={rutinaViendo?.nombre || 'Rutina'}
-                wide
-            >
-                {rutinaViendo && <DetalleRutina rutina={rutinaViendo} />}
-            </Modal>
+            <VerRutinaModal rutina={rutinaViendo} onClose={() => setRutinaViendo(null)} />
 
-            <Modal
-                open={!!pdfModalRutina}
+            <PdfRutinaModal
+                pdfModalRutina={pdfModalRutina}
+                alumnosActivos={alumnosActivos}
+                pdfModo={pdfModo}
+                setPdfModo={setPdfModo}
+                pdfAlumnoId={pdfAlumnoId}
+                setPdfAlumnoId={setPdfAlumnoId}
+                pdfAlumnoNombre={pdfAlumnoNombre}
+                setPdfAlumnoNombre={setPdfAlumnoNombre}
+                pdfFechaInicio={pdfFechaInicio}
+                setPdfFechaInicio={setPdfFechaInicio}
+                pdfFechaFin={pdfFechaFin}
+                setPdfFechaFin={setPdfFechaFin}
+                pdfConflicto={pdfConflicto}
+                setPdfConflicto={setPdfConflicto}
+                pdfError={pdfError}
+                setPdfError={setPdfError}
+                pdfAsignando={pdfAsignando}
+                rutinaImprimiendo={rutinaImprimiendo}
                 onClose={() => setPdfModalRutina(null)}
-                title={pdfModalRutina ? `PDF de "${pdfModalRutina.nombre}"` : 'PDF'}
-            >
-                <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                        {[
-                            { valor: 'alumno', label: 'Alumno registrado' },
-                            { valor: 'libre', label: 'Nombre libre' },
-                        ].map((op) => (
-                            <button
-                                key={op.valor}
-                                type="button"
-                                onClick={() => {
-                                    setPdfModo(op.valor);
-                                    setPdfError('');
-                                    setPdfConflicto(null);
-                                }}
-                                aria-pressed={pdfModo === op.valor}
-                                className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                                    pdfModo === op.valor
-                                        ? 'border-primary bg-primary text-primary-foreground'
-                                        : 'border-border text-muted-foreground hover:text-foreground'
-                                }`}
-                            >
-                                {op.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {pdfModo === 'alumno' ? (
-                        alumnosActivos.length === 0 ? (
-                            <Empty>No hay alumnos activos cargados. Usar "Nombre libre" para esta copia.</Empty>
-                        ) : (
-                            <Field label="Alumno">
-                                <Select
-                                    value={pdfAlumnoId}
-                                    onChange={(e) => {
-                                        const id = e.target.value;
-                                        setPdfAlumnoId(id);
-                                        setPdfAlumnoNombre(alumnosActivos.find((a) => a.id === id)?.nombre || '');
-                                        setPdfConflicto(null);
-                                    }}
-                                >
-                                    <option value="">Elegir un alumno...</option>
-                                    {alumnosActivos.map((a) => (
-                                        <option key={a.id} value={a.id}>
-                                            {a.nombre}
-                                        </option>
-                                    ))}
-                                </Select>
-                            </Field>
-                        )
-                    ) : (
-                        <Field label="Nombre del alumno (opcional)">
-                            <Input
-                                value={pdfAlumnoNombre}
-                                onChange={(e) => setPdfAlumnoNombre(e.target.value)}
-                                placeholder="Para quién es esta copia"
-                            />
-                        </Field>
-                    )}
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="Fecha de inicio">
-                            <Input
-                                type="date"
-                                value={pdfFechaInicio}
-                                onChange={(e) => setPdfFechaInicio(e.target.value)}
-                            />
-                        </Field>
-                        <Field label="Fecha de fin (opcional)">
-                            <Input
-                                type="date"
-                                value={pdfFechaFin}
-                                onChange={(e) => setPdfFechaFin(e.target.value)}
-                            />
-                        </Field>
-                    </div>
-
-                    {!pdfConflicto && (
-                        <span className="block text-xs text-muted-foreground">
-                            {pdfModo === 'alumno'
-                                ? 'Al generar el PDF, la rutina queda asignada a ese alumno con estas fechas (si ya la tenía asignada, no se duplica).'
-                                : 'Nombre libre: el PDF sale con ese nombre, pero no queda asignado a nadie ni con seguimiento.'}
-                        </span>
-                    )}
-
-                    {/* Mismo cartel de conflicto que "Asignar a alumnos", para un solo
-                        alumno: pedido de Nalux (03/09/2026). */}
-                    {pdfConflicto && (
-                        <div className="space-y-3 rounded-xl border border-warn bg-warn/10 p-4">
-                            <p className="text-sm font-semibold">
-                                {pdfAlumnoNombre || 'Este alumno'} ya tiene una rutina asignada: "
-                                {pdfConflicto.nombreRutina}".
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                ¿Le dejamos la que tiene, o se la reemplazamos por "{pdfModalRutina?.nombre}"?
-                            </p>
-                            <div className="flex flex-wrap justify-end gap-2 pt-1">
-                                <Btn variant="ghost" disabled={pdfAsignando} onClick={() => setPdfConflicto(null)}>
-                                    Dejarle la que tiene
-                                </Btn>
-                                <Btn disabled={pdfAsignando} onClick={confirmarPdf}>
-                                    {pdfAsignando ? 'Reemplazando...' : 'Reemplazar y generar PDF'}
-                                </Btn>
-                            </div>
-                        </div>
-                    )}
-
-                    {pdfError && <p className="text-sm text-destructive">{pdfError}</p>}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                        <Btn variant="ghost" onClick={() => setPdfModalRutina(null)}>
-                            Cancelar
-                        </Btn>
-                        {!pdfConflicto && (
-                            <Btn
-                                onClick={confirmarPdf}
-                                disabled={
-                                    pdfAsignando ||
-                                    !!rutinaImprimiendo ||
-                                    (pdfModo === 'alumno' && !pdfAlumnoId)
-                                }
-                            >
-                                <Printer className="h-4 w-4" />{' '}
-                                {pdfAsignando
-                                    ? 'Asignando...'
-                                    : rutinaImprimiendo
-                                      ? 'Generando...'
-                                      : 'Generar PDF'}
-                            </Btn>
-                        )}
-                    </div>
-                </div>
-            </Modal>
+                onConfirmar={confirmarPdf}
+            />
 
             <Modal open={open} onClose={() => setOpen(false)} title={editId ? 'Editar rutina' : 'Nueva rutina'} wide>
                 <form onSubmit={guardar} className="space-y-5">
@@ -1474,20 +1205,12 @@ const RutinasPage = () => {
                                                     La semana {semana + 1} ya tiene ejercicios cargados. ¿Reemplazarlos
                                                     con una copia de la semana {semana}?
                                                 </span>
-                                                <Btn
-                                                    variant="danger"
+                                                <ConfirmInlineActions
                                                     className="px-3 py-1.5 text-xs"
-                                                    onClick={duplicarSemanaActual}
-                                                >
-                                                    Sí, reemplazar
-                                                </Btn>
-                                                <Btn
-                                                    variant="ghost"
-                                                    className="px-3 py-1.5 text-xs"
-                                                    onClick={() => setConfirmandoDuplicarSemana(false)}
-                                                >
-                                                    Cancelar
-                                                </Btn>
+                                                    confirmLabel="Sí, reemplazar"
+                                                    onConfirmar={duplicarSemanaActual}
+                                                    onCancelar={() => setConfirmandoDuplicarSemana(false)}
+                                                />
                                             </div>
                                         ) : (
                                             <Btn
@@ -2259,182 +1982,29 @@ const RutinasPage = () => {
                 </div>
             )}
 
-            <Modal
-                open={asignarOpen}
+            <AsignarAlumnosModal
+                asignarOpen={asignarOpen}
                 onClose={() => setAsignarOpen(false)}
-                title={rutinaAsignando ? `Asignar "${rutinaAsignando.nombre}" a alumnos` : 'Asignar a alumnos'}
-            >
-                <div className="space-y-4">
-                    {/* Reportado por Nalux (03/09/2026): las fechas arriba de todo,
-                        antes de elegir a quién, confundían a los profes -- no quedaba
-                        claro que esas fechas eran "para el/los que tildes abajo". Ahora
-                        primero se elige alumno(s) y recién ahí (una vez tildado al
-                        menos uno) se abren los campos de fecha, justo antes de guardar
-                        todo junto con "Asignar". */}
-                    {alumnosActivos.length === 0 ? (
-                        <Empty>No hay alumnos activos para asignar.</Empty>
-                    ) : (
-                        <div className="max-h-80 overflow-y-auto rounded-xl border border-border">
-                            <ul className="divide-y divide-border">
-                                {alumnosActivos.map((a) => {
-                                    const asignacion = asignadasActivas.find(
-                                        (x) => x.rutina_id === rutinaAsignando?.id && x.alumno_id === a.id,
-                                    );
-                                    // Otra rutina activa (distinta a esta) -- no bloquea el
-                                    // tilde, solo avisa antes de que el profe lo elija: el
-                                    // cartel de "reemplazar o dejar" recién sale al confirmar.
-                                    const otra = !asignacion
-                                        ? asignadasActivas.find(
-                                              (x) => x.alumno_id === a.id && x.rutina_id !== rutinaAsignando?.id,
-                                          )
-                                        : null;
-                                    const nombreOtra = otra ? otra.rutina_nombre : null;
-                                    return (
-                                        <li key={a.id} className="flex items-center gap-3 px-4 py-3">
-                                            <input
-                                                type="checkbox"
-                                                id={`asignar-alumno-${a.id}`}
-                                                checked={seleccionados.has(a.id)}
-                                                disabled={!!asignacion}
-                                                onChange={() => toggleAlumno(a.id)}
-                                                className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))] disabled:opacity-40"
-                                            />
-                                            <label
-                                                htmlFor={`asignar-alumno-${a.id}`}
-                                                className={`flex-1 text-sm ${asignacion ? 'text-muted-foreground' : 'cursor-pointer'}`}
-                                            >
-                                                {a.nombre}
-                                                {asignacion && (
-                                                    <span className="ml-2 text-xs">
-                                                        (ya la tiene, desde el {fmtFecha(asignacion.fecha_inicio)}
-                                                        {asignacion.fecha_fin ? ` hasta el ${fmtFecha(asignacion.fecha_fin)}` : ''})
-                                                    </span>
-                                                )}
-                                                {nombreOtra && (
-                                                    <span className="ml-2 text-xs text-warn">
-                                                        (ya tiene: {nombreOtra})
-                                                    </span>
-                                                )}
-                                            </label>
-                                            {asignacion && confirmandoQuitarId === asignacion.id ? (
-                                                <div className="flex shrink-0 items-center gap-1.5">
-                                                    <span className="text-xs text-muted-foreground">¿Seguro?</span>
-                                                    <Btn
-                                                        type="button"
-                                                        variant="danger"
-                                                        className="px-2 py-1.5 text-xs"
-                                                        disabled={quitandoId === asignacion.id}
-                                                        onClick={() => quitarAsignacion(asignacion.id)}
-                                                    >
-                                                        {quitandoId === asignacion.id ? 'Quitando...' : 'Sí, quitar'}
-                                                    </Btn>
-                                                    <Btn
-                                                        type="button"
-                                                        variant="ghost"
-                                                        className="px-2 py-1.5 text-xs"
-                                                        onClick={() => setConfirmandoQuitarId(null)}
-                                                    >
-                                                        Cancelar
-                                                    </Btn>
-                                                </div>
-                                            ) : (
-                                                asignacion && (
-                                                    <Btn
-                                                        type="button"
-                                                        variant="ghost"
-                                                        className="shrink-0 px-2 py-1.5 text-xs text-primary"
-                                                        onClick={() => setConfirmandoQuitarId(asignacion.id)}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                        Quitar
-                                                    </Btn>
-                                                )
-                                            )}
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </div>
-                    )}
-
-                    {seleccionados.size > 0 && !conflictoAlumnos && (
-                        <div className="space-y-3 border-t border-border pt-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Para {seleccionados.size} alumno{seleccionados.size === 1 ? '' : 's'} elegido
-                                {seleccionados.size === 1 ? '' : 's'}
-                            </p>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <Field label="Fecha de inicio">
-                                    <Input
-                                        type="date"
-                                        value={fechaInicioAsig}
-                                        onChange={(e) => setFechaInicioAsig(e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Fecha de fin (opcional)">
-                                    <Input
-                                        type="date"
-                                        value={fechaFinAsig}
-                                        onChange={(e) => setFechaFinAsig(e.target.value)}
-                                    />
-                                </Field>
-                            </div>
-                            <span className="block text-xs text-muted-foreground">
-                                Con fecha de fin, van a aparecer en el panel general cuando se les esté por
-                                vencer o se les venza la rutina. Sin fecha de fin, no hay aviso.
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Cartel de conflicto: pedido de Nalux (03/09/2026) -- si algún
-                        tildado ya tiene otra rutina activa, no se pisa en silencio. */}
-                    {conflictoAlumnos && (
-                        <div className="space-y-3 rounded-xl border border-warn bg-warn/10 p-4">
-                            <p className="text-sm font-semibold">
-                                {conflictoAlumnos.length === 1
-                                    ? `${conflictoAlumnos[0].nombreAlumno} ya tiene una rutina asignada: "${conflictoAlumnos[0].nombreRutina}".`
-                                    : `${conflictoAlumnos.length} alumnos ya tienen otra rutina asignada:`}
-                            </p>
-                            {conflictoAlumnos.length > 1 && (
-                                <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
-                                    {conflictoAlumnos.map((c) => (
-                                        <li key={c.alumnoId}>
-                                            {c.nombreAlumno} — <span className="italic">{c.nombreRutina}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                                ¿Les dejamos la rutina que ya tienen, o se la reemplazamos por "
-                                {rutinaAsignando?.nombre}"?
-                            </p>
-                            <div className="flex flex-wrap justify-end gap-2 pt-1">
-                                <Btn variant="ghost" disabled={asignando} onClick={omitirConflictos}>
-                                    Dejarles la que tienen
-                                </Btn>
-                                <Btn disabled={asignando} onClick={reemplazarConflictos}>
-                                    {asignando ? 'Reemplazando...' : 'Reemplazar por esta'}
-                                </Btn>
-                            </div>
-                        </div>
-                    )}
-
-                    {asignarMsg && <p className="text-sm text-muted-foreground">{asignarMsg}</p>}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                        <Btn variant="ghost" onClick={() => setAsignarOpen(false)}>
-                            Cerrar
-                        </Btn>
-                        {!conflictoAlumnos && (
-                            <Btn onClick={iniciarAsignacion} disabled={asignando || seleccionados.size === 0}>
-                                {asignando
-                                    ? 'Asignando...'
-                                    : `Asignar${seleccionados.size > 0 ? ` a ${seleccionados.size} alumno${seleccionados.size === 1 ? '' : 's'}` : ''}`}
-                            </Btn>
-                        )}
-                    </div>
-                </div>
-            </Modal>
+                rutinaAsignando={rutinaAsignando}
+                alumnosActivos={alumnosActivos}
+                asignadasActivas={asignadasActivas}
+                seleccionados={seleccionados}
+                toggleAlumno={toggleAlumno}
+                confirmandoQuitarId={confirmandoQuitarId}
+                setConfirmandoQuitarId={setConfirmandoQuitarId}
+                quitandoId={quitandoId}
+                quitarAsignacion={quitarAsignacion}
+                conflictoAlumnos={conflictoAlumnos}
+                fechaInicioAsig={fechaInicioAsig}
+                setFechaInicioAsig={setFechaInicioAsig}
+                fechaFinAsig={fechaFinAsig}
+                setFechaFinAsig={setFechaFinAsig}
+                asignando={asignando}
+                asignarMsg={asignarMsg}
+                omitirConflictos={omitirConflictos}
+                reemplazarConflictos={reemplazarConflictos}
+                iniciarAsignacion={iniciarAsignacion}
+            />
         </AppLayout>
     );
 };
