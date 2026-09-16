@@ -216,7 +216,17 @@ const AlumnoPage = () => {
                                         acceso inválido" en vez de mostrar algo útil. */}
                                     {alumno.activo && (
                                         <a
-                                            href={`/mi-plan/${alumno.codigo_acceso}`}
+                                            // ?profesor=<id> (16/09/2026, pedido de Nalux:
+                                            // "el profe después no tiene opción de volver a
+                                            // su panel"): target="_blank" ya abre esto en una
+                                            // pestaña nueva, pero esa pestaña no tenía NINGÚN
+                                            // link de vuelta -- el alumno real nunca lo
+                                            // necesita (no tiene "panel" al que volver), así
+                                            // que MiPlanPage.jsx no mostraba ninguno. Con este
+                                            // parámetro, MiPlanPage.jsx muestra un cartel
+                                            // "Volver al panel del profesor" solo cuando se
+                                            // abrió desde acá.
+                                            href={`/mi-plan/${alumno.codigo_acceso}?profesor=${id}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
