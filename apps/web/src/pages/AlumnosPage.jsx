@@ -3,7 +3,20 @@ import { Helmet } from 'react-helmet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Info, Plus, Search, UserRound, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Empty, ErrorBox, Field, FechaInput, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
+import {
+    Badge,
+    Btn,
+    ConfirmInlineActions,
+    Empty,
+    ErrorBox,
+    Field,
+    FechaInput,
+    Input,
+    Loading,
+    Modal,
+    Select,
+    Textarea,
+} from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
@@ -445,22 +458,12 @@ const AlumnosPage = () => {
                                         <span className="text-xs text-muted-foreground">
                                             ¿Eliminar para siempre? Se borra también su historial.
                                         </span>
-                                        <Btn
-                                            variant="danger"
+                                        <ConfirmInlineActions
                                             className="px-3 py-2 text-xs"
-                                            disabled={borrando}
-                                            onClick={() => borrar(a.id)}
-                                        >
-                                            {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                        </Btn>
-                                        <Btn
-                                            variant="ghost"
-                                            className="px-3 py-2 text-xs"
-                                            disabled={borrando}
-                                            onClick={() => setConfirmandoBorrarId(null)}
-                                        >
-                                            Cancelar
-                                        </Btn>
+                                            ejecutando={borrando}
+                                            onConfirmar={() => borrar(a.id)}
+                                            onCancelar={() => setConfirmandoBorrarId(null)}
+                                        />
                                     </div>
                                 ) : (
                                     <Btn

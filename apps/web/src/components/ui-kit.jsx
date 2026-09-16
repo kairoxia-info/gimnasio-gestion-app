@@ -40,6 +40,39 @@ export const Btn = ({ variant = 'primary', className = '', type = 'button', ...p
     );
 };
 
+// Par de botones "Sí, eliminar/quitar/archivar... / Cancelar" del estado
+// "confirmando" de una acción destructiva -- copiado a mano en 7 pantallas
+// distintas (AlumnosPage, PreciosPage x3, RutinasPage x2, AlimentosPage x2,
+// AlumnoPage x2, PlanesAlimentacionPage x2, ConfiguracionPage x2), siempre
+// con la misma forma: un Btn danger que cambia de texto mientras la acción
+// está en curso + un Btn ghost "Cancelar" (encontrado en la auditoría final
+// del proyecto, 15/09/2026). A propósito SOLO envuelve estos dos botones, no
+// el mensaje "¿Seguro?" ni el botón disparador ("Eliminar"/ícono de tacho)
+// que lo muestra -- esas dos partes sí varían bastante entre pantallas
+// (texto distinto, a veces sin mensaje, disparador de texto o de ícono
+// solo), y forzarlas a un único componente hubiera significado más props
+// opcionales que las 15 líneas que reemplaza. className queda obligatorio
+// a propósito (sin default): cada pantalla ya tenía su propio padding
+// (px-3 py-2, px-3 py-1.5, px-2 py-1.5, flex-1 px-3 py-1.5...) y copiarlo
+// tal cual evita cambiar sin querer el tamaño de un botón en alguna.
+export const ConfirmInlineActions = ({
+    onConfirmar,
+    onCancelar,
+    ejecutando = false,
+    confirmLabel = 'Sí, eliminar',
+    ejecutandoLabel = 'Eliminando...',
+    className,
+}) => (
+    <>
+        <Btn variant="danger" className={className} disabled={ejecutando} onClick={onConfirmar}>
+            {ejecutando ? ejecutandoLabel : confirmLabel}
+        </Btn>
+        <Btn variant="ghost" className={className} disabled={ejecutando} onClick={onCancelar}>
+            Cancelar
+        </Btn>
+    </>
+);
+
 const controlClass =
     'w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none';
 

@@ -2,7 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Plus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select } from '@/components/ui-kit';
+import {
+    Badge,
+    Btn,
+    Card,
+    ConfirmInlineActions,
+    Empty,
+    ErrorBox,
+    Field,
+    Input,
+    Loading,
+    Modal,
+    Select,
+} from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { money } from '@/lib/format';
 
@@ -326,24 +338,12 @@ const PreciosPage = () => {
                                         Editar
                                     </Btn>
                                     {confirmandoBorrar?.tipo === 'periodo' && confirmandoBorrar.id === p.id ? (
-                                        <>
-                                            <Btn
-                                                variant="danger"
-                                                className="px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => borrarPeriodo(p)}
-                                            >
-                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                            </Btn>
-                                            <Btn
-                                                variant="ghost"
-                                                className="px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => setConfirmandoBorrar(null)}
-                                            >
-                                                Cancelar
-                                            </Btn>
-                                        </>
+                                        <ConfirmInlineActions
+                                            className="px-3 py-1.5 text-xs"
+                                            ejecutando={borrando}
+                                            onConfirmar={() => borrarPeriodo(p)}
+                                            onCancelar={() => setConfirmandoBorrar(null)}
+                                        />
                                     ) : (
                                         <Btn
                                             variant="danger"
@@ -417,24 +417,12 @@ const PreciosPage = () => {
                                         Editar
                                     </Btn>
                                     {confirmandoBorrar?.tipo === 'descuento' && confirmandoBorrar.id === d.id ? (
-                                        <>
-                                            <Btn
-                                                variant="danger"
-                                                className="px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => borrarDescuento(d)}
-                                            >
-                                                {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                            </Btn>
-                                            <Btn
-                                                variant="ghost"
-                                                className="px-3 py-1.5 text-xs"
-                                                disabled={borrando}
-                                                onClick={() => setConfirmandoBorrar(null)}
-                                            >
-                                                Cancelar
-                                            </Btn>
-                                        </>
+                                        <ConfirmInlineActions
+                                            className="px-3 py-1.5 text-xs"
+                                            ejecutando={borrando}
+                                            onConfirmar={() => borrarDescuento(d)}
+                                            onCancelar={() => setConfirmandoBorrar(null)}
+                                        />
                                     ) : (
                                         <Btn
                                             variant="danger"
@@ -495,24 +483,12 @@ const PreciosPage = () => {
                                     Editar
                                 </Btn>
                                 {confirmandoBorrar?.tipo === 'plan' && confirmandoBorrar.id === p.id ? (
-                                    <>
-                                        <Btn
-                                            variant="danger"
-                                            className="px-3 py-2 text-xs"
-                                            disabled={borrando}
-                                            onClick={() => borrarPlan(p)}
-                                        >
-                                            {borrando ? 'Eliminando...' : 'Sí, eliminar'}
-                                        </Btn>
-                                        <Btn
-                                            variant="ghost"
-                                            className="px-3 py-2 text-xs"
-                                            disabled={borrando}
-                                            onClick={() => setConfirmandoBorrar(null)}
-                                        >
-                                            Cancelar
-                                        </Btn>
-                                    </>
+                                    <ConfirmInlineActions
+                                        className="px-3 py-2 text-xs"
+                                        ejecutando={borrando}
+                                        onConfirmar={() => borrarPlan(p)}
+                                        onCancelar={() => setConfirmandoBorrar(null)}
+                                    />
                                 ) : (
                                     <Btn
                                         variant="danger"
