@@ -1625,7 +1625,14 @@ const RutinasPage = () => {
                                                             Superserie
                                                         </p>
                                                         <div className="flex flex-wrap items-stretch gap-2">
-                                                            {grupoCombo.map((it, iCombo) => (
+                                                            {grupoCombo.map((it, iCombo) => {
+                                                                // Mismo criterio que el ejercicio suelto (15/09/2026,
+                                                                // más arriba en este archivo): por tiempo no lleva
+                                                                // peso. Se calcula por ejercicio, no por combo entero,
+                                                                // porque una superserie puede mezclar uno por tiempo
+                                                                // con uno por reps.
+                                                                const porTiempo = esRepsPorTiempo(it.reps);
+                                                                return (
                                                                 <div key={it.key} className="flex shrink-0 items-stretch gap-2">
                                                                 {iCombo > 0 && (
                                                                     <span
@@ -1653,7 +1660,9 @@ const RutinasPage = () => {
                                                                             <Trash2 className="h-3.5 w-3.5" />
                                                                         </button>
                                                                     </div>
-                                                                    <div className="grid grid-cols-3 gap-1">
+                                                                    <div
+                                                                        className={`grid gap-1 ${porTiempo ? 'grid-cols-2' : 'grid-cols-3'}`}
+                                                                    >
                                                                         <Field label="Series" labelClassName="text-xs">
                                                                             {/* Bug reportado por Nalux (15/09/2026): "las series no
                                                                                 se pueden ver, esta el numero tapado" -- el Input
@@ -1681,39 +1690,44 @@ const RutinasPage = () => {
                                                                                         e.target.value,
                                                                                     )
                                                                                 }
+                                                                                placeholder={porTiempo ? '—' : ''}
                                                                                 className="!px-1 !py-1.5 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                                             />
                                                                         </Field>
                                                                         <Field label="Reps" labelClassName="text-xs">
-                                                                            {/* Acá NO entra el selector Reps/Seg/Min completo
-                                                                                (CampoReps) -- esta caja mide 9.5rem con 3
-                                                                                columnas, ~50px cada una, insuficiente para
-                                                                                número + selector. Sigue siendo texto libre
-                                                                                (ya aceptaba "30 seg" a mano) con un
-                                                                                placeholder que lo deja claro. */}
-                                                                            <Input
+                                                                            {/* Pedido de Nalux (16/09/2026): "cuando en el
+                                                                                armado de rutinas se pone una superserie no
+                                                                                aparece la opción... de segundos y minutos".
+                                                                                Antes quedaba en texto libre porque esta
+                                                                                columna mide ~50px -- CampoReps apila número
+                                                                                arriba y selector abajo (en vez de lado a
+                                                                                lado), así que cada control usa el ancho
+                                                                                COMPLETO de la columna por separado y entra
+                                                                                igual de bien que en el editor de un
+                                                                                ejercicio suelto (ver el comentario de
+                                                                                CampoReps.jsx, probado a ~53px de ancho). */}
+                                                                            <CampoReps
                                                                                 value={it.reps}
-                                                                                onChange={(e) =>
-                                                                                    editarItem(it.key, 'reps', e.target.value)
-                                                                                }
-                                                                                placeholder="10 o 30 seg"
-                                                                                className="!px-1 !py-1.5 text-center text-xs"
+                                                                                onChange={(v) => editarItem(it.key, 'reps', v)}
                                                                             />
                                                                         </Field>
-                                                                        <Field label="Peso" labelClassName="text-xs">
-                                                                            <Input
-                                                                                value={it.peso}
-                                                                                onChange={(e) =>
-                                                                                    editarItem(it.key, 'peso', e.target.value)
-                                                                                }
-                                                                                placeholder="kg"
-                                                                                className="px-2 py-1.5 text-xs"
-                                                                            />
-                                                                        </Field>
+                                                                        {!porTiempo && (
+                                                                            <Field label="Peso" labelClassName="text-xs">
+                                                                                <Input
+                                                                                    value={it.peso}
+                                                                                    onChange={(e) =>
+                                                                                        editarItem(it.key, 'peso', e.target.value)
+                                                                                    }
+                                                                                    placeholder="kg"
+                                                                                    className="px-2 py-1.5 text-xs"
+                                                                                />
+                                                                            </Field>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                         <div className="grid gap-3 sm:grid-cols-[1fr,1fr,2fr]">
                                                             <Field label="Descanso (compartido)">
