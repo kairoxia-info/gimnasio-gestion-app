@@ -5227,3 +5227,56 @@ apps/web/src/components/alumno/PlanEntrenamiento.jsx.
 **Pendiente de subir**: esta tanda todavía no se subió (falta el "dale, subilo todo" de Nalux), y
 se acumula sobre las dos tandas anteriores (los 4 bugs reales de la auditoría, y la limpieza de
 código duplicado/archivos grandes) que tampoco se habían subido todavía.
+
+## 16/09/2026 — "Eliminar cuenta" dejaba fotos huérfanas en el storage (verificación en producción)
+
+Nalux probó "Eliminar cuenta" en la URL de Vercel (producción) y pidió confirmar que no quedara
+nada del gimnasio borrado.
+
+### Lo que se verificó (y salió bien)
+
+Consulta directa contra la base de producción (proyecto `fftdmpqbemcnxdnfnvhd`):
+
+- **Cero filas huérfanas en las 17 tablas de negocio** (alumnos, ejercicios, rutinas,
+  rutinas_asignadas, planes_alimentacion, planes_alimentacion_biblioteca, asistencias, progreso,
+  pagos, configuracion_precios, configuracion_periodos, configuracion_descuentos,
+  pagos_archivo_mensual, notificaciones, entrenamientos_completados, biblioteca_ocultos, profiles)
+  -- ninguna apunta a un `gimnasio_id` que ya no exista. El `ON DELETE CASCADE` de la migración
+  0035 hizo exactamente lo que tenía que hacer.
+- **`auth.users` y `profiles` quedaron 1 a 1** (solo la cuenta viva de Nalux): ni un usuario de auth
+  sin profile, ni un profile sin usuario de auth.
+- **Cero errores en los logs de Postgres** de las 24 hs anteriores.
+
+### El bug que apareció mirando el storage
+
+`eliminarCuenta()` (AuthContext.jsx) limpiaba los archivos del gimnasio recorriendo SOLO dos
+buckets: `gimnasio-logos` y `ejercicios-media`. Pero hay CUATRO buckets con el mismo patrón
+`<gimnasio_id>/archivo`: faltaban **`alumnos-fotos`** (foto de perfil del alumno, AlumnosPage.jsx) y
+**`progreso-fotos`** (fotos de seguimiento, components/alumno/Progreso.jsx). Resultado: cada vez que
+se borraba un gimnasio que tuviera alumnos con foto o fotos de progreso, esos archivos quedaban
+flotando en el storage real, sin gimnasio dueño y sin forma de llegar a ellos desde la app.
+
+No es teórico: había 4 archivos huérfanos reales en producción (2 fotos de alumnos + 2 logos de
+gimnasios de prueba, del 08/09 y 14/09), de gimnasios borrados antes de que existiera esta
+funcionalidad. Se agregaron los dos buckets faltantes al recorrido.
+
+### La limpieza de los 4 archivos viejos
+
+No se pueden borrar por SQL: `DELETE FROM storage.objects` lo rechaza el trigger `protect_delete()`
+de Supabase ("Direct deletion from storage tables is not allowed. Use the Storage API instead") --
+el mismo detalle que ya estaba documentado en la migración 0035. La única vía real es la Storage
+API con service role, que no está (ni tiene que estar) en el frontend.
+
+Se resolvió con una Edge Function de un solo uso (`cleanup-archivos-huerfanos-temporal`), con los 4
+paths hardcodeados y sin ningún parámetro de entrada -- o sea, incapaz de borrar otra cosa aunque se
+la invoque de nuevo. Usa el `SUPABASE_SERVICE_ROLE_KEY` que Supabase inyecta sola en las Edge
+Functions, así que la clave nunca sale del entorno de Supabase. Se invocó una vez (los 4 archivos
+respondieron `borrado: true`) y se confirmó por SQL que no queda NINGÚN archivo bajo una carpeta de
+gimnasio inexistente.
+
+**Nota**: la Edge Function quedó desplegada porque no hay forma de borrarla desde acá (el MCP de
+Supabase no tiene una acción de borrado de funciones). Hay que eliminarla a mano desde el panel de
+Supabase → Edge Functions. Ya es inofensiva (los 4 archivos no existen más, y no acepta parámetros),
+pero no tiene sentido que siga ahí.
+
+**Archivos**: apps/web/src/contexts/AuthContext.jsx.
