@@ -13,8 +13,8 @@ import {
     esRepsPorTiempo,
     fmtFecha,
     hoy,
+    resumenSeries,
     resumenTipoGrupo,
-    tieneSeriesDetalle,
 } from '@/lib/format';
 import HistorialRutinas from '@/components/alumno/HistorialRutinas';
 
@@ -348,14 +348,13 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                 )}
                                                 {delBloque.map((it) =>
                                                     it.esCombo ? (
-                                                        // Superserie: cada ejercicio en su propia caja chica, uno al
-                                                        // lado del otro (mismo criterio que MiPlanPage) — descanso e
-                                                        // intensidad son del combo entero, se muestran una sola vez.
-                                                        // Apiladas (flex-col) en pantallas angostas: con 3 o 4
-                                                        // ejercicios comprimidos en una fila de celular, el nombre
-                                                        // quedaba truncado a 3-4 letras, ilegible (bug encontrado en
-                                                        // revisión mobile, 04/09/2026). En sm+ vuelve a la fila
-                                                        // horizontal comprimida de siempre.
+                                                        // Superserie -- rediseñado 16/09/2026 (pedido de Nalux:
+                                                        // "saca las cajas pon como texto normal... si sacás las
+                                                        // cajas se vería más como una hoja de entrenamiento y eso
+                                                        // es lo que quiero"). Mismo formato compacto que ya usa
+                                                        // resumenSeries() en el PDF y en el "Ver" de RutinasPage.jsx
+                                                        // (components/rutinas/VerRutinaModal.jsx) -- "4x10" en vez
+                                                        // de repetir "Series 4 · Reps 10" con etiquetas.
                                                         <div key={it.key} className="rounded-xl border-2 border-primary/30 p-3">
                                                             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary">
                                                                 Superserie
@@ -375,17 +374,12 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                                             <p className="text-xs font-bold leading-tight sm:truncate">
                                                                                 {sub.nombre}
                                                                             </p>
-                                                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                                                Series <span className="font-semibold text-foreground">{sub.series}</span>
-                                                                                {' · '}Reps <span className="font-semibold text-foreground">{sub.reps}</span>
-                                                                                {sub.peso && (
-                                                                                    <>
-                                                                                        {' · '}Peso{' '}
-                                                                                        <span className="font-semibold text-foreground">
-                                                                                            {sub.peso}
-                                                                                        </span>
-                                                                                    </>
-                                                                                )}
+                                                                            {sub.grupo && (
+                                                                                <p className="text-xs text-muted-foreground">{sub.grupo}</p>
+                                                                            )}
+                                                                            <p className="mt-0.5 text-xs font-semibold text-foreground">
+                                                                                {resumenSeries(sub)}
+                                                                                {sub.peso && ` · ${sub.peso}`}
                                                                             </p>
                                                                         </div>
                                                                     </React.Fragment>
@@ -407,70 +401,37 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <div key={it.key} className="rounded-xl border border-border p-3">
-                                                            {/* Un ejercicio por tiempo (bici 20 min) no muestra peso
-                                                                -- pedido de Nalux (15/09/2026), mismo criterio que en
-                                                                el editor de la rutina y en la pantalla del alumno.
-                                                                Una columna menos en la grilla, no una caja vacía. */}
-                                                            <div
-                                                                className={`grid gap-3 ${
-                                                                    esRepsPorTiempo(it.reps)
-                                                                        ? 'sm:grid-cols-[2fr,repeat(4,minmax(0,1fr))]'
-                                                                        : 'sm:grid-cols-[2fr,repeat(5,minmax(0,1fr))]'
-                                                                }`}
-                                                            >
-                                                                <div>
-                                                                    <p className="text-sm font-bold">{it.nombre}</p>
-                                                                    <p className="text-xs text-muted-foreground">{it.grupo}</p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                        Series
-                                                                    </p>
-                                                                    <p className="text-sm font-semibold">{it.series || '—'}</p>
-                                                                </div>
-                                                                {/* Series desglosadas (Fase 2.3, 13/09/2026): esta es la
-                                                                    ficha del PROFESOR, no lo que ve el alumno (eso ya
-                                                                    se actualizó en MiPlanPage.jsx) -- alcanza con el
-                                                                    resumen compacto "12/10/8" en vez de repetir la
-                                                                    tabla completa en una vista que ya es chica. */}
-                                                                <div>
-                                                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                        Reps
-                                                                    </p>
-                                                                    <p className="text-sm font-semibold">
-                                                                        {tieneSeriesDetalle(it)
-                                                                            ? it.seriesDetalle.map((s) => s.reps || '—').join('/')
-                                                                            : it.reps}
-                                                                    </p>
-                                                                </div>
-                                                                {!esRepsPorTiempo(it.reps) && (
-                                                                    <div>
-                                                                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                            Peso
-                                                                        </p>
-                                                                        <p className="text-sm font-semibold">
-                                                                            {tieneSeriesDetalle(it)
-                                                                                ? it.seriesDetalle
-                                                                                      .map((s) => s.peso || '—')
-                                                                                      .join('/')
-                                                                                : it.peso || '—'}
-                                                                        </p>
-                                                                    </div>
-                                                                )}
-                                                                <div>
-                                                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                        Descanso
-                                                                    </p>
-                                                                    <p className="text-sm font-semibold">{it.descanso || '—'}</p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                                        Intensidad
-                                                                    </p>
-                                                                    <p className="text-sm font-semibold">{it.intensidad || '—'}</p>
-                                                                </div>
+                                                        // Ejercicio suelto -- mismo rediseño de arriba: una línea
+                                                        // de texto (nombre + grupo a la izquierda, "4x10 · 60s" a
+                                                        // la derecha) en vez de la grilla de cajas Series/Reps/
+                                                        // Peso/Descanso/Intensidad de antes. resumenSeries() ya
+                                                        // resuelve series desglosadas (pirámide/dropset) sola, no
+                                                        // hace falta el join("/") manual que había acá.
+                                                        <div
+                                                            key={it.key}
+                                                            className="rounded-xl border border-border p-3"
+                                                        >
+                                                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                                                                <span className="min-w-0 text-sm font-bold">
+                                                                    {it.nombre}
+                                                                    {it.grupo && (
+                                                                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                                            {it.grupo}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                                <span className="text-xs font-semibold text-foreground">
+                                                                    {resumenSeries(it)}
+                                                                    {!esRepsPorTiempo(it.reps) && it.peso ? ` · ${it.peso}` : ''}
+                                                                    {it.descanso ? ` · ${it.descanso}` : ''}
+                                                                </span>
                                                             </div>
+                                                            {it.intensidad && it.intensidad !== '—' && (
+                                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                                    Intensidad:{' '}
+                                                                    <span className="font-semibold text-foreground">{it.intensidad}</span>
+                                                                </p>
+                                                            )}
                                                             {it.comentario && (
                                                                 <p className="mt-2 border-t border-border pt-2 text-xs italic text-muted-foreground">
                                                                     {it.comentario}

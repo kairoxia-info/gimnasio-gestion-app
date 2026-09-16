@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     AlertTriangle,
     Apple,
+    ArrowLeft,
     CheckCircle2,
     Download,
     Dumbbell,
@@ -546,42 +547,22 @@ const LogoGimnasio = ({ nombre, logoUrl }) => {
 // el celular (antes iban de a dos, en dos filas). Para eso cada caja tiene que
 // ser más angosta, así que en pantalla chica bajan el padding y el cuerpo de
 // letra -- el valor sigue siendo lo más grande y en negrita, que es lo que el
-// alumno busca de un vistazo. break-words evita que un valor largo escrito a
-// mano por el profe ("12 por lado") desborde la caja.
-const DatoEjercicio = ({ label, valor }) => (
-    <div className="rounded-xl bg-secondary p-2 text-center sm:p-3">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-sm">
-            {label}
-        </p>
-        <p className="mt-0.5 break-words text-lg font-extrabold leading-tight sm:mt-1 sm:text-3xl">
-            {valor}
-        </p>
-    </div>
+// alumno busca de un vistazo. Antes eran cuatro cajas grandes (series, reps,
+// peso, descanso) -- pedido de Nalux (16/09/2026): "el tamaño de letras y
+// cajas... se sigue viendo muy grande... tratemos de que se vea así como
+// tiene el profe [el "Ver" de una rutina]... si sacás las cajas se vería más
+// como una hoja de entrenamiento y eso es lo que quiero". Mismo criterio que
+// ya usa resumenSeries() en el PDF y en el "Ver" de RutinasPage.jsx
+// (components/rutinas/VerRutinaModal.jsx) -- una sola línea de texto en vez
+// de una caja por dato. Sigue sin mostrar peso en un ejercicio por tiempo
+// (bici, plancha) ni series cuando el profesor no cargó ninguna.
+const StatsDelEjercicio = ({ it }) => (
+    <p className="mt-1 text-sm text-muted-foreground">
+        {resumenSeries(it)}
+        {!esRepsPorTiempo(it.reps) && it.peso ? ` · ${it.peso} kg` : ''}
+        {it.descanso ? ` · ${it.descanso}` : ''}
+    </p>
 );
-
-// La fila de datos del ejercicio. Eran cuatro cajas fijas (series, reps,
-// peso, descanso); desde el 15/09/2026 (pedido de Nalux) un ejercicio medido
-// en segundos/minutos no muestra peso -- a una bicicleta de 20 minutos no le
-// corresponden kilos -- y las series solo aparecen si el profesor puso
-// alguna, porque ahí pasaron a ser opcionales. La cantidad de columnas sale
-// de cuántas cajas quedan: si no, las que sobreviven se estiran raro o queda
-// un hueco en la fila.
-const COLUMNAS_DATOS = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
-
-const DatosDelEjercicio = ({ it }) => {
-    const datos = [];
-    if (String(it.series ?? '').trim()) datos.push({ label: 'Series', valor: it.series });
-    datos.push({ label: 'Reps', valor: it.reps });
-    if (!esRepsPorTiempo(it.reps)) datos.push({ label: 'Peso', valor: it.peso || '—' });
-    datos.push({ label: 'Descanso', valor: it.descanso || '—' });
-    return (
-        <div className={`mt-4 grid gap-1.5 sm:gap-3 ${COLUMNAS_DATOS[datos.length] || 'grid-cols-4'}`}>
-            {datos.map((d) => (
-                <DatoEjercicio key={d.label} label={d.label} valor={d.valor} />
-            ))}
-        </div>
-    );
-};
 
 // Botón/link de "Ver demostración" de un ejercicio. Se reusa tal cual para
 // un ejercicio suelto y, dentro de un combo (superserie), una vez por cada
@@ -647,6 +628,10 @@ const EstadoRestringido = ({ gimnasioNombre }) => (
 const MiPlanPage = () => {
     const { codigo } = useParams();
     const navigate = useNavigate();
+    // ?profesor=<id>: presente solo cuando se llega acá desde "Ver como
+    // alumno" (AlumnoPage.jsx). Un alumno real nunca trae este parámetro.
+    const [searchParams] = useSearchParams();
+    const idProfesorQueVuelve = searchParams.get('profesor');
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -1103,6 +1088,17 @@ const MiPlanPage = () => {
                         </div>
                     </header>
 
+                    {idProfesorQueVuelve && (
+                        <div className="mp-no-imprimir bg-primary/10 px-4 py-2 text-center">
+                            <Link
+                                to={`/alumnos/${idProfesorQueVuelve}`}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                            >
+                                <ArrowLeft className="h-3.5 w-3.5" /> Volver al panel del profesor
+                            </Link>
+                        </div>
+                    )}
+
                     {sinConexion && (
                         <p className="mp-no-imprimir bg-warn/15 px-4 py-2 text-center text-xs font-semibold text-warn">
                             Sin conexión -- mostrando la última versión guardada.
@@ -1418,7 +1414,7 @@ const MiPlanPage = () => {
                                                                             >
                                                                                 {it.esCombo ? (
                                                                                     <>
-                                                                                        <p className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
+                                                                                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary">
                                                                                             Superserie
                                                                                         </p>
                                                                                         {/* En una sola fila también en el celular
@@ -1427,7 +1423,11 @@ const MiPlanPage = () => {
                                                                                             en la computadora"). Antes era flex-col abajo
                                                                                             de 640px y los ejercicios del combo quedaban
                                                                                             uno debajo del otro, que se lee como si fueran
-                                                                                            ejercicios sueltos, no una superserie. */}
+                                                                                            ejercicios sueltos, no una superserie. Texto
+                                                                                            achicado de nuevo el 16/09/2026 (pedido de
+                                                                                            Nalux, "el tamaño... se sigue viendo muy
+                                                                                            grande") -- ver el comentario de
+                                                                                            StatsDelEjercicio más arriba. */}
                                                                                         <div className="flex flex-row items-stretch gap-1.5">
                                                                                             {it.comboItems.map(
                                                                                                 (sub, i) => (
@@ -1439,40 +1439,31 @@ const MiPlanPage = () => {
                                                                                                         {i >
                                                                                                             0 && (
                                                                                                             <span
-                                                                                                                className="flex shrink-0 items-center justify-center text-lg font-bold text-primary"
+                                                                                                                className="flex shrink-0 items-center justify-center text-base font-bold text-primary"
                                                                                                                 aria-hidden="true"
                                                                                                             >
                                                                                                                 +
                                                                                                             </span>
                                                                                                         )}
-                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2.5">
+                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2">
                                                                                                             {/* Sin truncar en el celular: con
                                                                                                                 dos al lado el nombre entra en
                                                                                                                 dos renglones, pero completo --
                                                                                                                 cortarlo dejaría al alumno sin
                                                                                                                 saber qué ejercicio es. */}
-                                                                                                            <p className="text-base font-bold leading-tight">
+                                                                                                            <p className="text-sm font-bold leading-tight">
                                                                                                                 {
                                                                                                                     sub.nombre
                                                                                                                 }
                                                                                                             </p>
                                                                                                             {sub.grupo && (
-                                                                                                                <p className="text-sm text-muted-foreground">
+                                                                                                                <p className="text-xs text-muted-foreground">
                                                                                                                     {
                                                                                                                         sub.grupo
                                                                                                                     }
                                                                                                                 </p>
                                                                                                             )}
-                                                                                                            {/* Antes: "Series 4" / "Reps 10" /
-                                                                                                                "Peso X" en tres renglones
-                                                                                                                separados -- pedido de Nalux
-                                                                                                                (15/09/2026): "se ve mejor en
-                                                                                                                una línea... asi como el pdf"
-                                                                                                                (RutinaPDF.jsx ya combina esto
-                                                                                                                en un solo "4x10" compacto vía
-                                                                                                                resumenSeries(), sin repetir la
-                                                                                                                etiqueta de cada campo). */}
-                                                                                                            <p className="mt-2 text-base font-extrabold">
+                                                                                                            <p className="mt-1 text-sm font-bold">
                                                                                                                 {resumenSeries(sub)}
                                                                                                                 {sub.peso && (
                                                                                                                     <span className="ml-1 font-semibold text-muted-foreground">
@@ -1485,7 +1476,7 @@ const MiPlanPage = () => {
                                                                                                 ),
                                                                                             )}
                                                                                         </div>
-                                                                                        <p className="mt-3 text-base">
+                                                                                        <p className="mt-2 text-sm">
                                                                                             <span className="text-muted-foreground">
                                                                                                 Descanso:{' '}
                                                                                             </span>
@@ -1497,41 +1488,41 @@ const MiPlanPage = () => {
                                                                                     </>
                                                                                 ) : (
                                                                                     <>
-                                                                                        <p className="text-xl font-bold sm:text-2xl">
+                                                                                        <p className="text-base font-bold">
                                                                                             {it.nombre}
                                                                                         </p>
                                                                                         {it.grupo && (
-                                                                                            <p className="mt-0.5 text-base text-muted-foreground">
+                                                                                            <p className="text-sm text-muted-foreground">
                                                                                                 {it.grupo}
                                                                                             </p>
                                                                                         )}
                                                                                         {tieneSeriesDetalle(it) ? (
                                                                                             // Series desglosadas (Fase 2.3, 13/09/2026):
                                                                                             // pirámides, drop sets -- cada serie con su
-                                                                                            // propio peso/reps. Mismo criterio de letra
-                                                                                            // grande que el resto de esta pantalla ("hay
-                                                                                            // personas grandes que tienen que leer
-                                                                                            // también", pedido de Nalux).
-                                                                                            <div className="mt-4 space-y-1.5">
+                                                                                            // propio peso/reps. Achicado (16/09/2026,
+                                                                                            // pedido de Nalux) junto con el resto de la
+                                                                                            // pantalla -- ver el comentario de
+                                                                                            // StatsDelEjercicio más arriba.
+                                                                                            <div className="mt-2 space-y-1">
                                                                                                 {it.seriesDetalle.map((s, i) => (
                                                                                                     <div
                                                                                                         key={i}
-                                                                                                        className="flex items-center gap-3 rounded-xl bg-secondary p-2.5 sm:p-3"
+                                                                                                        className="flex items-center gap-2 rounded-lg bg-secondary px-2.5 py-1.5"
                                                                                                     >
-                                                                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary sm:h-10 sm:w-10 sm:text-base">
+                                                                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
                                                                                                             {i + 1}
                                                                                                         </span>
-                                                                                                        <span className="text-lg font-extrabold sm:text-2xl">
+                                                                                                        <span className="text-sm font-bold">
                                                                                                             {s.reps || '—'} reps
                                                                                                         </span>
                                                                                                         {s.peso && (
-                                                                                                            <span className="ml-auto text-lg font-extrabold sm:text-2xl">
+                                                                                                            <span className="ml-auto text-sm font-bold">
                                                                                                                 {s.peso} kg
                                                                                                             </span>
                                                                                                         )}
                                                                                                     </div>
                                                                                                 ))}
-                                                                                                <p className="pt-1 text-base">
+                                                                                                <p className="pt-1 text-sm">
                                                                                                     <span className="text-muted-foreground">
                                                                                                         Descanso entre series:{' '}
                                                                                                     </span>
@@ -1541,19 +1532,12 @@ const MiPlanPage = () => {
                                                                                                 </p>
                                                                                             </div>
                                                                                         ) : (
-                                                                                            // Un ejercicio por tiempo (bici 20
-                                                                                            // min, plancha 30 seg) no muestra
-                                                                                            // peso, y las series solo si el
-                                                                                            // profesor puso alguna -- pedido de
-                                                                                            // Nalux (15/09/2026). Las cajas que
-                                                                                            // quedan se reparten el ancho en vez
-                                                                                            // de dejar un hueco.
-                                                                                            <DatosDelEjercicio it={it} />
+                                                                                            <StatsDelEjercicio it={it} />
                                                                                         )}
                                                                                     </>
                                                                                 )}
                                                                                 {it.intensidad && (
-                                                                                    <p className="mt-3 text-base">
+                                                                                    <p className="mt-1 text-sm">
                                                                                         <span className="text-muted-foreground">
                                                                                             Intensidad:{' '}
                                                                                         </span>
@@ -1563,7 +1547,7 @@ const MiPlanPage = () => {
                                                                                     </p>
                                                                                 )}
                                                                                 {it.comentario && (
-                                                                                    <p className="mt-3 rounded-xl border-2 border-primary/40 bg-primary/10 p-4 text-base">
+                                                                                    <p className="mt-2 rounded-xl border-2 border-primary/40 bg-primary/10 p-3 text-sm">
                                                                                         {it.comentario}
                                                                                     </p>
                                                                                 )}
