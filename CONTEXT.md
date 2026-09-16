@@ -5142,3 +5142,88 @@ limpios los dos.
 **Archivos**: apps/web/src/components/ui-kit.jsx, apps/web/src/pages/{AlumnosPage,PreciosPage,
 RutinasPage,AlimentosPage,AlumnoPage,PlanesAlimentacionPage,ConfiguracionPage}.jsx, más las
 carpetas nuevas apps/web/src/components/{alumno,configuracion,planes-alimentacion,rutinas}/.
+
+## 16/09/2026 — Reps por tiempo en superseries, rediseño "hoja de entrenamiento" y vuelta al panel del profesor
+
+**Pedido de Nalux**: cuatro cosas en un mismo mensaje, con dos capturas de RutinasPage.jsx mostrando
+el modal "Ver" de una rutina como referencia de estilo.
+
+### 1) Reps en Seg/Min también en superseries
+
+El selector Reps/Seg/Min (`CampoReps`, de la tanda anterior) solo estaba en el editor de un
+ejercicio suelto -- en la caja de una superserie (RutinasPage.jsx, columna de ~50px dentro de la
+caja de 9.5rem) había quedado como texto libre, con un comentario viejo que decía que no entraba.
+Ese comentario estaba desactualizado: `CampoReps` apila el número arriba del selector (no lado a
+lado), así que usa el ancho completo de la columna igual que en el ejercicio suelto. Cambio:
+reemplazar el `<Input>` de Reps por `<CampoReps>` en la caja de cada ejercicio de la superserie.
+
+De paso, mismo criterio que ya tenía el ejercicio suelto desde la tanda del 15/09 ("un ejercicio
+por tiempo no lleva peso, y las series pasan a ser opcionales"): ahora se calcula `porTiempo =
+esRepsPorTiempo(it.reps)` **por ejercicio** dentro del combo (no por combo entero, porque una
+superserie puede mezclar uno por tiempo con uno por reps) y si es por tiempo, el campo Peso
+desaparece y la grilla de esa caja pasa de 3 a 2 columnas.
+
+**Verificado en vivo**: en "Plan superseries" (rutina real con superserie en Día 1), el combobox
+Reps/Seg/Min aparece en los dos ejercicios de la superserie; al pasar uno a "Seg" el campo Peso de
+ESE ejercicio desaparece y la caja pasa a 2 columnas, mientras el otro ejercicio de la misma
+superserie (que sigue en Reps) conserva sus 3 columnas con Peso. Sin guardar el cambio de prueba.
+
+### 2) y 3) Rediseño "hoja de entrenamiento": sacar las cajas, achicar letras
+
+Nalux: "el tamaño de letras y cajas en el celular se sigue viendo muy grande... si sacás las cajas
+se vería más como una hoja de entrenamiento y eso es lo que quiero". Con "como tiene el profe" se
+refería (confirmado por la captura) al modal "Ver" de RutinasPage.jsx (`DetalleRutina` en
+`VerRutinaModal.jsx`), que ya usa `resumenSeries()` en una sola línea de texto por ejercicio en vez
+de una caja de datos -- el mismo criterio que ya usa el PDF.
+
+Se llevó ese mismo criterio a los dos lugares que todavía mostraban SERIES/REPS/PESO/DESCANSO como
+casillas separadas:
+
+- **`MiPlanPage.jsx`** (vista del propio alumno, celular): se sacaron `DatoEjercicio`/
+  `DatosDelEjercicio`/`COLUMNAS_DATOS` (las cuatro cajas grandes) y se reemplazaron por
+  `StatsDelEjercicio`, una sola línea con `resumenSeries(it)` + peso (si no es por tiempo) +
+  descanso. Nombre/grupo del ejercicio bajaron de tamaño (`text-xl`/`text-2xl` → `text-base`), el
+  desglose de series (pirámide/dropset) se compactó (badges de 32-40px a 24px, texto a `text-sm`),
+  y el bloque de superserie perdió su formato viejo de 3 líneas "Series X / Reps X / Peso X" por el
+  mismo `resumenSeries()` de una línea.
+- **`PlanEntrenamiento.jsx`** (ficha del alumno del lado del profesor, pestaña "Entrenamiento"):
+  mismo cambio -- la grilla de 5 columnas (Series/Reps/Peso/Descanso/Intensidad) se reemplazó por
+  una fila flexible con nombre+grupo a la izquierda y `resumenSeries(it)` + peso + descanso a la
+  derecha, más intensidad y comentario como líneas aparte solo si tienen contenido. La lógica manual
+  de `.join('/')` para series desglosadas se sacó por completo porque `resumenSeries()` ya la hace
+  internamente -- estaba duplicada.
+
+Los días siguen separándose con su propia caja con borde (`DÍA 1`, `DÍA 2`...) -- eso no cambió,
+solo se sacaron las casillas de DENTRO de cada ejercicio.
+
+**No se pudo reproducir un bug de "texto vertical" literal** (se probó con `getComputedStyle`,
+`writing-mode` daba `horizontal-tb` en los dos lugares sospechados) -- el diagnóstico es que era
+cramping visual en una grilla angosta, no texto rotado, y sacar las cajas lo resuelve igual.
+
+**Verificado en vivo, a 375px (emulación celular)**: MiPlanPage.jsx (ejercicio suelto una línea
+"Peso Muerto · Piernas, Glúteos · 4×10 · 60 s", superserie con las dos cajas lado a lado sin
+desbordar) y PlanEntrenamiento.jsx del lado del profesor (mismo criterio, datos reales de Alumno 3,
+Día 1 y Día 2 bien distinguidos). `npx eslint` y `npm run build` sobre los dos archivos, limpios.
+
+### 4) "Ver como alumno" sin forma de volver
+
+Nalux: "cuando pongo ver como alumno se me abre... la pantalla del alumno pero el profe después no
+tiene opción de volver a su panel". El link de AlumnoPage.jsx ya tenía `target="_blank"`, pero en la
+práctica (reproducido en este mismo entorno de prueba) el click navegó en la MISMA pestaña -- y una
+vez en `/mi-plan/:codigo` no había ningún link de vuelta, porque el alumno real nunca necesita uno.
+
+Fix: el link ahora agrega `?profesor=<id del alumno>` a la URL. `MiPlanPage.jsx` lee ese parámetro
+(`useSearchParams`) y, solo si está presente, muestra un cartel "← Volver al panel del profesor"
+justo debajo del header, con un link a `/alumnos/<id>`. Un alumno real jamás trae ese parámetro, así
+que nunca ve el cartel. Es robusto independientemente de si el click terminó abriendo pestaña nueva
+o navegando en la misma.
+
+**Verificado en vivo**: desde Alumno 3 → "Ver como alumno" → aparece el cartel morado "Volver al
+panel del profesor" arriba de "Hola, Alumno 3" → click → vuelve exactamente a la ficha de Alumno 3.
+
+**Archivos**: apps/web/src/pages/{RutinasPage,MiPlanPage,AlumnoPage}.jsx,
+apps/web/src/components/alumno/PlanEntrenamiento.jsx.
+
+**Pendiente de subir**: esta tanda todavía no se subió (falta el "dale, subilo todo" de Nalux), y
+se acumula sobre las dos tandas anteriores (los 4 bugs reales de la auditoría, y la limpieza de
+código duplicado/archivos grandes) que tampoco se habían subido todavía.
