@@ -72,7 +72,9 @@ const vacioPago = {
 // ---------------------------------------------------------------------------
 const Comprobante = ({ pago, alumno, gimnasio, enPantalla = false, paraPdf = false }) => {
     if (!pago) return null;
-    const color = gimnasio?.color_principal || '#E10600';
+    // Mismo fix que RutinaPDF.jsx/PlanAlimentacionPDF.jsx: color de fábrica
+    // real (#F6B51E), no el rojo viejo de antes del 07/09/2026.
+    const color = gimnasio?.color_principal || '#F6B51E';
     const filas = [
         ['Alumno', alumno?.nombre || '—'],
         ['Fecha de pago', fmtFecha(pago.fecha_pago)],

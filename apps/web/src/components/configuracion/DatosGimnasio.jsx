@@ -9,7 +9,15 @@ import supabase from '@/lib/supabaseClient';
 // en dos lugares del mismo flujo.
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const MIME_TO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
-const COLOR_DEFAULT = '#E10600';
+// Bug encontrado probando un gimnasio recién creado (18/09/2026): sin color
+// elegido todavía (color_principal null), este picker mostraba rojo
+// (#E10600, el color de fábrica VIEJO, de antes del 07/09/2026) mientras que
+// el resto de la app ya mostraba dorado (--primary de index.css, cambiado
+// ese mismo día -- ver el comentario de lib/colorTema.js). Si el profesor
+// guardaba cualquier otro cambio (el nombre, los días) sin tocar el color a
+// propósito, quedaba fijado ese rojo viejo sin haberlo elegido nunca. Ahora
+// coincide con el dorado real (hsl(42, 92%, 54%) = #F6B51E).
+const COLOR_DEFAULT = '#F6B51E';
 
 // Días que abre el gimnasio (migración 0031). Los números son los mismos
 // que devuelve Date.getDay() (0 = domingo), pero se listan arrancando en

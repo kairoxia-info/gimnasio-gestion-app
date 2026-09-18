@@ -26,7 +26,9 @@ export const PlanAlimentacionImprimiblePDF = ({
     fechaInicio,
     fechaFin,
 }) => {
-    const colorFinal = color || '#E10600';
+    // Mismo fix que RutinaPDF.jsx: el color de fábrica real es el dorado de
+    // index.css (#F6B51E), no el rojo viejo de antes del 07/09/2026.
+    const colorFinal = color || '#F6B51E';
     const comidas = items || [];
     const observaciones = (notas || '')
         .split('\n')

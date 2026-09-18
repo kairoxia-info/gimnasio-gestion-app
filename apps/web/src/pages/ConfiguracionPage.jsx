@@ -11,7 +11,11 @@ import AvisoAutomaticoCuota from '@/components/configuracion/AvisoAutomaticoCuot
 import ArchivoPagos from '@/components/configuracion/ArchivoPagos';
 import EliminarCuenta from '@/components/configuracion/EliminarCuenta';
 
-const COLOR_DEFAULT = '#E10600';
+// Mismo bug y mismo fix que components/configuracion/DatosGimnasio.jsx: este
+// default tiene que coincidir con el color de fábrica real de index.css
+// (hsl(42, 92%, 54%) = #F6B51E), no con el rojo viejo de antes del
+// 07/09/2026.
+const COLOR_DEFAULT = '#F6B51E';
 const DIAS_ABIERTOS_DEFAULT = [1, 2, 3, 4, 5, 6];
 
 const ConfiguracionPage = () => {

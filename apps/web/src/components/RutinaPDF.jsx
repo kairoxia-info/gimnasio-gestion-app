@@ -108,7 +108,12 @@ export const RutinaImprimiblePDF = ({
     fechaFin,
     duracionSemanas,
 }) => {
-    const colorFinal = color || '#E10600';
+    // Mismo color de fábrica que index.css (hsl(42, 92%, 54%) = #F6B51E) --
+    // antes era el rojo viejo de antes del 07/09/2026, así que un PDF de un
+    // gimnasio sin color elegido quedaba en rojo mientras el resto de la app
+    // ya se veía dorado (bug encontrado probando un gimnasio recién creado,
+    // 18/09/2026).
+    const colorFinal = color || '#F6B51E';
     const grupos = agruparItemsRutina(items || []);
     const variasSemanas = grupos.length > 1;
 
