@@ -68,6 +68,24 @@ const diasHastaFecha = (fecha) => {
     return Math.round((f - hoyMedianoche) / 86400000);
 };
 
+// Misma cuenta que edadDesde() en UnirsePage.jsx (duplicada a propósito, son
+// dos pantallas públicas sin nada compartido entre sí): edad en años a
+// partir de la fecha de nacimiento, para saber si el modal de aceptación
+// (punto 2 del pedido de Nalux, 18/09/2026) tiene que pedir los datos de un
+// tutor. plan?.alumno_fecha_nacimiento puede no venir cargada (es opcional
+// tanto en el autorregistro como en el alta manual del profesor) -- en ese
+// caso esto devuelve null y el modal le pregunta directo al que acepta.
+const edadDesdeFecha = (fecha) => {
+    if (!fecha) return null;
+    const nac = new Date(`${fecha}T00:00:00`);
+    if (Number.isNaN(nac.getTime())) return null;
+    const hoyFecha = new Date();
+    let edad = hoyFecha.getFullYear() - nac.getFullYear();
+    const mes = hoyFecha.getMonth() - nac.getMonth();
+    if (mes < 0 || (mes === 0 && hoyFecha.getDate() < nac.getDate())) edad -= 1;
+    return edad >= 0 && edad < 120 ? edad : null;
+};
+
 const parsearDescanso = (texto) => {
     if (!texto) return null;
     const t = String(texto).trim().toLowerCase();
@@ -690,6 +708,24 @@ const MiPlanPage = () => {
     const [marcandoAviso, setMarcandoAviso] = useState(false);
     const [avisoError, setAvisoError] = useState('');
 
+    // Punto 2 del pedido de Nalux (18/09/2026, "cerrar los gaps legales
+    // antes de vender a un segundo gimnasio"): modal bloqueante de
+    // aceptación, la primera vez que el alumno entra de verdad a ver su
+    // plan -- reemplaza en valor legal al checkbox de UnirsePage.jsx
+    // (11/09/2026), que a propósito no persistía nada. Dos checkboxes
+    // separados (nunca un "acepto todo"): tratamiento de datos personales y
+    // asunción de riesgo/exoneración de responsabilidad por lesiones.
+    const [aceptaDatos, setAceptaDatos] = useState(false);
+    const [aceptaDeslinde, setAceptaDeslinde] = useState(false);
+    // Solo se usa cuando la fecha de nacimiento NO se conoce (es opcional en
+    // toda la app) -- si se conoce y da menor de 18, el formulario de tutor
+    // se muestra fijo, sin depender de este toggle (ver mostrarFormularioTutor).
+    const [tutorActivo, setTutorActivo] = useState(false);
+    const [tutorNombre, setTutorNombre] = useState('');
+    const [tutorDni, setTutorDni] = useState('');
+    const [guardandoAceptacion, setGuardandoAceptacion] = useState(false);
+    const [errorAceptacion, setErrorAceptacion] = useState('');
+
     // Monta la hoja de la sección pedida y, en cuanto está en el DOM, genera
     // y baja el PDF (lib/descargarPdf.js). Antes esto abría el diálogo de
     // impresión y había que elegir "Guardar como PDF" a mano -- pedido de
@@ -737,6 +773,51 @@ const MiPlanPage = () => {
             setAvisoError('No se pudo guardar. No es grave, se puede seguir usando la pantalla igual.');
         } finally {
             setMarcandoAviso(false);
+        }
+    };
+
+    // null = todavía no se sabe si es menor (fecha de nacimiento no
+    // cargada) -> se le pregunta directo a quien está aceptando.
+    const edadAlumno = useMemo(() => edadDesdeFecha(plan?.alumno_fecha_nacimiento), [plan]);
+    const esMenorConocido = edadAlumno !== null && edadAlumno < 18;
+    const mostrarFormularioTutor = esMenorConocido || tutorActivo;
+
+    // ?profesor=<id> significa que quien está mirando esta pantalla es el
+    // profesor, no el alumno (AlumnoPage.jsx, "Ver como alumno") -- no tiene
+    // sentido pedirle a él que acepte nada en nombre del alumno.
+    const debeAceptarTerminos =
+        !idProfesorQueVuelve && !!plan && (!plan.aceptacion_datos_en || !plan.aceptacion_deslinde_en);
+
+    const aceptarTerminos = async () => {
+        setErrorAceptacion('');
+        if (!aceptaDatos || !aceptaDeslinde) {
+            setErrorAceptacion('Hay que aceptar los dos puntos para continuar.');
+            return;
+        }
+        if (mostrarFormularioTutor && (!tutorNombre.trim() || !tutorDni.trim())) {
+            setErrorAceptacion('Hay que completar el nombre y el DNI de quien acepta en representación del alumno.');
+            return;
+        }
+        setGuardandoAceptacion(true);
+        try {
+            const { error: err } = await supabase.rpc('aceptar_terminos_alumno', {
+                p_codigo: codigo,
+                p_acepta_datos: true,
+                p_acepta_deslinde: true,
+                p_tutor_nombre: mostrarFormularioTutor ? tutorNombre.trim() : null,
+                p_tutor_dni: mostrarFormularioTutor ? tutorDni.trim() : null,
+            });
+            if (err) throw err;
+            // Optimista, igual que avisoOculto más arriba: no hace falta
+            // volver a pedir el plan entero solo para reflejar que ya se
+            // aceptó -- el modal se cierra solo porque debeAceptarTerminos
+            // pasa a dar false con este mismo cambio de estado.
+            const ahora = new Date().toISOString();
+            setPlan((prev) => (prev ? { ...prev, aceptacion_datos_en: ahora, aceptacion_deslinde_en: ahora } : prev));
+        } catch (_) {
+            setErrorAceptacion('No se pudo guardar. Probar de nuevo en un momento.');
+        } finally {
+            setGuardandoAceptacion(false);
         }
     };
 
@@ -1041,6 +1122,122 @@ const MiPlanPage = () => {
                     content="Rutina de entrenamiento y plan de alimentación del alumno, con acceso mediante usuario y contraseña."
                 />
             </Helmet>
+
+            {/* Modal bloqueante de aceptación (punto 2, 18/09/2026): sin X, sin
+                cierre por click afuera, y SIN listener de Escape (a
+                diferencia del <Modal> de ui-kit.jsx, que sí cierra con
+                Escape -- acá eso rompería el "no se puede usar el portal
+                sin aceptar"). Se arma a mano en vez de reusar <Modal> por
+                eso mismo. */}
+            {debeAceptarTerminos && (
+                <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/80 p-4 py-10">
+                    <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl border border-border bg-card p-6">
+                        <h2 className="font-display text-xl font-bold">Antes de empezar</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Para ver tu rutina y tu plan de alimentación en{' '}
+                            {plan.gimnasio_nombre || 'el gimnasio'}, hace falta aceptar estos dos puntos.
+                        </p>
+
+                        <div className="mt-5 space-y-4">
+                            <label className="flex items-start gap-3 rounded-2xl border border-border bg-secondary/40 p-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={aceptaDatos}
+                                    onChange={(e) => setAceptaDatos(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                />
+                                <span>
+                                    Leí y acepto el tratamiento de mis datos personales, según los{' '}
+                                    <Link
+                                        to="/terminos"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-semibold text-primary hover:underline"
+                                    >
+                                        Términos y la Política de privacidad
+                                    </Link>
+                                    .
+                                </span>
+                            </label>
+
+                            <label className="flex items-start gap-3 rounded-2xl border border-border bg-secondary/40 p-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={aceptaDeslinde}
+                                    onChange={(e) => setAceptaDeslinde(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                />
+                                <span>
+                                    Declaro estar en condiciones de salud para hacer actividad física (o contar
+                                    con autorización médica si tengo alguna condición). Entiendo que el
+                                    ejercicio conlleva riesgos propios de la actividad (lesiones musculares,
+                                    esguinces y similares), los asumo, y libero a{' '}
+                                    {plan.gimnasio_nombre || 'el gimnasio'} de responsabilidad por esos riesgos
+                                    ordinarios -- esto no cubre casos de negligencia comprobada del gimnasio.
+                                </span>
+                            </label>
+
+                            {esMenorConocido ? (
+                                <p className="rounded-2xl border border-warn/40 bg-warn/5 p-3 text-xs text-muted-foreground">
+                                    Según la fecha de nacimiento registrada,{' '}
+                                    {plan.alumno_nombre || 'el alumno'} es menor de edad: esto lo tiene que
+                                    aceptar su madre, padre o tutor, con sus datos abajo.
+                                </p>
+                            ) : (
+                                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <input
+                                        type="checkbox"
+                                        checked={tutorActivo}
+                                        onChange={(e) => setTutorActivo(e.target.checked)}
+                                        className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+                                    />
+                                    Estoy aceptando esto en representación de un menor de 18 años
+                                </label>
+                            )}
+
+                            {mostrarFormularioTutor && (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                                            Nombre del tutor
+                                        </label>
+                                        <input
+                                            value={tutorNombre}
+                                            onChange={(e) => setTutorNombre(e.target.value)}
+                                            placeholder="Nombre y apellido"
+                                            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                                            DNI del tutor
+                                        </label>
+                                        <input
+                                            value={tutorDni}
+                                            onChange={(e) => setTutorDni(e.target.value)}
+                                            placeholder="12345678"
+                                            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {errorAceptacion && (
+                            <p className="mt-4 text-sm font-semibold text-destructive">{errorAceptacion}</p>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={aceptarTerminos}
+                            disabled={guardandoAceptacion}
+                            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-base font-bold text-primary-foreground transition active:scale-[0.98] disabled:opacity-60"
+                        >
+                            {guardandoAceptacion ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Aceptar y continuar'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-6 text-center">
