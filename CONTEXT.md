@@ -5277,6 +5277,159 @@ gimnasio inexistente.
 **Nota**: la Edge Function quedó desplegada porque no hay forma de borrarla desde acá (el MCP de
 Supabase no tiene una acción de borrado de funciones). Hay que eliminarla a mano desde el panel de
 Supabase → Edge Functions. Ya es inofensiva (los 4 archivos no existen más, y no acepta parámetros),
-pero no tiene sentido que siga ahí.
+pero no tiene sentido que siga ahí. **Nalux decidió dejarla por ahora** (17/09).
 
 **Archivos**: apps/web/src/contexts/AuthContext.jsx.
+
+## 17/09/2026 — Tour de bienvenida (una sola vez) + ícono "i" de ayuda en cada pantalla
+
+**Pedido de Nalux**: vio en Planni que al entrar por primera vez te van apareciendo cajitas
+explicando qué hacer en cada parte. Quiere lo mismo: una demo guiada la primera vez que el profesor
+entra a su panel, que no se vuelva a mostrar nunca más, y un ícono "i" permanente en cada módulo
+para consultar la ayuda de esa pantalla cuando haga falta.
+
+**Decidido con ella antes de arrancar**: (1) carrusel de cajitas sobre el Panel, sin navegar de
+página; (2) lo ve CADA profesor -- admin y staff -- la primera vez que entra a SU panel, cada cuenta
+con su flag propio; (3) cerrarla con la X antes de terminar también la marca como vista para
+siempre, sin excepciones, y no hay botón de "volver a ver el tour".
+
+### Base de datos (migración 0060)
+
+- `profiles.tour_visto BOOLEAN NOT NULL DEFAULT false`. En la misma migración,
+  `UPDATE profiles SET tour_visto = true` para TODAS las cuentas que ya existían -- si no, a Nalux
+  (y a cualquier profesor que ya viene usando la app) le aparecería la demo de golpe en el próximo
+  login. Las cuentas nuevas heredan el `false` solas vía `handle_new_user()`.
+- RPC `marcar_tour_visto()`, SECURITY DEFINER: la columna NO está en el `GRANT UPDATE` de
+  `authenticated` (0043 lo dejó solo en `first_name, last_name, email`), así que un update directo
+  desde el cliente fallaría con "permission denied for column". Mismo patrón que `create_gimnasio`
+  y `eliminar_mi_cuenta`. Solo toca la propia fila (`auth.uid()`), y no hay función inversa a
+  propósito. Verificado: `authenticated` puede ejecutarla, `anon` no.
+
+### Frontend
+
+- **`AuthContext.jsx`**: `tour_visto` sumado al SELECT de `fetchProfile()` (si no, nunca llega al
+  cliente), y método nuevo `marcarTourVisto()` que llama la RPC y actualiza el estado local en vez
+  de un `refreshProfile()` completo (un SELECT de más para un valor que ya conocemos). Si la red
+  falla justo ahí, `tour_visto` queda en `false` y la demo vuelve en el próximo login -- caso borde
+  aceptado, se resuelve solo.
+- **`components/TourBienvenida.jsx`** (nuevo): 13 pasos (bienvenida + uno por cada ítem del menú en
+  el mismo orden del NAV + cierre con "un buen orden para arrancar: Configuración → Precios →
+  Alumnos"). Reusa `Modal` de ui-kit, que ya cierra con X **y con Escape** vía el mismo `onClose`:
+  cableando `onClose={finalizar}` quedan cubiertas las tres vías de salida (último botón, X,
+  Escape) con el mismo handler. Visible solo si `profile.tour_visto === false`; el paso actual no se
+  persiste (refrescar a mitad = arranca de nuevo). Cierre optimista (se oculta al toque, la RPC va
+  después).
+- **Montado en `DashboardPage.jsx`**, no en `AppLayout`: todo primer ingreso (login, signup,
+  onboarding) termina en `/panel`. En `AppLayout` se dispararía también con un link directo a
+  `/pagos` o `/alumnos`. Se renderiza antes del `loading` de las estadísticas.
+- **`AyudaInfo` en `ui-kit.jsx`** (nuevo): botón circular con ícono `Info` que abre una cajita al
+  hacer **click** (no hover -- tablet/celular en el gimnasio). Cierra tocando afuera (mismo patrón
+  `ref + mousedown` que `NotificacionesCampana.jsx`). **Bug encontrado y corregido en la prueba a
+  375px**: anclada a la izquierda del botón, la cajita se salía por el borde derecho y el texto
+  quedaba cortado ("Panel general (i)" deja el botón bien a la derecha). Ahora al abrir mide el rect
+  del botón y se corre hacia la izquierda lo justo para entrar con 16px de margen; en escritorio el
+  corrimiento da 0. No se usaron los componentes Radix de `components/ui/` (popover, tooltip):
+  ningún archivo de la app los importa y meterlos solo para esto rompía la consistencia con el kit
+  propio.
+- **Prop `ayuda` en `AppLayout.jsx`**: se renderiza pegado al `<h1>` del título, en un solo lugar.
+  Las 11 páginas del menú pasan su propio texto (`DashboardPage`, `AlumnosPage`, `EjerciciosPage`,
+  `RutinasPage`, `AlimentosPage`, `PlanesAlimentacionPage`, `AsistenciaPage`, `PagosPage`,
+  `AvisosPage`, `PreciosPage`, `ConfiguracionPage`). `AlumnoPage` (ficha, `/alumnos/:id`) no lo
+  tiene: no está en el menú y no pasa `title`.
+
+**Copy**: el tour dice "500 ejercicios" (son exactamente 500 globales, verificado) y NO dice que la
+biblioteca de alimentos "viene cargada" (solo hay 4 globales -- un gimnasio nuevo arranca casi
+vacío ahí; el texto dice que los registras una vez y los reusás).
+
+**REGLA NUEVA DE NALUX (17/09/2026), aplica a TODA la app de acá en adelante**: todo texto que ve
+el usuario va en **español neutro** -- tuteo (tú/tienes/puedes) o impersonal, nunca voseo
+(vos/tenés/podés/armás/cargás), nunca "acá" (→ "aquí"), sin regionalismos argentinos. Textual:
+"esta app es para toda la gente habla hispana y todos tienen que entender el lenguaje". Lo dijo al
+ver el primer borrador del tour y las ayudas, que estaban en voseo -- se reescribieron los 24
+textos (13 pasos + 11 ayudas). Reemplazos que se usaron: acá→aquí, cargar→registrar, armar→crear,
+grilla→tabla, celular→teléfono, link→enlace, bajar→descargar, anotarse→registrarse,
+mandar→enviar, "la app"→"la aplicación", "hace rato"→"lleva tiempo", "viene seguido"→"asiste con
+regularidad", reps→repeticiones, macros→macronutrientes. Los comentarios del código y este
+archivo siguen en el registro de siempre; la regla es solo para lo que ve el usuario final.
+**Barrido completo hecho el 18/09/2026** (Nalux pidió "hazlo" apenas se le avisó del resto
+pendiente): unos 45 textos visibles corregidos en 25 archivos -- `AccesoAlumno`, `AltaAlumnosPorLink`,
+`DatosGimnasio`, `EliminarCuenta`, `VencimientoCuotas`, `PlanFormModal`, `GenerarPdfPlanModal`,
+`PdfRutinaModal`, `VerPlanModal`, `VerRutinaModal`, `PlanAlimentacion`, `PlanEntrenamiento`,
+`Progreso`, `AppLayout`, y las páginas `AlimentosPage`, `EjerciciosPage`, `AlumnosPage`,
+`AsistenciaPage`, `DashboardPage`, `MiPlanPage`, `OnboardingPage`, `PagosPage`,
+`PlanesAlimentacionPage`, `PreciosPage`, `RutinasPage`, `UnirsePage`. Mismos reemplazos que la regla
+de arriba. Verificado con un grep final de todo `src/` (excluyendo comentarios de código y
+`components/ui/` sin usar): cero coincidencias de voseo/regionalismos en texto visible. `npx eslint
+src/` limpio.
+
+**Verificado en vivo** (local, con la cuenta de Nalux, flag puesto en `false` a mano antes de cada
+prueba): aparece solo al entrar a `/panel`; "Siguiente" avanza y "Atrás" aparece desde el paso 2;
+los 13 pasos hasta "Entendido, empezar"; cierre con X a mitad de camino; cierre con Escape. Los
+tres caminos dejan `tour_visto = true` en la base (confirmado por SQL) y la demo no vuelve al
+refrescar. Cero errores en consola (ningún "permission denied"). El "i" está en las 11 pantallas,
+abre con click, cierra tocando afuera, y entra completo a 375px después del fix. `npx eslint src/`
+y `npm run build` limpios.
+
+**Archivos**: supabase/migrations/0060_tour_bienvenida_profesores.sql,
+apps/web/src/contexts/AuthContext.jsx, apps/web/src/components/{TourBienvenida,ui-kit,AppLayout}.jsx,
+apps/web/src/pages/{Dashboard,Alumnos,Ejercicios,Rutinas,Alimentos,PlanesAlimentacion,Asistencia,
+Pagos,Avisos,Precios,Configuracion}Page.jsx.
+
+## 18/09/2026 — Tour de bienvenida rediseñado: marca el ítem real del menú (estilo Drivvo)
+
+Nalux probó el tour del 17/09 (modal centrado tipo carrusel) y mandó capturas de otra app de
+gimnasios (Drivvo) mostrando el patrón que quería en realidad: cada paso resalta el ítem REAL del
+menú del que habla (fondo del color de marca, el resto del menú atenuado), con una tarjeta chica
+flotando al lado -- "Paso X de N" / título / texto / botón -- en vez de un cuadro grande y
+centrado sin relación visual con la pantalla.
+
+### Cambio de arquitectura
+
+El tour anterior vivía como componente aparte (`TourBienvenida.jsx`, un `Modal` de ui-kit montado
+solo en `DashboardPage.jsx`). Ese diseño ya no alcanza: para señalar el ítem real hace falta abrir
+el cajón del menú de verdad y medir dónde cae cada ítem en pantalla -- y esas dos cosas (el estado
+`open` del cajón, el array `NAV`) viven en `AppLayout.jsx`, no en una página suelta. Se movió toda
+la lógica de render ahí:
+
+- **`TourBienvenida.jsx`** pasó a exportar solo CONTENIDO: `PASOS_TOUR` (11 pasos, uno por cada
+  ítem de `NAV`, mismo orden) y el componente presentacional `TarjetaTour` (la tarjeta chica con
+  "Paso X de N", título, texto y los botones Atrás/Próximo/Completar). No sabe nada de cajones ni
+  de medir posiciones -- solo recibe `posicion` ya calculada.
+- **`AppLayout.jsx`** hace todo lo que depende del DOM real:
+  - `guiaActiva = profile?.tour_visto === false && location.pathname === '/panel'` (con
+    `useLocation`) -- mismo criterio que antes, sigue sin dispararse con un link directo a otra
+    página.
+  - Si `guiaActiva`, fuerza el cajón abierto (`setOpen(true)`).
+  - Cada `NavLink` de `NavLinksAnimados` ahora tiene un `id` fijo (`nav-tour-item-<to>`) para poder
+    medirlo, y un prop nuevo `pasoTourTo`: si coincide con el paso actual del tour, el ítem se
+    resalta (`bg-primary` + anillo); si no, se atenúa (`opacity-40`), sin importar si es la ruta
+    real activa o no -- mientras el tour está activo, el resaltado del tour manda.
+  - Un `useEffect` mide el ítem del paso actual con `getBoundingClientRect()` 300ms después de
+    abrir el cajón (esperando su animación de entrada) y decide dónde poner la tarjeta: al costado
+    si entra (>352px libres a la derecha del cajón), o anclada abajo de toda la pantalla, a lo
+    ancho, si no entra (típico en un teléfono de 375px) -- en vez de calcular una posición que
+    terminaría cortada por el borde.
+  - **Bug encontrado en la prueba** (con los 11 ítems no entran todos en el alto del cajón sin
+    scroll): al llegar a los últimos pasos (Precios, Configuración), el ítem señalado quedaba fuera
+    de la vista -- la tarjeta apuntaba a algo que no se veía. Se agregó
+    `el.scrollIntoView({ block: 'nearest' })` (instantáneo, no 'smooth', para que la medición de
+    posición que sigue ya lea el valor final) justo antes de medir.
+  - Escape, tocar el fondo oscuro y la X del cajón ahora también cierran el tour si está activo
+    (antes solo cerraban el cajón) -- mismo criterio ya decidido con Nalux: cualquier forma de
+    salir marca `tour_visto = true` para siempre.
+  - La X de la propia tarjeta (`TarjetaTour`) hace lo mismo.
+- **`DashboardPage.jsx`**: se sacó el `<TourBienvenida />` que montaba el modal viejo -- ya no
+  hace falta, todo vive en `AppLayout`.
+
+**No se tocó la base de datos** (columna `tour_visto`, RPC `marcar_tour_visto()`, migración 0060):
+sigue exactamente igual que el 17/09, solo cambió cómo se dibuja el tour en el cliente.
+
+**Verificado en vivo**: recorrido completo de los 11 pasos con esperas realistas entre clicks
+(confirmando que el resaltado sigue al ítem correcto en cada uno, incluidos los que necesitan
+scroll), cierre con la X de la tarjeta a mitad de camino, y en 375px (la tarjeta se ancla abajo, a
+lo ancho, y los 11 ítems entran sin scroll en esa altura de pantalla). Los tres caminos de cierre
+confirmados por SQL dejando `tour_visto = true`. `npx eslint src/` y `npm run build` sobre todo el
+proyecto, limpios los dos. (Un error de consola visto en un momento de la prueba resultó ser un
+artefacto de hot-reload de Vite, no un bug real -- descartado abriendo una pestaña nueva.)
+
+**Archivos**: apps/web/src/components/{AppLayout,TourBienvenida}.jsx, apps/web/src/pages/DashboardPage.jsx.
