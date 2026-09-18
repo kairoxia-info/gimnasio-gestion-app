@@ -5660,3 +5660,44 @@ correctos en la base (confirmado por SQL en los dos casos). Probado en escritori
 **Archivos**: supabase/migrations/{0061_aceptacion_terminos_alumno,
 0062_fix_ambiguedad_ver_plan_por_codigo, 0063_fix_contador_aceptar_terminos}.sql,
 apps/web/src/pages/MiPlanPage.jsx.
+
+### Punto 3 — "Enviar por WhatsApp" en avisos y comprobantes de pago
+
+Mismo patrón ya probado en producción en `AccesoAlumno.jsx` (`https://wa.me/?text=...` +
+`window.open`, sin número de destino -- abre WhatsApp con el texto ya armado y deja que quien lo
+manda elija el contacto, grupo o lista de difusión). Sin dependencias nuevas.
+
+- **`AvisosPage.jsx`**: botón "Enviar por WhatsApp" en cada tarjeta de aviso (`linkWhatsappAviso`),
+  junto a "Editar"/"Archivar". Un aviso le llega a un SEGMENTO entero de alumnos (todos/vencidos/
+  etc.), no a uno puntual, así que no tiene sentido targetear un número -- el texto es
+  `título\n\nmensaje` tal cual están cargados.
+- **`PagosPage.jsx`**: botón "Enviar por WhatsApp" en el modal del comprobante
+  (`linkWhatsappComprobante`), junto a "Imprimir"/"Descargar PDF". **Ojo con esto**: `wa.me` solo
+  admite texto prellenado, no adjuntar archivos -- no se manda el PDF del comprobante, se manda un
+  resumen (nombre del alumno, monto, período, "¡Gracias!"). "Descargar PDF" sigue funcionando
+  igual que antes, aparte, para quien quiera adjuntarlo a mano. Se evaluó `navigator.share` (Web
+  Share API, sí permite adjuntar archivos) y se descartó: soporte parcial entre navegadores/SO, y
+  abre el selector nativo del sistema operativo, no WhatsApp puntualmente -- no vale la pena la
+  complejidad extra para esto.
+
+**Verificado**: `npx eslint`/`npm run build` limpios. No se pudo probar en el navegador con sesión
+real de profesora (misma restricción de siempre: no puedo iniciar sesión con contraseña), así que
+se verificó por separado la lógica de armado de texto/link (mismas funciones, con datos de
+ejemplo) -- las dos URLs resultan válidas (`https://wa.me/?text=...`) y el texto decodificado se
+lee natural en los dos casos.
+
+**Archivos**: apps/web/src/pages/AvisosPage.jsx, apps/web/src/pages/PagosPage.jsx.
+
+### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
+
+No es un cambio de código, es la revisión de una decisión de producto ya tomada antes de vender a
+un segundo gimnasio. Nalux devolvió la pregunta explícitamente: "esa es tuya, no mía... vos
+conocés el mercado de gimnasios mejor que yo", aportando un dato de la investigación (reservas/
+turnos con cupo aparece como bastante estándar en varios competidores: Gestión Gym, GymGestión,
+ViDay, Crossfy) pero sin pedir que se construya "por las dudas".
+
+**Conclusión**: la Decisión 21 se mantiene sin cambios -- RutNail sigue sin reservas/turnos con
+cupo. No se construye especulativamente aunque sea común en la competencia: es una feature grande
+(agenda, cupos por horario, lista de espera, notificaciones de turno) que no se justifica sin un
+cliente real pidiéndola. Queda anotado en el radar para cuando (si) aparece ese pedido concreto de
+un gimnasio nuevo -- ahí se evalúa con el caso real adelante, no en abstracto.
