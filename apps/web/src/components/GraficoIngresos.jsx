@@ -21,6 +21,15 @@ const GraficoIngresos = ({ serie }) => (
                 fontSize={12}
                 width={70}
                 tickFormatter={(v) => money(v)}
+                // Bug encontrado probando un gimnasio recién creado, sin pagos
+                // todavía (18/09/2026): sin domain explícito, con los 12 meses
+                // en $0 recharts arma un eje degenerado ($0, $1, $2, $3, $4)
+                // -- ticks que no significan nada en pesos reales. Con este
+                // domain, mientras no haya ingresos el eje llega a $100 (un
+                // techo prolijo), y en cuanto hay plata de verdad
+                // (normalmente mucho más que 100) el máximo real vuelve a
+                // mandar, sin cambiar nada del comportamiento de hoy.
+                domain={[0, (dataMax) => Math.max(dataMax, 100)]}
             />
             <Tooltip
                 cursor={{ fill: 'hsl(var(--secondary))' }}
