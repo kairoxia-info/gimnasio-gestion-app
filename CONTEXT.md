@@ -5433,3 +5433,84 @@ proyecto, limpios los dos. (Un error de consola visto en un momento de la prueba
 artefacto de hot-reload de Vite, no un bug real -- descartado abriendo una pestaña nueva.)
 
 **Archivos**: apps/web/src/components/{AppLayout,TourBienvenida}.jsx, apps/web/src/pages/DashboardPage.jsx.
+
+## 18/09/2026 — QA de punta a punta en producción (rutnail.vercel.app): 3 bugs reales encontrados y arreglados
+
+Nalux pidió una revisión completa en la URL real de Vercel: primero tocando todo dentro de "Mi GYM
+FIT" (su cuenta real, con cuidado de no generar pagos/avisos falsos ni tocar configuración de
+negocio real), después creando un gimnasio de prueba nuevo de cero ("Fitness Place") para probar el
+flujo real de registro → onboarding → primer login → tour, con datos de prueba, y borrándolo todo al
+final.
+
+**No pude crear la cuenta de prueba yo mismo** -- "crear cuentas o ingresar contraseñas para
+autenticar" es una de las pocas acciones que tengo prohibidas sin excepción, incluso pedida
+explícitamente. Nalux creó la cuenta a mano y me pasó la posta desde ahí.
+
+### Bugs reales encontrados (los 3 ya corregidos)
+
+1. **Gráfico "Ingresos por mes" con eje roto en un gimnasio sin pagos todavía**
+   (`components/GraficoIngresos.jsx`): sin pagos, con los 12 meses en $0, el `<YAxis>` de recharts
+   -- sin `domain` explícito -- arma un eje degenerado ($0, $1, $2, $3, $4) que no significa nada en
+   pesos reales. Fix: `domain={[0, (dataMax) => Math.max(dataMax, 100)]}` -- sin ingresos el eje
+   llega a un techo prolijo de $100, y en cuanto hay plata real (siempre mucho más que 100) el
+   máximo real vuelve a mandar, sin cambiar el comportamiento de hoy.
+
+2. **El color de un gimnasio nuevo (sin elegir todavía) no coincidía entre pantallas** -- el más
+   importante de los tres. `gimnasios.color_principal` queda `null` hasta que el profesor elige uno
+   en Configuración (el onboarding no pide color). Sin color guardado:
+   - El resto de la app (drawer, botones, tour) cae al color de fábrica real de `index.css`
+     (dorado, `hsl(42, 92%, 54%)` = `#F6B51E`, cambiado el 07/09/2026 -- antes era rojo).
+   - PERO cinco lugares distintos seguían usando el rojo VIEJO (`#E10600`) como su propio default,
+     nunca actualizado en el cambio del 07/09: el selector de color de Configuración (dos copias del
+     mismo valor, en `DatosGimnasio.jsx` y en `ConfiguracionPage.jsx`), el PDF de rutina
+     (`RutinaPDF.jsx`), el PDF de plan de alimentación (`PlanAlimentacionPDF.jsx`) y el comprobante
+     de pago (`PagosPage.jsx`).
+   - Consecuencia real, no solo cosmética: si el profesor guardaba cualquier otro cambio en
+     Configuración (el nombre, los días) sin tocar el color a propósito, quedaba fijado ese rojo
+     viejo para siempre -- un color que nunca eligió. **Confirmado en vivo**: el comprobante de un
+     pago de prueba salió con la franja roja mientras el resto de "Fitness Place" ya se veía
+     dorado.
+   - Fix: los 5 lugares ahora usan `#F6B51E`, coincidiendo con el color de fábrica real.
+
+3. **Cuatro textos en voseo que se habían escapado del barrido del 18/09 por la mañana** -- el
+   grep de verificación de ese momento era case-sensitive y no pescaba "Acá" con mayúscula al
+   empezar oración, ni verbos que no probé (`pedile`, `marcá`, `cargá`, `recargá`). Encontrados
+   navegando la app real, no por grep: "Acá está la rutina..." (saludo de MiPlanPage.jsx), "Pedile
+   al profesor..." (x2, rutina y plan vencidos), "Marcá 'Hecho'..." (racha de entrenamientos),
+   "Cargá tu peso..." (gráfico de progreso), y "Recargá la página..." (pantalla de error genérica,
+   ErrorBoundary.jsx). Corregidos, y esta vez se volvió a barrer TODO el proyecto con grep
+   case-insensitive (`grep -rniE`) más una búsqueda separada de verbos terminados en á/é -- limpio.
+
+### Lo que se verificó en vivo y funciona bien (sin bugs)
+
+- **Mi GYM FIT** (cuenta real): las 11 pantallas con su ícono "i", campanita, "Ver"/"Editar" de
+  rutinas con el selector Reps/Seg/Min de superseries, "Ver como alumno" + cartel de vuelta,
+  marcar/desmarcar asistencia (revertido, sin dejar rastro), formularios de Registrar pago y Nuevo
+  aviso (abiertos y cerrados sin enviar nada real), cambio de tema.
+- **Fitness Place** (cuenta de prueba, de punta a punta): registro → onboarding → el tour se
+  disparó SOLO en el primer /panel real (no fue necesario tocar la base a mano esta vez) → recorrido
+  completo de los 11 pasos con el color propio del gimnasio (naranja) → período y plan nuevos →
+  alumno nuevo con usuario/contraseña → rutina nueva con superserie (Reps/Seg/Min y ocultamiento de
+  Peso confirmados de punta a punta, incluido en la vista real del alumno) → asignación → plan de
+  alimentación nuevo → asignación → asistencia marcada → pago registrado (con comprobante N° 0001,
+  reveló el bug del color) → aviso creado → "Ver como alumno" completo (rutina, alimentación,
+  progreso, PDF, marcar como hecho, registrar peso -- todo confirmado en la ficha del profesor
+  después). Eliminación de la cuenta de prueba al final: sin poder re-ingresar la contraseña (mismo
+  motivo que no pude crear la cuenta), se replicó a mano el mismo efecto de `eliminar_mi_cuenta()`
+  -- borrar el archivo de storage por Edge Function temporal + `DELETE` de gimnasio/profile/
+  auth.users -- y se verificó por SQL que no quedó ningún huérfano. Volvió a quedar 1 usuario, 1
+  profile, 1 gimnasio: los reales de Nalux.
+
+### Detalles menores anotados, no corregidos (a definir con Nalux)
+
+- "1 presentes" en vez de "1 presente" en el contador de Asistencia (plural mal aplicado a 1).
+- En Precios (Mi GYM FIT, dato real de Nalux, no un bug): un período "Trimestral (3 días)" que
+  cubre 30 días -- probablemente un error de carga suyo.
+- El mensaje automático de cuota vencida que Nalux escribió a mano dice "Pasá por el gimnasio..."
+  (voseo) -- es contenido suyo, no de la app, no se tocó.
+
+**Archivos**: apps/web/src/components/GraficoIngresos.jsx,
+apps/web/src/components/configuracion/DatosGimnasio.jsx, apps/web/src/pages/ConfiguracionPage.jsx,
+apps/web/src/components/RutinaPDF.jsx, apps/web/src/components/PlanAlimentacionPDF.jsx,
+apps/web/src/pages/PagosPage.jsx, apps/web/src/pages/MiPlanPage.jsx,
+apps/web/src/components/ErrorBoundary.jsx.
