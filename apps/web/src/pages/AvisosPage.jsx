@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Archive, Megaphone, Plus, RotateCcw } from 'lucide-react';
+import { Archive, Megaphone, MessageCircle, Plus, RotateCcw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, updateRec } from '@/lib/data';
@@ -138,6 +138,14 @@ const AvisosPage = () => {
     const activos = notificaciones.filter((n) => n.activa);
     const archivados = notificaciones.filter((n) => !n.activa);
 
+    // Punto 3 de los gaps legales/de producto (18/09/2026, pedido de Nalux):
+    // mismo patrón ya probado en producción en AccesoAlumno.jsx --
+    // wa.me/?text=... sin número de destino, así el profesor elige a quién
+    // (o a qué grupo/lista de difusión) mandárselo desde su propio
+    // WhatsApp. Un aviso le llega a un SEGMENTO entero, no a un alumno
+    // puntual, así que no tiene sentido targetear un número acá.
+    const linkWhatsappAviso = (n) => `https://wa.me/?text=${encodeURIComponent(`${n.titulo}\n\n${n.mensaje}`)}`;
+
     const renderAviso = (n) => {
         const y = audienciaPorSegmento[n.segmento] ?? 0;
         const x = leidosDe(n.id);
@@ -171,6 +179,13 @@ const AvisosPage = () => {
                 <div className="mt-4 flex flex-wrap gap-2">
                     <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => abrirEditar(n)}>
                         Editar
+                    </Btn>
+                    <Btn
+                        variant="ghost"
+                        className="px-3 py-2 text-xs"
+                        onClick={() => window.open(linkWhatsappAviso(n), '_blank', 'noopener,noreferrer')}
+                    >
+                        <MessageCircle className="h-3.5 w-3.5" /> Enviar por WhatsApp
                     </Btn>
                     {n.activa ? (
                         <Btn variant="ghost" className="px-3 py-2 text-xs" onClick={() => toggleActiva(n)}>

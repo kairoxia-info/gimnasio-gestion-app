@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Download, Plus, Printer, Search } from 'lucide-react';
+import { Download, MessageCircle, Plus, Printer, Search } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll } from '@/lib/data';
@@ -483,6 +483,22 @@ const PagosPage = () => {
 
     const alumnoDe = (pago) => alumnos.find((a) => a.id === pago?.alumno_id);
 
+    // Punto 3 de los gaps legales/de producto (18/09/2026, pedido de Nalux):
+    // wa.me solo admite texto, no adjuntar el PDF del comprobante -- se
+    // manda un resumen (monto, período, fecha) en vez del comprobante
+    // completo, y "Descargar PDF" queda igual que antes para adjuntarlo a
+    // mano si hace falta. Mismo patrón wa.me/?text=... sin número de
+    // destino que ya usa AccesoAlumno.jsx.
+    const linkWhatsappComprobante = (pago) => {
+        if (!pago) return '#';
+        const nombre = alumnoDe(pago)?.nombre || '';
+        const saludo = `Hola${nombre ? ` ${nombre}` : ''}!`;
+        const texto =
+            `${saludo} Se registró tu pago en ${gimnasio?.nombre || 'el gimnasio'}: ${money(pago.monto)}, ` +
+            `período del ${fmtFecha(pago.periodo_desde)} al ${fmtFecha(pago.periodo_hasta)}. ¡Gracias!`;
+        return `https://wa.me/?text=${encodeURIComponent(texto)}`;
+    };
+
     // Se fotografia una copia aparte del comprobante (la que lleva la clase
     // cp-hoja-pdf), no la que se esta viendo en el modal: asi la hoja se puede
     // medir a lo ancho de una A4 sin que al alumno le baile en pantalla lo que
@@ -934,6 +950,14 @@ const PagosPage = () => {
                     </Btn>
                     <Btn variant="ghost" onClick={() => window.print()}>
                         <Printer className="h-4 w-4" /> Imprimir
+                    </Btn>
+                    <Btn
+                        variant="ghost"
+                        onClick={() =>
+                            window.open(linkWhatsappComprobante(comprobante), '_blank', 'noopener,noreferrer')
+                        }
+                    >
+                        <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
                     </Btn>
                     <Btn onClick={descargarComprobante} disabled={generandoPdfComprobante}>
                         <Download className="h-4 w-4" />{' '}
