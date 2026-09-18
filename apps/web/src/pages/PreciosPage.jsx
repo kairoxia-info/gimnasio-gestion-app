@@ -248,6 +248,7 @@ const PreciosPage = () => {
 
     return (
         <AppLayout
+            ayuda="Qué cobras y por cuánto tiempo (mensual, trimestral, el que uses), además de descuentos y recargo por mora si lo deseas. Con esto la aplicación calcula automáticamente hasta cuándo está cubierto cada alumno."
             title="Planes y precios"
             subtitle="Los planes que se les cobra a los alumnos, y los períodos con los que se arman."
             actions={
@@ -298,9 +299,9 @@ const PreciosPage = () => {
                 {loading ? null : periodos.length === 0 ? (
                     <div className="mt-4">
                         <Empty>
-                            Todavía no hay períodos cargados.{' '}
+                            Todavía no hay períodos registrados.{' '}
                             <button type="button" onClick={cargarSugeridos} className="font-semibold text-primary">
-                                Cargar los típicos
+                                Agregar los típicos
                             </button>{' '}
                             (clase suelta, diario, semanal, mensual, trimestral y anual) y después editarlos.
                         </Empty>
@@ -529,7 +530,7 @@ const PreciosPage = () => {
                             </Select>
                             {periodosActivos.length === 0 && (
                                 <span className="text-xs text-warn">
-                                    Cargar primero un período acá arriba.
+                                    Agregar primero un período aquí arriba.
                                 </span>
                             )}
                         </Field>
@@ -555,7 +556,7 @@ const PreciosPage = () => {
                             />
                             <span className="text-xs text-muted-foreground">
                                 El recargo que se le suma si paga después del vencimiento. Cuándo empieza a
-                                aplicarse lo definís en Configuración.
+                                aplicarse lo defines en Configuración.
                             </span>
                         </Field>
                     </div>

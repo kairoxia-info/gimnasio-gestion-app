@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
         const { data, error } = await supabase
             .from('profiles')
             .select(
-                'id, email, first_name, last_name, gimnasio_id, role, gimnasios(nombre, logo_url, color_principal, dias_abiertos)',
+                'id, email, first_name, last_name, gimnasio_id, role, tour_visto, gimnasios(nombre, logo_url, color_principal, dias_abiertos)',
             )
             .eq('id', userId)
             .single();
@@ -124,6 +124,21 @@ export const AuthProvider = ({ children }) => {
                 return result;
             },
             refreshProfile: () => fetchProfile(user?.id),
+            // Tour de bienvenida (migración 0060): marca la propia cuenta como
+            // "ya vio la demo", para siempre. Va por RPC porque la columna no
+            // está en el GRANT UPDATE de authenticated (0043). Se actualiza el
+            // estado local en vez de refreshProfile(): ya sabemos el valor
+            // resultante, un SELECT de más no aporta nada. Si la red falla justo
+            // acá, tour_visto queda en false en la base y la demo vuelve a
+            // aparecer en el próximo login -- caso borde aceptado, no de
+            // seguridad, y se resuelve solo la próxima vez.
+            marcarTourVisto: async () => {
+                const result = await supabase.rpc('marcar_tour_visto');
+                if (!result.error) {
+                    setProfile((prev) => (prev ? { ...prev, tour_visto: true } : prev));
+                }
+                return result;
+            },
             // Borrado de cuenta (migración 0035), pedido de Nalux (08/09/2026):
             // borrado definitivo e inmediato -- sin papelera ni período de
             // gracia (lo pidió así a propósito, para que el mismo correo quede

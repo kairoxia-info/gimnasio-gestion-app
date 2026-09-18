@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import {
@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
+import TarjetaTour, { PASOS_TOUR } from '@/components/TourBienvenida';
+import { AyudaInfo } from '@/components/ui-kit';
 import { listAll, updateRec } from '@/lib/data';
 import { estadoCuota, fmtFecha, money, ultimoPagoDeAlumno } from '@/lib/format';
 import { descartarFallido, onCambioCola, onCambioColaFallida, verCola, verColaFallida } from '@/lib/offline';
@@ -253,8 +255,25 @@ const brilloVariants = {
     },
 };
 
-const NavLinksAnimados = ({ nav, onNavegar }) => {
+// `pasoTourTo` (18/09/2026, tour de bienvenida): el `to` del ítem que el
+// tour está señalando ahora mismo, o null si no hay ningún recorrido activo.
+// Cada NavLink lleva un `id` fijo (`nav-tour-item-<to>`) para que AppLayout
+// pueda medir su posición real en pantalla con getBoundingClientRect() y
+// ubicar la tarjeta del paso al lado -- sin eso no hay forma de saber dónde
+// cayó cada ítem, sobre todo con la animación de entrada de abajo.
+const NavLinksAnimados = ({ nav, onNavegar, pasoTourTo }) => {
     const reduceMotion = useReducedMotion();
+    const claseItem = (to, isActive) => {
+        if (pasoTourTo) {
+            return to === pasoTourTo
+                ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
+                : 'text-muted-foreground opacity-40';
+        }
+        return isActive
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-secondary hover:text-foreground';
+    };
+
     if (reduceMotion) {
         // Sin animación si el sistema la pidió apagada -- mismo criterio que
         // ya usa Reveal.jsx en el resto de la app.
@@ -263,14 +282,11 @@ const NavLinksAnimados = ({ nav, onNavegar }) => {
                 {nav.map(({ to, label, icon: Icon }) => (
                     <NavLink
                         key={to}
+                        id={`nav-tour-item-${to}`}
                         to={to}
                         onClick={onNavegar}
                         className={({ isActive }) =>
-                            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                                isActive
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                            }`
+                            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${claseItem(to, isActive)}`
                         }
                     >
                         <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
@@ -291,14 +307,11 @@ const NavLinksAnimados = ({ nav, onNavegar }) => {
             {nav.map(({ to, label, icon: Icon }) => (
                 <motion.div key={to} variants={itemMenuVariants} className="relative overflow-hidden rounded-xl">
                     <NavLink
+                        id={`nav-tour-item-${to}`}
                         to={to}
                         onClick={onNavegar}
                         className={({ isActive }) =>
-                            `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                                isActive
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                            }`
+                            `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${claseItem(to, isActive)}`
                         }
                     >
                         <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
@@ -370,7 +383,7 @@ const resumenFallido = (item) => {
     return 'Un cambio sin identificar';
 };
 
-const AppLayout = ({ title, subtitle, actions, children }) => {
+const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     const [open, setOpen] = useState(false);
     const [confirmandoSalir, setConfirmandoSalir] = useState(false);
     // Pedido de Nalux (15/09/2026): "esa parte... ocupa mucho lugar" -- el
@@ -378,9 +391,37 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
     // siempre visibles. Arranca plegado (lo que más se usa es navegar, no
     // ver el propio mail) y se abre con la flechita cuando hace falta.
     const [mostrarCuenta, setMostrarCuenta] = useState(false);
-    const { signOut, user, profile } = useAuth();
+    const { signOut, user, profile, marcarTourVisto } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const { sinConexion, pendientes, fallidos } = useEstadoOffline();
+
+    // Tour de bienvenida (rediseñado 18/09/2026, a pedido de Nalux con
+    // capturas de otra app como referencia): se dispara solo en el primer
+    // aterrizaje real en /panel -- no con un deep-link directo a /pagos o
+    // /alumnos -- y solo mientras profiles.tour_visto siga en false (una vez
+    // por cuenta, para siempre). El contenido de cada paso vive en
+    // TourBienvenida.jsx; acá se resuelve la parte que sí depende del
+    // cajón real: abrirlo solo, señalar el ítem correspondiente y medir
+    // dónde cae para ubicar la tarjeta al lado.
+    const [pasoTour, setPasoTour] = useState(0);
+    const guiaActiva = profile?.tour_visto === false && location.pathname === '/panel';
+    const pasoActual = PASOS_TOUR[pasoTour];
+
+    useEffect(() => {
+        if (guiaActiva) setOpen(true);
+    }, [guiaActiva]);
+
+    // Cualquier forma de salir del recorrido -- Escape, tocar el fondo, la X
+    // de la tarjeta o llegar al final -- lo marca como visto para siempre
+    // (mismo criterio ya aplicado en otras partes de la app: aparece una
+    // sola vez, sin excepciones). Cierre optimista: se oculta al toque, sin
+    // esperar la respuesta de la RPC.
+    const finalizarTour = () => {
+        if (!guiaActiva) return;
+        setPasoTour(0);
+        marcarTourVisto();
+    };
 
     // Cerrar el menú con Escape, además de la X / tocar afuera / elegir una
     // opción -- mismo criterio que el Modal de ui-kit.jsx.
@@ -393,11 +434,56 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
             return undefined;
         }
         const alPresionar = (e) => {
-            if (e.key === 'Escape') setOpen(false);
+            if (e.key === 'Escape') {
+                finalizarTour();
+                setOpen(false);
+            }
         };
         window.addEventListener('keydown', alPresionar);
         return () => window.removeEventListener('keydown', alPresionar);
-    }, [open]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, guiaActiva]);
+
+    // Posición de la tarjeta del paso actual: se mide el ítem real del menú
+    // (getBoundingClientRect) recién cuando el cajón terminó de animar su
+    // entrada (280ms, mismo valor que la transición de abajo) -- medir antes
+    // daría la posición de arranque (fuera de pantalla, a la izquierda). Si
+    // no entra al lado (menos de 340px libres, típico en un teléfono), la
+    // tarjeta se ancla abajo de todo en vez de calcular una posición que
+    // terminaría cortada por el borde derecho.
+    const [posicionTour, setPosicionTour] = useState(null);
+    useEffect(() => {
+        if (!guiaActiva || !open) {
+            setPosicionTour(null);
+            return undefined;
+        }
+        const medir = () => {
+            const el = document.getElementById(`nav-tour-item-${pasoActual.to}`);
+            if (!el) return;
+            // Con 11 ítems no entran todos en el alto del cajón sin scroll --
+            // sin esto, los últimos pasos (Precios, Configuración) señalarían
+            // un ítem fuera de la vista. Instantáneo (no 'smooth') para que
+            // el getBoundingClientRect() de abajo ya lea la posición final.
+            el.scrollIntoView({ block: 'nearest' });
+            const r = el.getBoundingClientRect();
+            const anchoTarjeta = 320;
+            const margen = 16;
+            if (window.innerWidth - r.right < anchoTarjeta + margen * 2) {
+                setPosicionTour('mobile');
+                return;
+            }
+            setPosicionTour({
+                top: Math.max(margen, Math.min(r.top, window.innerHeight - 260)),
+                left: r.right + margen,
+            });
+        };
+        const t = setTimeout(medir, 300);
+        window.addEventListener('resize', medir);
+        return () => {
+            clearTimeout(t);
+            window.removeEventListener('resize', medir);
+        };
+    }, [guiaActiva, open, pasoActual]);
 
     const salir = async (forzar = false) => {
         // Cerrar sesión limpia la cola de sincronización de este celular
@@ -545,7 +631,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                         <div className="flex items-center justify-center gap-2 bg-warn/15 px-4 py-2 text-center text-xs font-semibold text-warn">
                             <WifiOff className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
                             {sinConexion
-                                ? 'Sin conexión -- mostrando lo último cargado. Lo que hagas ahora se manda solo apenas vuelva la señal.'
+                                ? 'Sin conexión -- mostrando lo último guardado. Lo que hagas ahora se enviará automáticamente en cuanto vuelva la señal.'
                                 : `Sincronizando ${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'}...`}
                         </div>
                     )}
@@ -562,8 +648,8 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                             <p className="flex items-center justify-center gap-2 text-center text-xs font-bold">
                                 <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2.2} aria-hidden="true" />
                                 {fallidos.length === 1
-                                    ? 'Hubo un problema al guardar esto -- revisar si hace falta cargarlo de nuevo:'
-                                    : `Hubo un problema al guardar estos ${fallidos.length} cambios -- revisar si hace falta cargarlos de nuevo:`}
+                                    ? 'Hubo un problema al guardar esto -- revisar si hace falta registrarlo de nuevo:'
+                                    : `Hubo un problema al guardar estos ${fallidos.length} cambios -- revisar si hace falta registrarlos de nuevo:`}
                             </p>
                             <ul className="mx-auto max-w-md space-y-1.5">
                                 {fallidos.map((item) => (
@@ -595,10 +681,17 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                     para la marca -- el wordmark de Kairox y el nombre del
                                     gimnasio -- que es donde aportan identidad en vez de
                                     volumen. */}
+                                {/* `ayuda` (16/09/2026): el ícono "i" va pegado al título
+                                    de cada pantalla, en un solo lugar, en vez de que cada
+                                    página lo arme por su cuenta. Cada página pasa su propio
+                                    texto; sin texto, AyudaInfo no renderiza nada. */}
                                 {title && (
-                                    <h1 className="font-display text-3xl font-extrabold sm:text-4xl">
-                                        {title}
-                                    </h1>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">
+                                            {title}
+                                        </h1>
+                                        <AyudaInfo texto={ayuda} />
+                                    </div>
                                 )}
                                 {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
                             </div>
@@ -618,7 +711,10 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                     <div className="fixed inset-0 z-50">
                         <motion.div
                             className="absolute inset-0 bg-black/70"
-                            onClick={() => setOpen(false)}
+                            onClick={() => {
+                                finalizarTour();
+                                setOpen(false);
+                            }}
                             role="presentation"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -640,7 +736,10 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                 <GimnasioMark className="h-10" />
                                 <button
                                     type="button"
-                                    onClick={() => setOpen(false)}
+                                    onClick={() => {
+                                        finalizarTour();
+                                        setOpen(false);
+                                    }}
                                     aria-label="Cerrar menú"
                                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
                                 >
@@ -648,7 +747,11 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                 </button>
                             </div>
                             <div className="min-h-0 flex-1 overflow-y-auto px-4">
-                                <NavLinksAnimados nav={NAV} onNavegar={() => setOpen(false)} />
+                                <NavLinksAnimados
+                                    nav={NAV}
+                                    onNavegar={() => setOpen(false)}
+                                    pasoTourTo={guiaActiva ? pasoActual.to : null}
+                                />
                             </div>
                             <div className="shrink-0 px-4 pt-4">
                                 <button
@@ -668,7 +771,7 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                                             <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
                                                 <p className="text-xs text-muted-foreground">
                                                     {pendientes > 0 &&
-                                                        `Hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin mandar (asistencia o pagos cargados sin conexión). `}
+                                                        `Hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin enviar (asistencia o pagos registrados sin conexión). `}
                                                     {fallidos.length > 0 &&
                                                         `Hay ${fallidos.length} ${fallidos.length === 1 ? 'cambio' : 'cambios'} que no se pudo${fallidos.length === 1 ? '' : 'n'} guardar y todavía no se resolvió. `}
                                                     Si se cierra sesión ahora se pierden.
@@ -705,6 +808,25 @@ const AppLayout = ({ title, subtitle, actions, children }) => {
                     </div>
                 )}
             </AnimatePresence>
+
+            {guiaActiva && open && posicionTour && (
+                <TarjetaTour
+                    paso={pasoTour + 1}
+                    total={PASOS_TOUR.length}
+                    titulo={NAV.find((n) => n.to === pasoActual.to)?.label}
+                    texto={pasoActual.texto}
+                    posicion={posicionTour}
+                    esPrimero={pasoTour === 0}
+                    esUltimo={pasoTour === PASOS_TOUR.length - 1}
+                    onAtras={() => setPasoTour((p) => Math.max(0, p - 1))}
+                    onSiguiente={() =>
+                        pasoTour === PASOS_TOUR.length - 1
+                            ? finalizarTour()
+                            : setPasoTour((p) => p + 1)
+                    }
+                    onCerrar={finalizarTour}
+                />
+            )}
         </div>
     );
 };

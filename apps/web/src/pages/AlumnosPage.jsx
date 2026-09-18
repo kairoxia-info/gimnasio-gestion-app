@@ -52,7 +52,7 @@ const AYUDA_ESTADOS = [
     ['activo', 'Está entrenando. Cuenta en las estadísticas y aparece en pagos/asistencia.'],
     [
         'pendiente',
-        'Cargado pero todavía no arrancó — se anotó solo con el link de invitación y falta aprobarlo, o lo marcaste así a propósito (ej. "se anotó pero no vino todavía").',
+        'Registrado pero todavía no comenzó — se registró por su cuenta con el enlace de invitación y falta aprobarlo, o lo marcaste así a propósito (ej. "se registró pero no vino todavía").',
     ],
     ['inactivo', 'Dado de baja, no entrena más por ahora.'],
 ];
@@ -273,6 +273,7 @@ const AlumnosPage = () => {
 
     return (
         <AppLayout
+            ayuda="La lista de todos tus alumnos, con su estado de cuota y desde cuándo entrenan. Toca uno para ver su ficha completa: rutina, plan de alimentación, progreso, asistencia y pagos. Desde la ficha le creas usuario y contraseña para que vea su rutina en el teléfono."
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Alumnos
@@ -380,7 +381,7 @@ const AlumnosPage = () => {
             ) : filtrados.length === 0 ? (
                 <Empty>
                     {alumnos.length === 0 ? (
-                        <>Todavía no hay alumnos cargados. Empezar con el botón &ldquo;Nuevo alumno&rdquo;.</>
+                        <>Todavía no hay alumnos registrados. Comenzar con el botón &ldquo;Nuevo alumno&rdquo;.</>
                     ) : (
                         'No hay alumnos que coincidan con estos filtros.'
                     )}
@@ -521,9 +522,9 @@ const AlumnosPage = () => {
                         <Field label="Plan contratado">
                             {planes.length === 0 ? (
                                 <p className="rounded-xl border border-warn/30 bg-warn/10 px-3 py-2.5 text-xs text-warn">
-                                    Todavía no hay planes cargados.{' '}
+                                    Todavía no hay planes registrados.{' '}
                                     <Link to="/precios" className="font-semibold underline">
-                                        Cargar precios
+                                        Registrar precios
                                     </Link>{' '}
                                     y volver para poder dar de alta al alumno.
                                 </p>
@@ -624,9 +625,9 @@ const AlumnosPage = () => {
                             })}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                            &ldquo;Pendiente&rdquo; sirve tanto para alguien que se anotó solo con el link de
-                            invitación (falta aprobarlo) como para alguien cargado manualmente que todavía no
-                            arrancó.
+                            &ldquo;Pendiente&rdquo; sirve tanto para alguien que se registró por su cuenta con el
+                            enlace de invitación (falta aprobarlo) como para alguien registrado manualmente que
+                            todavía no comenzó.
                         </span>
                     </Field>
                     <div className="flex justify-end gap-2 pt-2">

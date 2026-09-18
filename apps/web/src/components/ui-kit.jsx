@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, Info, X } from 'lucide-react';
 
 export const Card = ({ className = '', children }) => (
     <div className={`rounded-2xl border border-border bg-card p-5 ${className}`}>{children}</div>
@@ -276,6 +276,79 @@ export const Modal = ({ open, onClose, title, children, wide = false }) => {
                 </motion.div>
             )}
         </AnimatePresence>
+    );
+};
+
+// Ícono "i" de ayuda de cada pantalla (pedido de Nalux, 16/09/2026): la
+// demo de bienvenida se ve una sola vez, así que esto es lo que queda para
+// orientar al profesor después. Se abre con CLICK y se cierra tocando afuera
+// -- no con hover, porque la app se usa en tablet/celular en el gimnasio y
+// ahí el hover directamente no existe. Mismo patrón de "ref + mousedown
+// afuera" que ya usa NotificacionesCampana.jsx. Sin texto no renderiza
+// nada: así cada pantalla puede pasar la ayuda o no, sin condicionales.
+const ANCHO_AYUDA = 288; // w-72
+const MARGEN_AYUDA = 16;
+
+export const AyudaInfo = ({ texto, className = '' }) => {
+    const [abierto, setAbierto] = useState(false);
+    // Cuánto correr la cajita hacia la izquierda para que no se salga de la
+    // pantalla. El botón vive al lado del título, que en el celular puede
+    // quedar bien a la derecha (ej. "Panel general (i)" a 375px): anclada a
+    // la izquierda del botón, la cajita se iba por el borde derecho y el
+    // texto quedaba cortado (visto en la prueba del 17/09/2026). Se mide
+    // al abrir, con el rect real del botón.
+    const [corrimiento, setCorrimiento] = useState(0);
+    const cajaRef = React.useRef(null);
+    const botonRef = React.useRef(null);
+
+    useEffect(() => {
+        if (!abierto) return undefined;
+        const cerrarSiAfuera = (e) => {
+            if (cajaRef.current && !cajaRef.current.contains(e.target)) setAbierto(false);
+        };
+        document.addEventListener('mousedown', cerrarSiAfuera);
+        return () => document.removeEventListener('mousedown', cerrarSiAfuera);
+    }, [abierto]);
+
+    if (!texto) return null;
+
+    const alternar = () => {
+        if (!abierto && botonRef.current) {
+            const r = botonRef.current.getBoundingClientRect();
+            const ancho = Math.min(ANCHO_AYUDA, window.innerWidth - MARGEN_AYUDA * 2);
+            const sobra = r.left + ancho - (window.innerWidth - MARGEN_AYUDA);
+            setCorrimiento(sobra > 0 ? -sobra : 0);
+        }
+        setAbierto((v) => !v);
+    };
+
+    return (
+        <div ref={cajaRef} className={`relative inline-block ${className}`}>
+            <button
+                ref={botonRef}
+                type="button"
+                onClick={alternar}
+                aria-label="Ayuda de esta sección"
+                aria-expanded={abierto}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-primary hover:text-foreground"
+            >
+                <Info className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <AnimatePresence>
+                {abierto && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        style={{ left: corrimiento }}
+                        className="absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground shadow-lg"
+                    >
+                        {texto}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 

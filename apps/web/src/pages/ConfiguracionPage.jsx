@@ -98,6 +98,7 @@ const ConfiguracionPage = () => {
 
     return (
         <AppLayout
+            ayuda="Nombre, logo y color de tu gimnasio (el color se aplica a toda la aplicación y a los PDF), el texto del comprobante, los días de gracia de la cuota, y el enlace para que los alumnos nuevos se registren por su cuenta desde el teléfono."
             title="Configuración"
             subtitle="Los datos y las reglas del gimnasio. Los planes y precios se configuran en su propia pantalla."
         >

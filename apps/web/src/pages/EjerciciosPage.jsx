@@ -285,6 +285,7 @@ const EjerciciosPage = () => {
 
     return (
         <AppLayout
+            ayuda="Todos los ejercicios que puedes usar en las rutinas, con foto o video de cómo se hacen. Puedes agregar los tuyos y ocultar los que no uses, para que no aparezcan al crear rutinas."
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de ejercicios
@@ -303,7 +304,7 @@ const EjerciciosPage = () => {
                               ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
                               : ''
                       }. Se pueden sumar más propios para completarla.`
-                    : 'Cargar los ejercicios del gimnasio una sola vez y reutilizarlos en todas las rutinas.'
+                    : 'Registrar los ejercicios del gimnasio una sola vez y reutilizarlos en todas las rutinas.'
             }
             actions={
                 <Btn
@@ -324,7 +325,7 @@ const EjerciciosPage = () => {
                 <title>Biblioteca de ejercicios | RutNail</title>
                 <meta
                     name="description"
-                    content="Biblioteca de ejercicios por grupo muscular con descripción y video demostrativo para armar planes de entrenamiento."
+                    content="Biblioteca de ejercicios por grupo muscular con descripción y video demostrativo para crear planes de entrenamiento."
                 />
             </Helmet>
 
@@ -374,7 +375,7 @@ const EjerciciosPage = () => {
                 // simple: nombre, grupo y un único botón.
                 <>
                     <p className="mb-4 text-sm text-muted-foreground">
-                        Ejercicios que ocultaste en este gimnasio. Dejás de verlos vos, pero podés volver a
+                        Ejercicios que ocultaste en este gimnasio. Dejas de verlos, pero puedes volver a
                         mostrarlos cuando quieras.
                     </p>
                     {loading ? (
@@ -434,7 +435,7 @@ const EjerciciosPage = () => {
                         <Select
                             value={filtroDemo}
                             onChange={(e) => setFiltroDemo(e.target.value)}
-                            aria-label="Filtrar por demostración cargada"
+                            aria-label="Filtrar por demostración agregada"
                         >
                             <option value="todos">Con o sin demostración</option>
                             <option value="con">Con demostración</option>
@@ -562,7 +563,7 @@ const EjerciciosPage = () => {
                                         <div className="mt-4 space-y-2">
                                             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                                 <Lock className="h-3.5 w-3.5" /> Es un ejercicio predefinido, no se
-                                                puede editar ni borrar. Podés ocultarlo si no lo usás.
+                                                puede editar ni borrar. Puedes ocultarlo si no lo usas.
                                             </p>
                                             <Btn
                                                 variant="ghost"
@@ -633,7 +634,7 @@ const EjerciciosPage = () => {
                             disabled={!!mediaFile}
                         />
                         <span className="text-xs text-muted-foreground">
-                            Pegar un link de YouTube, Vimeo, etc. — o subir un archivo propio abajo.
+                            Pegar un enlace de YouTube, Vimeo, etc. — o subir un archivo propio abajo.
                         </span>
                     </Field>
                     <Field label="Subir archivo propio (opcional)">
@@ -653,7 +654,7 @@ const EjerciciosPage = () => {
                         )}
                         {!mediaFile && mediaUrlActual && (
                             <span className="text-xs text-muted-foreground">
-                                Ya hay un archivo cargado para este ejercicio.
+                                Ya hay un archivo subido para este ejercicio.
                             </span>
                         )}
                         {mediaError && <ErrorBox>{mediaError}</ErrorBox>}

@@ -504,6 +504,7 @@ const PagosPage = () => {
 
     return (
         <AppLayout
+            ayuda="Registra cada cobro y la aplicación lleva automáticamente la caja del mes, el estado de cuota de cada alumno (al día, por vencer, vencido) y el historial. Cada pago genera un comprobante numerado que puedes reimprimir cuando lo necesites."
             title="Pagos y caja"
             subtitle="Cobrar, ver quién debe y reimprimir cualquier comprobante."
             actions={
@@ -540,7 +541,7 @@ const PagosPage = () => {
                                 {money(resumen.deudaTotal)}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Saldos pendientes cargados (pagos parciales y activaciones sin cobrar).
+                                Saldos pendientes registrados (pagos parciales y activaciones sin cobrar).
                             </p>
                         </Card>
                         <Card>
@@ -566,11 +567,11 @@ const PagosPage = () => {
                         <Card className="mb-6 border-warn/40 bg-warn/10">
                             <h2 className="font-display text-lg font-bold">
                                 {pendientes.length} pago{pendientes.length === 1 ? '' : 's'} pendiente
-                                {pendientes.length === 1 ? '' : 's'} de mandar
+                                {pendientes.length === 1 ? '' : 's'} de enviar
                             </h2>
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Se cargaron sin conexión -- se van a mandar solos (con su número de
-                                comprobante real) apenas vuelva la señal.
+                                Se registraron sin conexión -- se enviarán automáticamente (con su número de
+                                comprobante real) en cuanto vuelva la señal.
                             </p>
                             <ul className="mt-3 divide-y divide-border">
                                 {pendientes.map((p) => (

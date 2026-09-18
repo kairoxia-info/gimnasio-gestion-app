@@ -575,6 +575,7 @@ const PlanesAlimentacionPage = () => {
 
     return (
         <AppLayout
+            ayuda="Cada plan se crea una sola vez, por comida del día y con opciones, y se asigna a los alumnos que lo necesiten. El alumno lo ve en su teléfono y puede descargarlo en PDF."
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Planes de alimentación
@@ -583,7 +584,7 @@ const PlanesAlimentacionPage = () => {
                     </span>
                 </span>
             }
-            subtitle='Armar un plan una sola vez y asignarlo a cualquier alumno (o descargar el PDF) desde acá. Si una comida es opcional, marcar "Opcional" para que quede bien claro.'
+            subtitle='Crear un plan una sola vez y asignarlo a cualquier alumno (o descargar el PDF) desde aquí. Si una comida es opcional, marcar "Opcional" para que quede bien claro.'
             actions={
                 <Btn onClick={abrirNuevo}>
                     <Plus className="h-4 w-4" /> Nuevo plan de alimentación
@@ -594,7 +595,7 @@ const PlanesAlimentacionPage = () => {
                 <title>Planes de alimentación | RutNail</title>
                 <meta
                     name="description"
-                    content="Biblioteca de planes de comidas reutilizables para armar el plan de cualquier alumno."
+                    content="Biblioteca de planes de comidas reutilizables para crear el plan de cualquier alumno."
                 />
             </Helmet>
 

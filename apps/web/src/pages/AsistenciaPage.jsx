@@ -326,6 +326,7 @@ const AsistenciaPage = () => {
 
     return (
         <AppLayout
+            ayuda="Marca presente o ausente a cada alumno, día por día. Con eso el panel te muestra quién asiste con regularidad y quién lleva tiempo sin venir."
             title={esDia ? 'Pasar lista' : esMes ? 'Asistencia del mes' : 'Asistencia semanal'}
             subtitle={
                 esDia
@@ -339,7 +340,7 @@ const AsistenciaPage = () => {
                 <title>Control de asistencia | RutNail</title>
                 <meta
                     name="description"
-                    content="Grilla semanal de asistencia de todos los alumnos activos del gimnasio, con conteo de presentes y ausentes."
+                    content="Tabla semanal de asistencia de todos los alumnos activos del gimnasio, con conteo de presentes y ausentes."
                 />
             </Helmet>
 
@@ -432,7 +433,7 @@ const AsistenciaPage = () => {
                 <Empty>
                     No hay alumnos activos.{' '}
                     <Link to="/alumnos" className="font-semibold text-primary">
-                        Cargar alumnos
+                        Registrar alumnos
                     </Link>
                 </Empty>
             ) : visibles.length === 0 ? (
@@ -483,7 +484,7 @@ const AsistenciaPage = () => {
                                         </Link>
                                         {reg?.pendiente && (
                                             <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warn">
-                                                Pendiente de mandar
+                                                Pendiente de enviar
                                             </span>
                                         )}
                                     </span>

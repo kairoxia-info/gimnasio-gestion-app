@@ -240,6 +240,7 @@ const AlimentosPage = () => {
 
     return (
         <AppLayout
+            ayuda="Los alimentos que usas para crear planes de alimentación, con calorías y macronutrientes por porción. Regístralos una vez y después los eliges de la lista al crear cada plan."
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de alimentos
@@ -257,7 +258,7 @@ const AlimentosPage = () => {
                               ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
                               : ''
                       }. Se pueden sumar más propios, y ocultar los que no se usen.`
-                    : 'Cargar cada alimento una vez con su información nutricional y reutilizarlo en los planes.'
+                    : 'Registrar cada alimento una vez con su información nutricional y reutilizarlo en los planes.'
             }
             actions={
                 <Btn
@@ -275,7 +276,7 @@ const AlimentosPage = () => {
                 <title>Biblioteca de alimentos | RutNail</title>
                 <meta
                     name="description"
-                    content="Alimentos con calorías y macros por porción para armar planes de alimentación personalizados."
+                    content="Alimentos con calorías y macronutrientes por porción para crear planes de alimentación personalizados."
                 />
             </Helmet>
 
@@ -318,7 +319,7 @@ const AlimentosPage = () => {
                 // es más simple: sin Editar/Eliminar.
                 <>
                     <p className="mb-4 text-sm text-muted-foreground">
-                        Alimentos que ocultaste en este gimnasio. Dejás de verlos vos, pero podés volver a
+                        Alimentos que ocultaste en este gimnasio. Dejas de verlos, pero puedes volver a
                         mostrarlos cuando quieras.
                     </p>
                     {loading ? (
@@ -409,7 +410,7 @@ const AlimentosPage = () => {
                         <Select
                             value={filtroNutricion}
                             onChange={(e) => setFiltroNutricion(e.target.value)}
-                            aria-label="Filtrar por información nutricional cargada"
+                            aria-label="Filtrar por información nutricional registrada"
                         >
                             <option value="todos">Con o sin información nutricional</option>
                             <option value="con">Con información nutricional</option>

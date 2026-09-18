@@ -261,6 +261,7 @@ const DashboardPage = () => {
         <AppLayout
             title="Panel general"
             subtitle="Todo el estado del gimnasio en una sola pantalla: alumnos, asistencia y caja del mes."
+            ayuda="Aquí ves de un vistazo cómo está el gimnasio: alumnos activos, quién asistió esta semana, cuánto se cobró en el mes y quién tiene la cuota vencida o por vencer. Toca cualquier tarjeta para ir a esa sección."
         >
             <Helmet>
                 <title>Panel general | RutNail</title>
@@ -406,7 +407,7 @@ const DashboardPage = () => {
                             <div>
                                 <h2 className="font-display text-lg font-bold">Ingresos por mes</h2>
                                 <p className="text-sm text-muted-foreground">
-                                    Últimos 12 meses, según la fecha de cada pago cargado.
+                                    Últimos 12 meses, según la fecha de cada pago registrado.
                                 </p>
                             </div>
                             <Link to="/pagos" className="text-sm font-semibold text-primary">
@@ -510,8 +511,8 @@ const DashboardPage = () => {
                         <h2 className="font-display text-lg font-bold">Flujo recomendado</h2>
                         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             {[
-                                ['1. Cargar biblioteca', 'Ejercicios y alimentos una sola vez.', '/ejercicios'],
-                                ['2. Armar el plan', 'Elegir ejercicios y definir series y reps.', '/alumnos'],
+                                ['1. Preparar la biblioteca', 'Ejercicios y alimentos una sola vez.', '/ejercicios'],
+                                ['2. Crear el plan', 'Elegir ejercicios y definir series y repeticiones.', '/alumnos'],
                                 ['3. Marcar asistencia', 'Presente o ausente, día por día.', '/asistencia'],
                                 ['4. Registrar el pago', 'Monto, período y estado del alumno.', '/pagos'],
                             ].map(([t, d, to]) => (

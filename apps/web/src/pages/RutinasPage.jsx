@@ -887,6 +887,7 @@ const RutinasPage = () => {
 
     return (
         <AppLayout
+            ayuda="Cada rutina se crea una sola vez y se asigna a todos los alumnos que la necesiten. Editar una rutina aquí no cambia la de los alumnos que ya la tienen: para darles la versión nueva, hay que volver a asignársela."
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de rutinas de ejercicios
@@ -895,7 +896,7 @@ const RutinasPage = () => {
                     </span>
                 </span>
             }
-            subtitle="Armar cada rutina una sola vez y asignarla a todos los alumnos que la necesiten."
+            subtitle="Crear cada rutina una sola vez y asignarla a todos los alumnos que la necesiten."
             actions={
                 <Btn onClick={abrirNueva}>
                     <Plus className="h-4 w-4" /> Nueva rutina
@@ -934,7 +935,7 @@ const RutinasPage = () => {
             ) : visibles.length === 0 ? (
                 <Empty>
                     {rutinas.length === 0 ? (
-                        <>Todavía no hay rutinas cargadas. Empezar con el botón &ldquo;Nueva rutina&rdquo;.</>
+                        <>Todavía no hay rutinas registradas. Comenzar con el botón &ldquo;Nueva rutina&rdquo;.</>
                     ) : (
                         'No hay rutinas que coincidan con la búsqueda.'
                     )}
@@ -969,7 +970,7 @@ const RutinasPage = () => {
                                     <p className="mt-3 text-sm text-muted-foreground">{r.descripcion}</p>
                                 )}
                                 <p className="mt-3 text-xs text-muted-foreground">
-                                    {cantItems} ejercicio{cantItems === 1 ? '' : 's'} cargado{cantItems === 1 ? '' : 's'}
+                                    {cantItems} ejercicio{cantItems === 1 ? '' : 's'} agregado{cantItems === 1 ? '' : 's'}
                                     {semanasUsadas > 1 ? ` · ${semanasUsadas} semanas distintas` : ''}
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-2">
@@ -1075,9 +1076,9 @@ const RutinasPage = () => {
                     {editId && contarAsignados(editId) > 0 && (
                         <p className="rounded-xl border border-border bg-secondary px-4 py-3 text-xs text-muted-foreground">
                             Esta rutina la tienen {contarAsignados(editId)} alumno
-                            {contarAsignados(editId) === 1 ? '' : 's'}. Lo que se cambie acá{' '}
+                            {contarAsignados(editId) === 1 ? '' : 's'}. Lo que se cambie aquí{' '}
                             <span className="font-semibold text-foreground">no les cambia la rutina</span> que ya
-                            están haciendo: para pasarles esta versión, hay que volver a asignársela.
+                            están haciendo: para darles esta versión, hay que volver a asignársela.
                         </p>
                     )}
                     <Card>
@@ -1126,7 +1127,7 @@ const RutinasPage = () => {
                         {ejercicios.length === 0 ? (
                             <div className="mt-4">
                                 <Empty>
-                                    Primero cargar ejercicios en la{' '}
+                                    Primero agregar ejercicios en la{' '}
                                     <Link to="/ejercicios" className="font-semibold text-primary">
                                         biblioteca
                                     </Link>
@@ -1202,7 +1203,7 @@ const RutinasPage = () => {
                                         {confirmandoDuplicarSemana ? (
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-xs text-muted-foreground">
-                                                    La semana {semana + 1} ya tiene ejercicios cargados. ¿Reemplazarlos
+                                                    La semana {semana + 1} ya tiene ejercicios agregados. ¿Reemplazarlos
                                                     con una copia de la semana {semana}?
                                                 </span>
                                                 <ConfirmInlineActions
@@ -1587,7 +1588,7 @@ const RutinasPage = () => {
                                                                             onChange={(e) =>
                                                                                 editarItem(it.key, 'comentario', e.target.value)
                                                                             }
-                                                                            placeholder="Bajar despacio, sin trabar los codos..."
+                                                                            placeholder="Bajar el peso despacio, sin trabar los codos..."
                                                                         />
                                                                     </Field>
                                                                 </div>
@@ -1854,7 +1855,7 @@ const RutinasPage = () => {
                                         <span className="text-sm text-muted-foreground">
                                             {bloque
                                                 ? `Los ejercicios que agregues abajo van a la caja "${bloque}".`
-                                                : 'Dejalo vacío para agregar ejercicios sueltos, sin agrupar en ninguna caja.'}
+                                                : 'Dejarlo vacío para agregar ejercicios sueltos, sin agrupar en ninguna caja.'}
                                         </span>
                                     </Field>
                                 )}
@@ -1941,7 +1942,7 @@ const RutinasPage = () => {
                                     </div>
                                     <span className="text-xs text-muted-foreground">
                                         Marcar varios para agregarlos todos juntos, uno detrás del otro -- si van
-                                        en superserie, dejalos en la misma caja.
+                                        en superserie, dejarlos en la misma caja.
                                     </span>
                                 </Field>
 

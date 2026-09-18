@@ -188,6 +188,7 @@ const AvisosPage = () => {
 
     return (
         <AppLayout
+            ayuda="Mensajes para tus alumnos según el estado de su cuota: a todos, solo a los que están por vencer o solo a los vencidos. Lo ven en cuanto abren su rutina en el teléfono, y pueden descartarlo con 'Entendido'."
             title="Avisos"
             subtitle="Enviar un aviso segmentado por estado de cuota. Se calcula solo según el estado de cada alumno, cada vez que entra a ver su plan."
             actions={
