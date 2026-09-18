@@ -5514,3 +5514,149 @@ apps/web/src/components/configuracion/DatosGimnasio.jsx, apps/web/src/pages/Conf
 apps/web/src/components/RutinaPDF.jsx, apps/web/src/components/PlanAlimentacionPDF.jsx,
 apps/web/src/pages/PagosPage.jsx, apps/web/src/pages/MiPlanPage.jsx,
 apps/web/src/components/ErrorBoundary.jsx.
+
+## 18/09/2026 — Gaps legales antes de vender a un segundo gimnasio: análisis y punto 1 (Términos y
+   política de privacidad)
+
+Antes de vender RutNail a un gimnasio que no sea el de Nalux, alguien externo al proyecto tiró 3
+candidatos a gap (comparando contra competidores argentinos y jurisprudencia sobre responsabilidad
+de gimnasios): términos + privacidad estáticos, deslinde de responsabilidad por lesiones en el
+alta del alumno, y "Enviar por WhatsApp" en avisos/comprobantes. Análisis hecho ANTES de tocar
+código (sin implementar nada todavía en ese momento):
+
+- **Ninguno de los tres estaba resuelto**, pero UnirsePage.jsx (11/09/2026) ya tenía una pieza
+  parcial del punto de datos: un párrafo + checkbox de conformidad, sin persistir nada (a
+  propósito, según su propio comentario) y sin cubrir el alta manual que hace el profesor.
+- El patrón de WhatsApp (`wa.me/?text=...` + `window.open`) ya existe y está probado en producción
+  en AccesoAlumno.jsx — bajo riesgo para avisos, pero el comprobante de pago es un PDF y `wa.me` no
+  admite adjuntar archivos (no es lo mismo mandar texto que mandar un archivo).
+- Se anotó como pendiente de negocio, no de código: como plataforma multi-tenant, RutNail es
+  "encargado de tratamiento" de los datos de los alumnos de cada gimnasio cliente bajo la Ley
+  25.326, y cada gimnasio es el "responsable" — antes de vender a un tercero real hace falta un
+  contrato de encargado de tratamiento firmado con cada uno, que es un documento legal, no algo
+  que se resuelva en código. **No se tocó nada de esto, queda anotado nomás.**
+
+Nalux devolvió el orden de trabajo: 1) términos + privacidad, 2) deslinde de responsabilidad +
+consentimiento de datos unificados en el primer login del alumno, 3) WhatsApp en avisos/
+comprobantes, 4) confirmar si "sin reservas/turnos" (Decisión 21) sigue en pie para un gimnasio
+nuevo. Pedido explícito de ir punto por punto, avisando antes de seguir con el próximo.
+
+### Punto 1 — Pantalla `/terminos` (Términos y condiciones + política de privacidad)
+
+**Hallazgo de código antes de escribir, que cambió el enfoque de dónde enganchar el link**: el
+plan asumía que el "primer login del alumno" pasa por `/alumno`, pero esa pantalla
+(AlumnoLoginPage.jsx) no renderiza nada del alumno — solo valida usuario/contraseña vía
+`iniciar_sesion_alumno()` (RPC pública, sin sesión de Supabase Auth) y navega a
+`/mi-plan/:codigo`, que es donde vive `MiPlanPage.jsx` con el contenido real. Además `MiPlanPage`
+se reutiliza para "Ver como alumno" desde el panel del profesor (`?profesor=<id>` en la URL). Esto
+importa para el punto 2 (el modal de aceptación bloqueante tiene que vivir en `MiPlanPage`, no en
+`AlumnoLoginPage`, y tiene que ignorar el caso `?profesor=`) — anotado acá para no reabrir esta
+investigación cuando se arranque ese punto.
+
+**Qué se hizo:**
+- `TerminosPage.jsx` (nueva), ruta pública `/terminos` (sin `ProtectedRoute`, mismo criterio que
+  `UnirsePage`/`AlumnoLoginPage` — nadie que la abre tiene por qué tener sesión). Mismo lenguaje
+  visual "neutro" (fondo + `ThemeToggle`, no `AuthBackdrop`, porque se llega tanto desde pantallas
+  de antes del login como de después). Contenido: qué es RutNail, quién es responsable del
+  tratamiento (el gimnasio, no Kairox IA — Kairox es encargado del tratamiento), qué datos se
+  recolectan (incluye `observaciones_salud`, marcado como dato sensible), para qué se usan,
+  menores de edad, derechos ARCO + mención de la AAIP como organismo de control, seguridad, y
+  contacto. **Es un borrador de base para el soft launch, no un texto revisado por un abogado** —
+  si en algún momento se define un CUIT o domicilio legal de Kairox IA para sumar, hay que hacerlo
+  con el dato real, no inventado (no se agregó nada de eso).
+- Enganchado en `LoginPage.jsx` (solo en modo "Registrarse", no en login — una cuenta ya creada no
+  está aceptando nada nuevo) y en `UnirsePage.jsx` (dentro del párrafo de conformidad que ya
+  existía). Los dos con `target="_blank"`: en `LoginPage` a propósito, para no perderle al
+  profesor el formulario a mitad de carga si ya había tipeado nombre/correo/contraseña.
+- Pendiente enganchar en el modal de primer login del alumno — se hace en el punto 2, que todavía
+  no se tocó.
+
+**Verificado en local** (`localhost:3001`): `/terminos` carga standalone, en 375px y en escritorio,
+con el link "Volver" funcionando. El link aparece en `/login` únicamente al tocar "Registrarse"
+(no en el modo de inicio de sesión) y en `/unirse/:codigo`, los dos apuntando a `/terminos` con
+`target="_blank"`. `npx eslint` sobre los 4 archivos tocados y `npm run build` del proyecto,
+limpios los dos.
+
+**Archivos**: apps/web/src/pages/TerminosPage.jsx (nuevo), apps/web/src/App.jsx,
+apps/web/src/pages/LoginPage.jsx, apps/web/src/pages/UnirsePage.jsx.
+
+**Pendiente de negocio, NO de código (anotado a pedido de Nalux, no tocar)**: como plataforma
+multi-tenant, RutNail es "encargado de tratamiento" de los datos de los alumnos de cada gimnasio
+cliente bajo la Ley 25.326, y cada gimnasio es el "responsable". Antes de vender a un tercero real
+hace falta una cláusula o contrato de encargado de tratamiento firmado con cada gimnasio cliente —
+documento legal, se resuelve fuera de la app.
+
+### Punto 2 — Modal de aceptación en el primer ingreso del alumno (deslinde de responsabilidad +
+   consentimiento de datos, unificados)
+
+Un solo punto de aceptación con valor legal real, sin importar si el alumno se autorregistró o si
+el profesor lo cargó a mano: modal bloqueante (sin X, sin cierre por click afuera, sin Escape) la
+primera vez que `/mi-plan/:codigo` carga con cualquiera de los dos consentimientos pendientes.
+Reemplaza en valor legal al checkbox de `UnirsePage.jsx` (11/09/2026), que a propósito no
+persistía nada -- esa pantalla sigue mostrando su aviso, sin cambios.
+
+**Migración `supabase/migrations/0061_aceptacion_terminos_alumno.sql`**: 4 columnas nuevas en
+`alumnos` (`aceptacion_datos_en`, `aceptacion_deslinde_en`, `aceptacion_tutor_nombre`,
+`aceptacion_tutor_dni` -- las dos últimas NULL si aceptó el propio alumno), RPC pública
+`aceptar_terminos_alumno()` (mismo patrón que `marcar_entrenamiento_hecho`/`alumno_cargar_peso`:
+resuelve por `codigo_acceso` + `activo=true`, `SECURITY DEFINER`), y `ver_plan_por_codigo()`
+extendida con `alumno_fecha_nacimiento`/`aceptacion_datos_en`/`aceptacion_deslinde_en`. Las 4
+columnas nuevas quedan FUERA de los permisos por columna de la 0051: ninguna pantalla del profesor
+las lee todavía, mismo criterio que esa migración ya usó para `dni`/los contadores.
+
+**Dos bugs reales encontrados probando en local, los dos corregidos con migraciones de
+seguimiento (mismo criterio que 0056→0057 del proyecto: nunca se edita una migración ya aplicada,
+se corrige con una nueva)**:
+
+1. **`0062_fix_ambiguedad_ver_plan_por_codigo.sql`** -- Postgres tiraba *"column reference
+   \"aceptacion_datos_en\" is ambiguous"* (42702). Causa: nombrar las columnas nuevas del
+   `RETURNS TABLE` exactamente igual que las columnas reales de `alumnos` -- en PL/pgSQL, las
+   columnas de un `RETURNS TABLE` son variables implícitas en toda la función, así que el
+   `SELECT ..., aceptacion_datos_en, ... FROM public.alumnos` (sin alias) no podía saber si eso
+   era la tabla o la variable de retorno. Fix: alias `a.` en ese `SELECT`. El resto de las
+   columnas nuevas (`alumno_fecha_nacimiento`) no tenía el problema por estar prefijadas distinto
+   del nombre real (`fecha_nacimiento`).
+2. **`0063_fix_contador_aceptar_terminos.sql`** -- *"column \"escritura_intentos_ventana_inicio\"
+   does not exist"* (42703). La 0061 copió el rate-limit de `marcar_entrenamiento_hecho` tal como
+   estaba escrito en la migración 0050 (columnas compartidas `escritura_intentos_*`) sin notar que
+   la migración 0052 (14/09/2026) ya las había DROPEADO a propósito, reemplazándolas por un par de
+   columnas POR ACCIÓN (`marcar_entreno_*`, `cargar_peso_*`) -- un contador compartido entre
+   acciones distintas hace que agotar el tope de una trabe la otra. Fix: columnas propias
+   `aceptar_terminos_contador`/`aceptar_terminos_ventana_inicio`, mismo criterio que las otras dos
+   acciones.
+
+**`apps/web/src/pages/MiPlanPage.jsx`**: `debeAceptarTerminos` = hay `plan` cargado, NO viene
+`?profesor=<id>` (el profesor previsualizando con "Ver como alumno" nunca tiene que aceptar nada
+en nombre del alumno), y falta alguno de los dos timestamps. El modal se arma a mano (no reusa
+`<Modal>` de `ui-kit.jsx`, que cierra con Escape -- acá eso rompería el bloqueo) con dos checkboxes
+separados: tratamiento de datos (linkea a `/terminos`, target `_blank`) y una cláusula de
+asunción de riesgo redactada para no exonerar negligencia del gimnasio ("libero... de esos riesgos
+ordinarios -- esto no cubre casos de negligencia comprobada"), a propósito, porque una cláusula
+que exonera TODO (incluida la propia negligencia) es más fácil de tumbar como abusiva que una
+acotada a los riesgos ordinarios de la actividad física.
+
+Menor de edad: si `plan.alumno_fecha_nacimiento` ya está cargada (autorregistro o alta manual) y
+da menos de 18 años, el formulario de tutor (nombre + DNI, dos campos de texto sin verificación de
+identidad) aparece FIJO, sin toggle. Si la fecha no está cargada (es opcional en toda la app, así
+que es el caso más común en altas manuales), aparece un checkbox chico para que quien acepta se
+autodeclare tutor de un menor -- mismo nivel de rigor que ya tiene el resto de la app (sin
+verificación dura de identidad en ningún lado).
+
+**Nota sobre el DNI del tutor**: el 11/09/2026 se sacó el DNI del alumno de toda la app,
+justamente para no juntar un dato de identidad sin usarlo (ver `UnirsePage.jsx`). Acá se vuelve a
+pedir un DNI, pero del TUTOR, no del alumno, y con un uso real y distinto: identificar quién
+aceptó una cláusula de responsabilidad en representación de un menor -- no es el mismo caso que el
+dato que se sacó (que no lo usaba ninguna función). Señalado por transparencia, no se le preguntó
+a Nalux antes porque su propio plan ya lo pedía explícitamente así.
+
+**Verificado en local** con 4 alumnos de prueba temporales en Mi GYM FIT (adulto, menor con fecha
+de nacimiento cargada, uno para el caso `?profesor=`, uno para mobile -- los 4 borrados al
+terminar, cero rastro): el modal aparece solo cuando falta la aceptación, bloquea sin checkboxes
+marcados, exige nombre+DNI del tutor cuando corresponde, cierra y no vuelve a aparecer al
+recargar, `?profesor=<id>` lo salta por completo, y los timestamps + datos del tutor quedan
+correctos en la base (confirmado por SQL en los dos casos). Probado en escritorio y en 375px.
+`npx eslint` y `npm run build` del proyecto, limpios.
+
+**Archivos**: supabase/migrations/{0061_aceptacion_terminos_alumno,
+0062_fix_ambiguedad_ver_plan_por_codigo, 0063_fix_contador_aceptar_terminos}.sql,
+apps/web/src/pages/MiPlanPage.jsx.
