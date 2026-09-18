@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Loader2, Lock, Mail, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -227,6 +227,28 @@ const LoginPage = () => {
                                 Olvidé mi contraseña
                             </button>
                         </div>
+                    )}
+
+                    {/* Punto 1 del pedido de Nalux (18/09/2026, "cerrar los gaps legales
+                        antes de vender a un segundo gimnasio"): enganchar el link a
+                        Términos y privacidad en el registro del profesor. Solo en modo
+                        "signup" -- un login ya existente no está aceptando nada nuevo.
+                        target="_blank" a propósito: si el profesor ya completó nombre/
+                        correo/contraseña, navegar en la misma pestaña le borraría el
+                        formulario a mitad de carga. */}
+                    {!isLogin && (
+                        <p className="text-center text-xs text-muted-foreground">
+                            Al crear una cuenta, aceptás los{' '}
+                            <Link
+                                to="/terminos"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold text-[#d8b876] hover:underline"
+                            >
+                                Términos y la Política de privacidad
+                            </Link>
+                            .
+                        </p>
                     )}
 
                     {error && <ErrorBox>{error}</ErrorBox>}

@@ -8,6 +8,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import UnirsePage from '@/pages/UnirsePage';
+import TerminosPage from '@/pages/TerminosPage';
 import MiPlanPage from '@/pages/MiPlanPage';
 import AlumnoLoginPage from '@/pages/AlumnoLoginPage';
 import OnboardingPage from '@/pages/OnboardingPage';
@@ -55,6 +56,13 @@ function App() {
                                 de poder ver el formulario, igual que pasaría con /login y
                                 /restablecer-password si los envolviéramos. */}
                             <Route path="/unirse/:codigo" element={<UnirsePage />} />
+                            {/* Sin ProtectedRoute a propósito: pantalla estática pública
+                                (Términos y condiciones / política de privacidad, punto 1 del
+                                pedido de Nalux del 18/09/2026), enlazada desde el registro del
+                                profesor, el autorregistro del alumno y, más adelante, el modal
+                                de primer login del alumno -- ninguno de esos puntos de entrada
+                                tiene sesión garantizada. */}
+                            <Route path="/terminos" element={<TerminosPage />} />
                             {/* Sin ProtectedRoute a propósito, mismo criterio que /unirse/:codigo:
                                 el alumno accede escaneando un QR o abriendo un link, sin sesión
                                 propia (el acceso se resuelve 100% por el código individual del

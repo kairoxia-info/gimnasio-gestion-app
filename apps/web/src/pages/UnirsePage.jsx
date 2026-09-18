@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
@@ -240,7 +240,11 @@ const UnirsePage = () => {
                                 para crear tu ficha, contactarte y administrar tu cuota. No se
                                 comparten con nadie más ni se usan para publicidad. Para ver,
                                 corregir o borrar tus datos en cualquier momento, alcanza con
-                                pedírselo al profesor.
+                                pedírselo al profesor. Ver el detalle completo en los{' '}
+                                <Link to="/terminos" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline">
+                                    Términos y la Política de privacidad
+                                </Link>
+                                .
                             </p>
                             <label className="mt-3 flex items-start gap-3 text-xs">
                                 <input
