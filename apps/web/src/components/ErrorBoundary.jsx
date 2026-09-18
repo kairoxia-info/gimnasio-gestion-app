@@ -36,7 +36,7 @@ class ErrorBoundary extends React.Component {
                         Algo no cargó bien
                     </p>
                     <p className="max-w-sm text-sm text-muted-foreground">
-                        Puede haber quedado una versión vieja guardada en el dispositivo. Recargá la
+                        Puede haber quedado una versión vieja guardada en el dispositivo. Recarga la
                         página para volver a intentar.
                     </p>
                     <button

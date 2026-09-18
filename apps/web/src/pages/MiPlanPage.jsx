@@ -1183,7 +1183,7 @@ const MiPlanPage = () => {
                                 Hola, {plan.alumno_nombre}
                             </h1>
                             <p className="text-lg text-muted-foreground">
-                                Acá está la rutina y el plan de alimentación.
+                                Aquí está la rutina y el plan de alimentación.
                             </p>
                         </section>
 
@@ -1280,9 +1280,9 @@ const MiPlanPage = () => {
                                         }`}
                                     >
                                         {diasHastaRutina < 0
-                                            ? `Tu rutina venció el ${fmtFecha(plan.rutina_fecha_fin)}. Pedile al profesor una rutina nueva.`
+                                            ? `Tu rutina venció el ${fmtFecha(plan.rutina_fecha_fin)}. Pídele al profesor una rutina nueva.`
                                             : diasHastaRutina === 0
-                                              ? 'Tu rutina vence hoy. Pedile al profesor una rutina nueva.'
+                                              ? 'Tu rutina vence hoy. Pídele al profesor una rutina nueva.'
                                               : `Tu rutina vence en ${diasHastaRutina} ${diasHastaRutina === 1 ? 'día' : 'días'} (${fmtFecha(plan.rutina_fecha_fin)}).`}
                                     </p>
                                 </div>
@@ -1722,10 +1722,10 @@ const MiPlanPage = () => {
                                             </p>
                                             <p className="mt-1 text-base text-muted-foreground">
                                                 {progreso.entrenamientos_ultima_semana === 0
-                                                    ? 'Marcá "Hecho" en tu rutina de hoy para empezar la racha.'
+                                                    ? 'Marca "Hecho" en tu rutina de hoy para empezar la racha.'
                                                     : progreso.entrenamientos_ultima_semana >= 4
-                                                      ? '¡Muy bien! Seguí así.'
-                                                      : 'Vas bien, un poco más y sostenés la racha.'}
+                                                      ? '¡Muy bien! Sigue así.'
+                                                      : 'Vas bien, un poco más y sostienes la racha.'}
                                             </p>
                                         </div>
                                     </div>
@@ -1734,7 +1734,7 @@ const MiPlanPage = () => {
                                         <h3 className="mb-4 font-display text-lg font-bold">Evolución del peso</h3>
                                         {progreso.historial_peso.length < 2 ? (
                                             <p className="text-base text-muted-foreground">
-                                                Cargá tu peso un par de veces más para empezar a ver el gráfico.
+                                                Registra tu peso un par de veces más para empezar a ver el gráfico.
                                             </p>
                                         ) : (
                                             <div className="h-56">
@@ -1812,9 +1812,9 @@ const MiPlanPage = () => {
                                         }`}
                                     >
                                         {diasHastaPlan < 0
-                                            ? `Tu plan de alimentación venció el ${fmtFecha(plan.plan_fecha_fin)}. Pedile al profesor uno nuevo.`
+                                            ? `Tu plan de alimentación venció el ${fmtFecha(plan.plan_fecha_fin)}. Pídele al profesor uno nuevo.`
                                             : diasHastaPlan === 0
-                                              ? 'Tu plan de alimentación vence hoy. Pedile al profesor uno nuevo.'
+                                              ? 'Tu plan de alimentación vence hoy. Pídele al profesor uno nuevo.'
                                               : `Tu plan de alimentación vence en ${diasHastaPlan} ${diasHastaPlan === 1 ? 'día' : 'días'} (${fmtFecha(plan.plan_fecha_fin)}).`}
                                     </p>
                                 </div>
