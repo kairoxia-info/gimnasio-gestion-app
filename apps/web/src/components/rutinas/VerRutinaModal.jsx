@@ -51,7 +51,7 @@ const agruparPorCombo = (lista) => {
 // editables.
 const DetalleRutina = ({ rutina }) => {
     const items = rutina.items || [];
-    if (items.length === 0) return <Empty>Esta rutina todavía no tiene ejercicios cargados.</Empty>;
+    if (items.length === 0) return <Empty>Esta rutina todavía no tiene ejercicios agregados.</Empty>;
 
     const semanas = [...new Set(items.map(semanaDeItem))].sort((a, b) => a - b);
 

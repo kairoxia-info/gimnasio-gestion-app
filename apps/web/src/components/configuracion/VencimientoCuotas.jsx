@@ -131,8 +131,8 @@ const VencimientoCuotas = ({ gimnasioFull, setGimnasioFull, vencForm, setVencFor
                     {vencForm.politica_vencimiento_cuota === 'restringir' && (
                         <div className="space-y-2 border-t border-warn/40 pt-3">
                             <p className="text-xs text-muted-foreground">
-                                En su link personal (el que abre sin login), en vez del contenido tildado
-                                de abajo va a ver un cartel de &quot;cuota vencida, pasar por el
+                                En su enlace personal (el que abre sin iniciar sesión), en vez del contenido
+                                marcado de abajo va a ver un aviso de &quot;cuota vencida, pasar por el
                                 gimnasio&quot;. Apenas se le registre el pago vuelve a ver todo -- no se
                                 borra nada. La rutina y el plan de comidas se restringen por separado,
                                 porque uno puede seguir vigente aunque el otro no.

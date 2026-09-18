@@ -159,7 +159,7 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
                     <Loading rows={2} />
                 ) : planesDisponibles.length === 0 ? (
                     <Empty>
-                        No hay planes en la biblioteca todavía. Armar uno desde{' '}
+                        No hay planes en la biblioteca todavía. Crear uno desde{' '}
                         <Link to="/planes-alimentacion" className="font-semibold text-primary">
                             Planes de alimentación
                         </Link>
@@ -238,7 +238,7 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
                     <button type="button" onClick={abrirSelector} className="font-semibold text-primary">
                         Asignarle uno, con su fecha de inicio y de fin
                     </button>
-                    , o armar uno nuevo desde{' '}
+                    , o crear uno nuevo desde{' '}
                     <Link to="/planes-alimentacion" className="font-semibold text-primary">
                         Planes de alimentación
                     </Link>
@@ -309,7 +309,7 @@ const PlanAlimentacion = ({ alumnoId, alumnoNombre, plan, onSaved }) => {
             </Card>
 
             {(plan.items || []).length === 0 ? (
-                <Empty>Este plan todavía no tiene comidas cargadas.</Empty>
+                <Empty>Este plan todavía no tiene comidas agregadas.</Empty>
             ) : (
                 <div className="space-y-4">
                     {(plan.items || []).map((c, i) => (

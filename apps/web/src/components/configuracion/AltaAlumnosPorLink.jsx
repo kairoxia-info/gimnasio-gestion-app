@@ -87,11 +87,11 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
 
     return (
         <Card className="mb-8">
-            <h2 className="font-display text-lg font-bold">Alta de alumnos por link</h2>
+            <h2 className="font-display text-lg font-bold">Alta de alumnos por enlace</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-                Un link (o el mismo QR) para que los alumnos se anoten solos, sin tener que cargarlos
-                uno por uno. Quedan como &quot;Pendiente&quot; en Alumnos hasta que se revisan y se
-                aprueban.
+                Un enlace (o el mismo QR) para que los alumnos se registren por su cuenta, sin tener que
+                agregarlos uno por uno. Quedan como &quot;Pendiente&quot; en Alumnos hasta que se revisan
+                y se aprueban.
             </p>
 
             <label className="mt-4 flex items-center gap-3 text-sm">
@@ -102,7 +102,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                     disabled={autorregistroSaving}
                     className="h-4 w-4 accent-[hsl(var(--primary))]"
                 />
-                Permitir que los alumnos se anoten solos con este link
+                Permitir que los alumnos se registren por su cuenta con este enlace
             </label>
 
             {autorregistroError && (
@@ -116,7 +116,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                     {qrDataUrl && (
                         <img
                             src={qrDataUrl}
-                            alt="Código QR para anotarse"
+                            alt="Código QR para registrarse"
                             className="h-40 w-40 shrink-0 rounded-2xl border border-border bg-white p-2"
                         />
                     )}
@@ -126,7 +126,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                                 readOnly
                                 value={linkAutorregistro}
                                 onFocus={(e) => e.target.select()}
-                                aria-label="Link para anotarse"
+                                aria-label="Enlace para registrarse"
                                 className="min-w-0 flex-1 truncate rounded-xl border border-border bg-secondary px-3 py-2.5 font-mono text-xs text-foreground outline-none focus:border-primary"
                             />
                             <Btn
@@ -148,7 +148,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                         </div>
                         {linkCopiado === 'error' && (
                             <p className="text-xs text-warn">
-                                El navegador no dejó copiar. Tocar el link de arriba (se selecciona
+                                El navegador no dejó copiar. Tocar el enlace de arriba (se selecciona
                                 solo) y copiarlo a mano.
                             </p>
                         )}
@@ -163,7 +163,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                         {confirmandoRegenerar ? (
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-muted-foreground">
-                                    El link y el QR actuales dejan de funcionar (incluido cualquier QR ya
+                                    El enlace y el QR actuales dejan de funcionar (incluido cualquier QR ya
                                     impreso). ¿Seguro?
                                 </span>
                                 <ConfirmInlineActions
@@ -188,7 +188,7 @@ const AltaAlumnosPorLink = ({ gimnasioFull, setGimnasioFull }) => {
                 </div>
             ) : (
                 <p className="mt-4 text-xs text-muted-foreground">
-                    Desactivado -- nadie puede anotarse por este link hasta que se active de nuevo.
+                    Desactivado -- nadie puede registrarse por este enlace hasta que se active de nuevo.
                 </p>
             )}
         </Card>

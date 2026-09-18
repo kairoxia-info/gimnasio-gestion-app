@@ -76,7 +76,7 @@ const OnboardingPage = () => {
                 } catch {
                     // No bloqueamos el alta del gimnasio por un logo que falló al subir.
                     // Se puede volver a subir después desde Configuración.
-                    setWarning('El gimnasio se creó, pero el logo no se pudo subir. Se puede cargar después desde Configuración.');
+                    setWarning('El gimnasio se creó, pero el logo no se pudo subir. Se puede agregar después desde Configuración.');
                 }
             }
 

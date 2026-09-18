@@ -1292,7 +1292,7 @@ const MiPlanPage = () => {
                                 <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
                             ) : !tieneRutina ? (
                                 <EstadoVacio>
-                                    Todavía no hay una rutina cargada, pedirla al profesor.
+                                    Todavía no hay una rutina registrada, pedirla al profesor.
                                 </EstadoVacio>
                             ) : (
                                 <>
@@ -1313,7 +1313,7 @@ const MiPlanPage = () => {
 
                                     {(plan.rutina_items || []).length === 0 ? (
                                         <EstadoVacio>
-                                            Esta rutina todavía no tiene ejercicios cargados.
+                                            Esta rutina todavía no tiene ejercicios agregados.
                                         </EstadoVacio>
                                     ) : (
                                         grupos.map(([nroSemana, dias]) => (
@@ -1824,7 +1824,7 @@ const MiPlanPage = () => {
                                 <EstadoRestringido gimnasioNombre={plan.gimnasio_nombre} />
                             ) : !tienePlan ? (
                                 <EstadoVacio>
-                                    Todavía no hay un plan de alimentación cargado, pedirlo al profesor.
+                                    Todavía no hay un plan de alimentación registrado, pedirlo al profesor.
                                 </EstadoVacio>
                             ) : (
                                 <>
@@ -1834,7 +1834,7 @@ const MiPlanPage = () => {
 
                                     {(plan.plan_items || []).length === 0 ? (
                                         <EstadoVacio>
-                                            Este plan todavía no tiene comidas cargadas.
+                                            Este plan todavía no tiene comidas agregadas.
                                         </EstadoVacio>
                                     ) : (
                                         (plan.plan_items || []).map((comidaPlan, i) => (

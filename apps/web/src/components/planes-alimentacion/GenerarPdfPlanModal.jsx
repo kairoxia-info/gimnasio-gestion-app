@@ -57,7 +57,7 @@ const GenerarPdfPlanModal = ({
 
             {pdfModo === 'alumno' ? (
                 alumnosActivos.length === 0 ? (
-                    <Empty>No hay alumnos activos cargados. Usar "Nombre libre" para esta copia.</Empty>
+                    <Empty>No hay alumnos activos registrados. Usar "Nombre libre" para esta copia.</Empty>
                 ) : (
                     <Field label="Alumno">
                         <Select

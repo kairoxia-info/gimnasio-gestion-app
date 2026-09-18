@@ -8,7 +8,7 @@ const VerPlanModal = ({ planViendo, onClose, alimentosPorId }) => (
     <Modal open={!!planViendo} onClose={onClose} title={planViendo?.nombre || 'Plan de alimentación'} wide>
         {planViendo &&
             ((planViendo.items || []).length === 0 ? (
-                <Empty>Este plan todavía no tiene comidas cargadas.</Empty>
+                <Empty>Este plan todavía no tiene comidas agregadas.</Empty>
             ) : (
                 <div className="space-y-3">
                     {(planViendo.items || []).map((comida, i) => {
@@ -20,7 +20,7 @@ const VerPlanModal = ({ planViendo, onClose, alimentosPorId }) => (
                             <div key={comida.key || i} className="rounded-2xl border border-border p-4">
                                 <p className="font-display text-base font-bold">{comida.nombre}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    {armarTextoAlimentos(comida.alimentos) || 'Sin alimentos cargados.'}
+                                    {armarTextoAlimentos(comida.alimentos) || 'Sin alimentos agregados.'}
                                 </p>
                                 {macros && <p className="mt-1.5 text-xs font-semibold text-primary">{macros}</p>}
                             </div>

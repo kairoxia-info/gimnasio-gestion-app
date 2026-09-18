@@ -361,7 +361,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                 <Card>
                     <h3 className="mb-4 font-display text-lg font-bold">Evolución del peso</h3>
                     {serie.length < 2 ? (
-                        <Empty>Cargar al menos dos registros para ver el gráfico.</Empty>
+                        <Empty>Agregar al menos dos registros para ver el gráfico.</Empty>
                     ) : (
                         <div className="h-56">
                             <React.Suspense
@@ -421,7 +421,7 @@ const Progreso = ({ alumnoId, registros, onChange }) => {
                                             {r.origen === 'alumno' && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                                                     <Smartphone className="h-3 w-3" aria-hidden="true" />
-                                                    Cargado por el alumno
+                                                    Registrado por el alumno
                                                 </span>
                                             )}
                                         </p>

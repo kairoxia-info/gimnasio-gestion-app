@@ -266,7 +266,7 @@ const PlanFormModal = ({
                                             className="px-3 py-1.5 text-xs"
                                             onClick={() => agruparSeleccionados(c.key)}
                                         >
-                                            Agrupar los {seleccionComida.size} tildados como alternativas
+                                            Agrupar los {seleccionComida.size} marcados como alternativas
                                         </Btn>
                                     )}
                                 </div>

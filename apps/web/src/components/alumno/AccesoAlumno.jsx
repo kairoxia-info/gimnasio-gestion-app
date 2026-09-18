@@ -183,14 +183,14 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const saludo = `Hola${alumno?.nombre ? ` ${alumno.nombre}` : ''}!`;
     const textoWhatsapp = creado
         ? `${saludo} Ya se puede entrar a ver la rutina y el plan de alimentación en ${urlIngreso}. Usuario: ${creado.usuario} · Contraseña: ${creado.contrasena}`
-        : `${saludo} Para ver la rutina y el plan de alimentación, entrar en ${urlIngreso}. Usuario: ${alumno?.usuario} · La contraseña es la que te pasé cuando creamos el acceso; si no la tenés a mano, avisame y te paso una nueva.`;
+        : `${saludo} Para ver la rutina y el plan de alimentación, entrar en ${urlIngreso}. Usuario: ${alumno?.usuario} · La contraseña es la que te pasé cuando creamos el acceso; si no la tienes a mano, avísame y te envío una nueva.`;
     const linkWhatsapp = `https://wa.me/?text=${encodeURIComponent(textoWhatsapp)}`;
 
     return (
         <Card className="mb-6">
             <h2 className="font-display text-lg font-bold">Acceso del alumno</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-                Usuario y contraseña para que entre a ver su rutina y su plan desde el celular, en{' '}
+                Usuario y contraseña para que entre a ver su rutina y su plan desde el teléfono, en{' '}
                 <span className="font-mono">{urlIngreso}</span>.
             </p>
 
@@ -217,7 +217,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                                 readOnly
                                 value={urlIngreso}
                                 onFocus={(e) => e.target.select()}
-                                aria-label="Link para entrar"
+                                aria-label="Enlace para entrar"
                                 className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-primary"
                             />
                             <Btn
@@ -239,7 +239,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                         </div>
                         {linkCopiado === 'error' && (
                             <p className="mt-2 text-xs text-warn">
-                                El navegador no dejó copiar. Tocar el link de arriba (se selecciona solo) y
+                                El navegador no dejó copiar. Tocar el enlace de arriba (se selecciona solo) y
                                 copiarlo a mano.
                             </p>
                         )}
@@ -291,7 +291,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             className="px-3 py-2 text-xs"
                             onClick={() => window.open(linkWhatsapp, '_blank', 'noopener,noreferrer')}
                         >
-                            <MessageCircle className="h-3.5 w-3.5" /> Reenviar solo el link
+                            <MessageCircle className="h-3.5 w-3.5" /> Reenviar solo el enlace
                         </Btn>
                         {confirmandoReenvio ? (
                             <div className="flex flex-wrap items-center gap-1.5">

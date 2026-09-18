@@ -64,8 +64,8 @@ const EliminarCuenta = ({ esAdminConGimnasio, eliminarCuenta, signOut }) => {
                             {esAdminConGimnasio ? (
                                 <>
                                     Borra el gimnasio completo: alumnos, pagos, rutinas, planes de
-                                    alimentación, asistencias, ejercicios propios y todo lo demás cargado en
-                                    esta cuenta. No se puede deshacer.
+                                    alimentación, asistencias, ejercicios propios y todo lo demás registrado
+                                    en esta cuenta. No se puede deshacer.
                                 </>
                             ) : (
                                 <>
@@ -102,7 +102,7 @@ const EliminarCuenta = ({ esAdminConGimnasio, eliminarCuenta, signOut }) => {
                     <form onSubmit={confirmarEliminarCuenta} className="space-y-4">
                         <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
                             {esAdminConGimnasio
-                                ? 'Esta acción borra el gimnasio entero, con todo lo que tiene cargado, para siempre.'
+                                ? 'Esta acción borra el gimnasio entero, con todo lo que tiene registrado, para siempre.'
                                 : 'Esta acción borra tu acceso a este gimnasio para siempre.'}{' '}
                             Para confirmar, ingresar la contraseña de la cuenta.
                         </div>

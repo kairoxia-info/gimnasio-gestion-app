@@ -178,7 +178,7 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                     <Loading rows={2} />
                 ) : rutinasDisponibles.length === 0 ? (
                     <Empty>
-                        No hay rutinas en la biblioteca todavía. Armar una desde{' '}
+                        No hay rutinas en la biblioteca todavía. Crear una desde{' '}
                         <Link to="/rutinas" className="font-semibold text-primary">
                             Rutinas
                         </Link>
@@ -234,7 +234,7 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
                     <button type="button" onClick={abrirSelector} className="font-semibold text-primary">
                         Asignarle una, con su fecha de inicio y de fin
                     </button>
-                    , o armar una rutina nueva desde{' '}
+                    , o crear una rutina nueva desde{' '}
                     <Link to="/rutinas" className="font-semibold text-primary">
                         Rutinas
                     </Link>
@@ -308,7 +308,7 @@ const PlanEntrenamiento = ({ alumnoId, alumnoNombre, plan, historial, onSaved })
             </Card>
 
             {(plan.items || []).length === 0 ? (
-                <Empty>Esta rutina todavía no tiene ejercicios cargados.</Empty>
+                <Empty>Esta rutina todavía no tiene ejercicios agregados.</Empty>
             ) : (
                 <div className="space-y-5">
                     {grupos.map(([nroSemana, dias]) => (

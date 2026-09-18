@@ -225,7 +225,7 @@ const UnirsePage = () => {
                             para pedir la autorización del adulto. */}
                         {esMenor && (
                             <div className="rounded-2xl border border-warn/40 bg-warn/5 p-3 text-xs text-muted-foreground">
-                                Según la fecha cargada sos menor de 18 años. Esta solicitud la tiene
+                                Según la fecha registrada eres menor de 18 años. Esta solicitud la tiene
                                 que hacer o autorizar tu madre, padre o tutor, y el profesor se lo va
                                 a pedir antes de activar la cuenta.
                             </div>
@@ -237,7 +237,7 @@ const UnirsePage = () => {
                                 <span className="font-semibold text-foreground">
                                     {nombreGimnasio || 'el gimnasio'}
                                 </span>{' '}
-                                para armar tu ficha, contactarte y administrar tu cuota. No se
+                                para crear tu ficha, contactarte y administrar tu cuota. No se
                                 comparten con nadie más ni se usan para publicidad. Para ver,
                                 corregir o borrar tus datos en cualquier momento, alcanza con
                                 pedírselo al profesor.
