@@ -49,7 +49,7 @@ export const PASOS_TOUR = [
     },
     {
         to: '/noticias',
-        texto: 'Sube una imagen (una promoción, un evento, un cambio de horario) y tus alumnos la ven arriba de todo al abrir su rutina.',
+        texto: 'Sube una foto o arma un cartel con título y texto (una promoción, un evento, un cambio de horario) y tus alumnos lo ven arriba de todo al abrir su rutina.',
     },
     {
         to: '/precios',

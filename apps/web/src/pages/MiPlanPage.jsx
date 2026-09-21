@@ -37,6 +37,7 @@ import {
 } from '@/lib/format';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 import { copiarAlPortapapeles } from '@/lib/copiar';
+import NoticiasCarrusel from '@/components/NoticiasCarrusel';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
@@ -1329,20 +1330,12 @@ const MiPlanPage = () => {
                         ancho"). En el celular sigue igual: max-w-2xl no llega a
                         aplicarse nunca abajo de 672px de ancho. */}
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6 lg:max-w-5xl">
-                        {/* Noticia (migración 0068): la imagen activa más reciente
-                            del gimnasio, arriba de todo. Sin texto, sin botón: es
-                            un banner. La altura sigue a la imagen hasta un tope,
-                            para que una foto vertical no se coma la pantalla del
-                            celular. mp-no-imprimir: no va en el PDF. */}
-                        {plan.noticia_imagen_url && (
-                            <section className="mp-no-imprimir">
-                                <img
-                                    src={plan.noticia_imagen_url}
-                                    alt="Noticia del gimnasio"
-                                    className="max-h-72 w-full rounded-2xl border border-border object-cover sm:max-h-96"
-                                />
-                            </section>
-                        )}
+                        {/* Noticias (migraciones 0068/0069): todas las activas del
+                            gimnasio, arriba de todo, en carrusel si hay más de
+                            una. Imagen completa siempre, sin recortar. Sin
+                            noticias no se pinta nada (el componente devuelve
+                            null). */}
+                        <NoticiasCarrusel noticias={plan.noticias} />
 
                         {/* Recordatorio automático de cuota (migración 0015). A
                             diferencia del aviso manual de arriba, este NO tiene botón
