@@ -48,6 +48,10 @@ export const PASOS_TOUR = [
         texto: 'Envía mensajes a tus alumnos según el estado de su cuota.',
     },
     {
+        to: '/noticias',
+        texto: 'Sube una imagen (una promoción, un evento, un cambio de horario) y tus alumnos la ven arriba de todo al abrir su rutina.',
+    },
+    {
         to: '/precios',
         texto: 'Define qué cobras y por cuánto tiempo, con descuentos y recargo por mora si lo deseas.',
     },

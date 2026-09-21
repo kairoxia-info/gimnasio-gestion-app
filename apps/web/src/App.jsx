@@ -23,6 +23,7 @@ import PreciosPage from '@/pages/PreciosPage';
 import AsistenciaPage from '@/pages/AsistenciaPage';
 import PagosPage from '@/pages/PagosPage';
 import AvisosPage from '@/pages/AvisosPage';
+import NoticiasPage from '@/pages/NoticiasPage';
 import ConfiguracionPage from '@/pages/ConfiguracionPage';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
@@ -86,6 +87,7 @@ function App() {
                             <Route path="/asistencia" element={guard(<AsistenciaPage />)} />
                             <Route path="/pagos" element={guard(<PagosPage />)} />
                             <Route path="/avisos" element={guard(<AvisosPage />)} />
+                            <Route path="/noticias" element={guard(<NoticiasPage />)} />
                             <Route path="/configuracion" element={guard(<ConfiguracionPage />)} />
                             <Route path="*" element={<Navigate to="/panel" replace />} />
                         </Routes>

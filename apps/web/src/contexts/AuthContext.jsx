@@ -179,7 +179,11 @@ export const AuthProvider = ({ children }) => {
                 // de pruebas anteriores en la base de producción.
                 if (profile?.role === 'admin' && profile?.gimnasio_id) {
                     const gimnasioId = profile.gimnasio_id;
-                    for (const bucket of ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos']) {
+                    // 'noticias-imagenes' sumado el 21/09/2026 con la migración
+                    // 0068 -- misma regla que ya costó un bug el 16/09: cada
+                    // bucket nuevo con carpeta por gimnasio tiene que estar acá,
+                    // o sus archivos quedan huérfanos al borrar la cuenta.
+                    for (const bucket of ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos', 'noticias-imagenes']) {
                         try {
                             const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId);
                             if (archivos?.length) {

@@ -36,6 +36,7 @@ import {
     tipoDeGrupo,
 } from '@/lib/format';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
+import { copiarAlPortapapeles } from '@/lib/copiar';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
@@ -708,6 +709,21 @@ const MiPlanPage = () => {
     const [marcandoAviso, setMarcandoAviso] = useState(false);
     const [avisoError, setAvisoError] = useState('');
 
+    // Alias de Mercado Pago (migración 0067): solo se muestra si el gimnasio
+    // lo cargó Y la cuota está vencida o con deuda -- no con "próximo a
+    // vencer", que todavía no es momento de pedir plata. Vive adentro de la
+    // tarjeta de cuota, así que además hereda su condición (el gimnasio tiene
+    // que tener el recordatorio automático prendido).
+    const [aliasCopiado, setAliasCopiado] = useState(false);
+    const mostrarAliasMp = !!plan?.alias_mercadopago && ['vencido', 'con_deuda'].includes(plan?.cuota_estado);
+    const copiarAlias = async () => {
+        const ok = await copiarAlPortapapeles(plan?.alias_mercadopago);
+        if (ok) {
+            setAliasCopiado(true);
+            setTimeout(() => setAliasCopiado(false), 2500);
+        }
+    };
+
     // Punto 2 del pedido de Nalux (18/09/2026, "cerrar los gaps legales
     // antes de vender a un segundo gimnasio"): modal bloqueante de
     // aceptación, la primera vez que el alumno entra de verdad a ver su
@@ -1313,6 +1329,21 @@ const MiPlanPage = () => {
                         ancho"). En el celular sigue igual: max-w-2xl no llega a
                         aplicarse nunca abajo de 672px de ancho. */}
                     <main className="mx-auto max-w-2xl space-y-10 px-4 py-8 sm:px-6 lg:max-w-5xl">
+                        {/* Noticia (migración 0068): la imagen activa más reciente
+                            del gimnasio, arriba de todo. Sin texto, sin botón: es
+                            un banner. La altura sigue a la imagen hasta un tope,
+                            para que una foto vertical no se coma la pantalla del
+                            celular. mp-no-imprimir: no va en el PDF. */}
+                        {plan.noticia_imagen_url && (
+                            <section className="mp-no-imprimir">
+                                <img
+                                    src={plan.noticia_imagen_url}
+                                    alt="Noticia del gimnasio"
+                                    className="max-h-72 w-full rounded-2xl border border-border object-cover sm:max-h-96"
+                                />
+                            </section>
+                        )}
+
                         {/* Recordatorio automático de cuota (migración 0015). A
                             diferencia del aviso manual de arriba, este NO tiene botón
                             "Entendido" ni se guarda en notificaciones_leidas: no existe
@@ -1336,6 +1367,31 @@ const MiPlanPage = () => {
                                         <p className="mt-2 text-lg text-foreground">
                                             {plan.cuota_aviso_mensaje}
                                         </p>
+                                        {mostrarAliasMp && (
+                                            <div className="mt-4 rounded-xl border border-warn/40 bg-background/60 p-4">
+                                                <p className="text-sm font-semibold text-muted-foreground">
+                                                    Para pagar tu cuota, transfiere a:
+                                                </p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-3">
+                                                    <span className="break-all font-mono text-lg font-bold text-foreground">
+                                                        {plan.alias_mercadopago}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={copiarAlias}
+                                                        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-semibold transition active:scale-[0.98]"
+                                                    >
+                                                        {aliasCopiado ? (
+                                                            <>
+                                                                <CheckCircle2 className="h-4 w-4 text-ok" aria-hidden="true" /> Copiado
+                                                            </>
+                                                        ) : (
+                                                            'Copiar alias'
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </section>

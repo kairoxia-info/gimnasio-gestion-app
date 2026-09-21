@@ -16,6 +16,7 @@ import {
     Megaphone,
     Menu,
     Moon,
+    Newspaper,
     Settings,
     Sun,
     Tag,
@@ -43,6 +44,7 @@ const NAV = [
     { to: '/asistencia', label: 'Asistencia', icon: CalendarCheck },
     { to: '/pagos', label: 'Pagos', icon: Wallet },
     { to: '/avisos', label: 'Avisos', icon: Megaphone },
+    { to: '/noticias', label: 'Noticias', icon: Newspaper },
     { to: '/precios', label: 'Precios', icon: Tag },
     { to: '/configuracion', label: 'Configuración', icon: Settings },
 ];

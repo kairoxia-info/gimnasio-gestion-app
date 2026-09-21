@@ -87,6 +87,10 @@ const DatosGimnasio = ({
                 nombre: dgForm.nombre.trim(),
                 color_principal: dgForm.color_principal || COLOR_DEFAULT,
                 dias_abiertos: dgForm.dias_abiertos,
+                // NULL cuando queda vacío, no '': el portal del alumno muestra
+                // el bloque de "transferir a" solo si hay alias, y un string
+                // vacío contaría como que hay (migración 0067).
+                alias_mercadopago: dgForm.alias_mercadopago.trim() || null,
             });
 
             if (logoFile) {
@@ -219,6 +223,26 @@ const DatosGimnasio = ({
                         <span className="text-xs text-muted-foreground">
                             Los días apagados aparecen en gris en la asistencia y no cuentan como
                             falta. Tiene que quedar al menos uno encendido.
+                        </span>
+                    </Field>
+
+                    {/* Pedido de Nalux (21/09/2026, visto en Control Gym): que el
+                        alumno sepa a qué cuenta transferir. Es un texto y nada
+                        más -- no se valida contra Mercado Pago ni se cobra nada
+                        solo; el pago lo sigue confirmando el profesor en Pagos.
+                        Se muestra en el portal del alumno junto al recordatorio
+                        de cuota, solo con la cuota vencida o con deuda. */}
+                    <Field label="Alias de Mercado Pago (opcional)">
+                        <Input
+                            value={dgForm.alias_mercadopago}
+                            onChange={(e) => setDgForm({ ...dgForm, alias_mercadopago: e.target.value })}
+                            placeholder="ej: mi.gimnasio.mp"
+                            maxLength={100}
+                            autoCapitalize="none"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                            El alumno lo ve en su portal cuando tiene la cuota vencida, para saber a
+                            dónde transferir. Si queda vacío, no se muestra nada.
                         </span>
                     </Field>
 

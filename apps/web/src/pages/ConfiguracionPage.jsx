@@ -33,6 +33,7 @@ const ConfiguracionPage = () => {
         nombre: '',
         color_principal: COLOR_DEFAULT,
         dias_abiertos: DIAS_ABIERTOS_DEFAULT,
+        alias_mercadopago: '',
     });
 
     // Vencimiento de cuotas (migración 0013). El % de recargo NO va acá: ya
@@ -76,6 +77,7 @@ const ConfiguracionPage = () => {
                     nombre: data.nombre || '',
                     color_principal: data.color_principal || COLOR_DEFAULT,
                     dias_abiertos: data.dias_abiertos?.length ? data.dias_abiertos : DIAS_ABIERTOS_DEFAULT,
+                    alias_mercadopago: data.alias_mercadopago || '',
                 });
                 setVencForm({
                     dias_gracia_cuota: String(data.dias_gracia_cuota ?? 0),
