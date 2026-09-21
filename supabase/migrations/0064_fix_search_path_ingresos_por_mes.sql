@@ -1,0 +1,31 @@
+-- ============================================================================
+-- 0064_fix_search_path_ingresos_por_mes.sql
+--
+-- Regresión encontrada en el repaso previo a darle acceso al primer cliente
+-- real (21/09/2026). El 11/09 la migración 0045 dejó el advisor de Supabase
+-- `function_search_path_mutable` en CERO ("el aviso desapareció del todo",
+-- ver CONTEXT.md). Hoy volvió a aparecer con 1 hallazgo:
+-- `public.ingresos_por_mes`.
+--
+-- Causa: la migración 0059 (18/09) rehízo esa función con CREATE OR REPLACE
+-- para arreglar la suma de los meses archivados, y al reescribirla se perdió
+-- el `SET search_path` -- un CREATE OR REPLACE reemplaza la definición
+-- entera, no parchea solo el cuerpo.
+--
+-- Riesgo real: BAJO, no es el caso grave del advisor. La función es SECURITY
+-- INVOKER (corre con los permisos de quien la llama, con RLS aplicada) y solo
+-- la puede ejecutar `authenticated`, no `anon`. Igual se corrige: el cuerpo ya
+-- referencia todo con esquema explícito (public.pagos,
+-- public.pagos_archivo_mensual) más funciones de pg_catalog, así que fijar el
+-- search_path no cambia ningún resultado -- solo cierra el aviso y deja la
+-- función igual que el resto del proyecto.
+--
+-- ALTER FUNCTION en vez de CREATE OR REPLACE: se toca únicamente el
+-- search_path, sin reescribir el cuerpo (que quedó bien en la 0059).
+-- ============================================================================
+
+ALTER FUNCTION public.ingresos_por_mes(integer) SET search_path TO 'public';
+
+-- ============================================================================
+-- Fin de la migración 0064.
+-- ============================================================================

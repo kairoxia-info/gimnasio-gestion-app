@@ -402,13 +402,19 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
      alcance** (26/08/2026, Decisión 21) — el cliente confirmó una sola sede y que no necesita
      reservas/turnos (de donde dependía G9). No quedan pendientes, no hace falta revisarlas de
      nuevo más adelante salvo que el cliente cambie de opinión.
-2. **Pendiente de seguridad, antes de sumar staff que no sea de confianza (y OBLIGATORIO antes de
-   construir cualquier feature de "invitar staff a mi gimnasio"):** el trigger `BEFORE UPDATE`
-   sobre `profiles` de la Decisión 6, y reactivar "Confirm email" (Decisión 17) antes de
-   producción. Ver Decisión 18 — el Bloque E subió la prioridad real de este gap: hoy mismo
-   permite que cualquier staff se autoasigne `admin` de su propio gimnasio (ya lo permitía antes),
-   pero **desde el Bloque E** eso además le da permiso a invalidar el código de invitación real
-   del gimnasio (`regenerar_codigo_invitacion()`) sin ser el admin real.
+2. ~~**Pendiente de seguridad, antes de sumar staff que no sea de confianza:** el trigger
+   `BEFORE UPDATE` sobre `profiles` de la Decisión 6, y reactivar "Confirm email"
+   (Decisión 17).~~ **RESUELTO, este texto estaba viejo** (detectado en el repaso del
+   21/09/2026, que lo verificó contra la base en vez de confiar en el documento):
+   - El trigger lo cerró la **migración 0043** (11/09/2026). Confirmado en producción el
+     21/09: el trigger `profiles_congelar_rol_y_gimnasio_trg` está activo, y `authenticated`
+     solo tiene `UPDATE` sobre `email`, `first_name` y `last_name` — `role` y `gimnasio_id`
+     ya no son editables, así que nadie se autoasciende a `admin` ni toca
+     `regenerar_codigo_invitacion()` sin serlo.
+   - "Confirm email" se activó en el Dashboard el **08/09/2026**, junto con el SMTP propio
+     (ver esa entrada del historial). Ojo: es un ajuste de Supabase Auth, no del repo, así
+     que no se puede verificar desde el código — conviene mirarlo en el Dashboard antes de
+     darle una cuenta a un cliente.
 
 **Las 7 preguntas abiertas de `PLAN.md` ya están todas respondidas** (26/08/2026, Decisión 21) —
 no queda ninguna pendiente con el cliente por ahora. Lo único que queda como trabajo futuro real
@@ -430,9 +436,13 @@ Lo que sí queda abierto:
   y sin identidad. Desde la migración **0028 el alumno tiene login propio** (usuario y contraseña
   que le crea el profesor), así que ahora **sí hay identidad para que escriba datos propios**.
   Antes de retomarlos hay que definir con Nalux si quiere que el alumno cargue sus pesos.
-- El pendiente de seguridad del punto 2 de arriba (trigger `BEFORE UPDATE` sobre `profiles` y
-  reactivar "Confirm email") sigue igual, sin tocar.
-- Nalux mencionó el 07/09 que quiere cambios "del lado del alumno", pero todavía no dijo cuáles.
+- ~~El pendiente de seguridad del punto 2 de arriba sigue igual, sin tocar.~~ **Desactualizado:**
+  se cerró entre el 08/09 y el 11/09 — ver el punto 2 corregido más arriba (verificado contra la
+  base el 21/09/2026).
+- ~~Nalux mencionó el 07/09 que quiere cambios "del lado del alumno", pero todavía no dijo
+  cuáles.~~ Ya se definieron y se hicieron: todo el rediseño del portal del alumno (09/09) y la
+  Fase 2 completa (13/09), incluida la parte en que el alumno por primera vez escribe
+  (marcar entrenamiento hecho, cargar peso).
 
 ---
 
@@ -5687,6 +5697,177 @@ ejemplo) -- las dos URLs resultan válidas (`https://wa.me/?text=...`) y el text
 lee natural en los dos casos.
 
 **Archivos**: apps/web/src/pages/AvisosPage.jsx, apps/web/src/pages/PagosPage.jsx.
+
+## 21/09/2026 — Repaso a fondo antes del primer cliente real (semana de prueba gratis)
+
+Nalux va a darle acceso al primer gimnasio cliente de verdad (no el suyo) por una semana, con la
+cuenta creada a mano por ella. Pidió un repaso con foco en "¿aguanta una semana de uso real sin
+romperse ni perder datos?", no en features nuevas.
+
+### Parte 1 — CONTEXT.md contra el código real: 3 pendientes que ya estaban resueltos
+
+Se verificó ítem por ítem contra la base y el repo, en vez de confiar en el documento. La sección
+5 ("Qué falta") estaba **desactualizada**, y quedó corregida más arriba en este mismo archivo:
+
+| Decía | Realidad verificada el 21/09 |
+|---|---|
+| Falta el trigger `BEFORE UPDATE` sobre `profiles` | Lo cerró la migración 0043 (11/09). Trigger activo y `authenticated` solo puede tocar `email`/`first_name`/`last_name` |
+| Falta reactivar "Confirm email" | Activado el 08/09 con SMTP propio (ver esa entrada) |
+| "Nalux quiere cambios del lado del alumno, no dijo cuáles" | Definidos y hechos: rediseño del portal (09/09) y Fase 2 completa (13/09) |
+
+Otros ítems del historial, revisados y confirmados **cerrados**: headers de seguridad en
+`vercel.json` (CSP, HSTS, X-Frame-Options, Referrer-Policy y Permissions-Policy, todos presentes),
+dependencias (`npm audit --omit=dev` = **0 vulnerabilidades**), y lo de Ley 25.326 (cerrado entre
+el 11/09 y el 18/09 con el DNI sacado, el consentimiento, `/terminos` y el modal de aceptación).
+
+**Siguen genuinamente abiertos** (ninguno bloquea la semana de prueba, los tres son de Nalux, no
+de código): sin backups restaurables por estar en plan Free; "Leaked password protection" es de
+plan Pro; y G3/G4 (cargas por ejercicio y récords automáticos) nunca se construyeron — ya no
+están *bloqueados* técnicamente desde que el alumno tiene login propio (0028) y escribe datos
+(0050), simplemente no se pidieron.
+
+### Parte 2 — Dos bugs reales encontrados probando, los dos corregidos
+
+**1. Un alumno con la cuota paga pero con saldo pendiente se quedaba sin rutina**
+(`0065_fix_restriccion_con_saldo_pendiente.sql`). El caso de prueba: plan anual pagado hasta
+2027 con $15.000 de saldo. El portal le decía "En pausa por cuota vencida" mientras el panel del
+profesor lo mostraba "Al día" — las dos caras contestaban distinto sobre la misma persona.
+
+Causa: una decisión de producto aplicada en un solo lado. El 09/09 Nalux pidió que un saldo
+pendiente NO defina el estado mientras el período siga vigente; se corrigió `estadoCuota()` y la
+baja automática, pero `ver_plan_por_codigo()` siguió con la regla vieja (`monto_adeudado > 0`
+⇒ "vencido operativo") para decidir la RESTRICCIÓN de acceso. Peor: ese dato lo genera la propia
+app con "activación sin cobrar" (activar ahora, anotar la deuda) — la app creaba el dato que
+después usaba para bloquear al alumno. Ahora la restricción mira solo fecha + gracia, igual que
+`estadoCuota()`. **No se tocó `v_segmento`** (audiencia de avisos), que está espejado a propósito
+con `segmentoNotificacion()`. Solo pega con la política "restringir" prendida (el default es
+"dejar", así que un gimnasio nuevo no lo sufre salvo que la active).
+
+**2. "elegir uno: Banana" en planes de alimentación** (`lib/format.js`, `armarTextoAlimentos`).
+Un grupo de alternativas con UN solo alimento igual escribía "elegir uno: X", que no quiere decir
+nada — pasa con solo marcar un alimento con grupo sin haber cargado todavía la alternativa, o al
+borrar una de dos. Salía así en el portal del alumno, en la ficha y en el PDF que se lleva el
+alumno. Ahora un grupo de uno se escribe como un alimento suelto, respetando su "opcional" (que
+la rama de grupo ignoraba).
+
+**Y una regresión de seguridad** (`0064_fix_search_path_ingresos_por_mes.sql`): el advisor
+`function_search_path_mutable` de Supabase, que la 0045 había dejado en cero, volvió a aparecer —
+la migración 0059 (18/09) rehízo `ingresos_por_mes` con `CREATE OR REPLACE` y perdió el
+`SET search_path`. Riesgo bajo (es SECURITY INVOKER y solo la llama `authenticated`), corregido
+con `ALTER FUNCTION` sin tocar el cuerpo.
+
+### Parte 3 — Ronda de pruebas con un gimnasio de prueba descartable
+
+Se armó por SQL un gimnasio completo ("ZZZ QA Gimnasio Prueba", política "restringir", 5 días de
+gracia) con 6 alumnos cubriendo los casos borde pedidos, y se probó **contra la URL real de
+producción**: rutina con las 5 variantes (serie normal, superserie, pirámide con desglose por
+serie, circuito con rondas e intervalo con timer), plan de alimentación, aviso con "Entendido",
+"Marcar como hecho", carga de peso, pestaña de progreso, autorregistro público por código, y el
+modal de aceptación en su versión adulto y en su versión menor de edad.
+
+Casos borde, todos correctos: alumno **sin rutina** (vacío prolijo, no rompe), cuota que **vence
+hoy** (queda "próximo", no vencido — el borde está bien), alumno **vencido fuera de gracia**
+(rutina en pausa con mensaje claro), y **textos larguísimos** (nombre de alumno, de rutina, de
+ejercicio y comentario) a 375px: sin desborde horizontal, el nombre del gimnasio se corta con
+puntos suspensivos. Escrituras confirmadas por SQL (entrenamiento marcado, aviso leído, peso
+78.5 guardado con `origen='alumno'`), autorregistro confirmado creando el alumno con
+`activo=false, pendiente=true`.
+
+**Lo que NO se pudo probar, y por qué**: todo el panel del profesor (onboarding, tour, alta de
+alumnos por la UI, armado de rutinas, asistencia, registrar pagos, comprobantes, avisos, "Ver como
+alumno"). Crear cuentas e ingresar contraseñas son acciones que no puedo hacer, ni siquiera
+pedidas explícitamente — mismo límite que el 18/09, cuando Nalux creó "Fitness Place" a mano y me
+pasó la posta. Para cubrir esa mitad hace falta que ella cree una cuenta descartable.
+
+**Datos de prueba borrados al terminar**, confirmado por SQL: 1 gimnasio (el real), 1 usuario de
+auth (el real), cero registros "ZZZ", cero huérfanos en las 9 tablas hijas y cero archivos en
+storage.
+
+### Parte 4 — Autorregistro público: diagnóstico (no se tocó nada)
+
+Aclaración primero, porque la premisa de la pregunta no era exacta: `/unirse/:codigo` **no crea
+gimnasios**. Crea un alumno PENDIENTE dentro de un gimnasio que ya existe, exige un código válido,
+nunca se autoactiva y tiene rate limit (50 altas por gimnasio cada 5 minutos).
+
+La puerta real es otra: **el registro de profesores en `/login` está abierto a cualquiera**.
+Registrarse → `/onboarding` → `create_gimnasio()` y ya hay un gimnasio nuevo en la misma base.
+
+- **Riesgo de que vea o toque los datos del cliente: nulo.** El aislamiento por RLS está auditado
+  tres veces (11/09, 18/09 y hoy): un gimnasio no puede leer nada de otro.
+- **Riesgo real, y es otro**: consumo de cuota del plan Free compartida con el cliente (base de
+  500 MB, storage, egress), ruido en la base, y sobre todo **el SMTP de Gmail** — una tanda de
+  registros puede quemar el límite diario de envío y dejar al cliente sin poder recuperar su
+  contraseña.
+- **Probabilidad: baja** (la URL no está difundida ni indexada), pero es una puerta de un clic.
+
+**Opción más barata, sin tocar código**: Dashboard de Supabase →
+`Authentication → Sign In / Providers → Email → "Allow new users to sign up"` en OFF. Como las
+cuentas las crea Nalux a mano desde el Dashboard, no le cambia el flujo en nada, y se revierte con
+el mismo clic. Efecto secundario a saber: con eso apagado, la pestaña "Registrarse" de la app
+devuelve error para cualquiera (incluida ella) — para una semana de prueba no molesta; si en algún
+momento quiere venta autoservicio, se prende de nuevo o se hace la aprobación por código.
+
+### Parte 5 — Visibilidad de errores durante la semana
+
+**Lo que hay hoy, honestamente: casi nada.**
+
+- **Vercel no sirve para esto**: la app es un SPA estático puro (no hay `api/`, ni funciones
+  serverless — solo el rewrite a `index.html`). Un error de JavaScript en el navegador del cliente
+  nunca llega a Vercel; sus logs son de archivos servidos.
+- **Supabase → Logs** sí muestra lo que falla del lado del servidor (API/PostgREST con 4xx-5xx,
+  Auth, Postgres). Es donde habría aparecido, por ejemplo, el error de columna ambigua del 18/09.
+  Dos límites: en plan Free la retención es de **1 día** (si el cliente rompe algo un sábado y ella
+  mira el lunes, ya no está), y no hay alertas.
+- **En la app**: `ErrorBoundary` atrapa el crash y muestra una pantalla amable, pero **no lo
+  reporta a ningún lado**. O sea: si al cliente le queda una pantalla en blanco, Nalux se entera
+  solo si él avisa.
+
+Opciones baratas, en orden de esfuerzo (ninguna implementada todavía, esperando decisión):
+1. **Rutina diaria, cero código**: mirar Supabase → Logs → API filtrando status ≥ 400, una vez por
+   día. Cubre fallas del lado del servidor, no los crashes puros del navegador.
+2. **Tabla propia de errores** (~1 migración chica + enganchar `ErrorBoundary`): errores del panel
+   del profesor guardados en una tabla que ella puede mirar. Decisión de diseño pendiente: el
+   portal del alumno no tiene sesión, así que cubrirlo también exigiría una RPC pública nueva
+   (otra superficie de escritura abierta, con su rate limit).
+3. **Sentry free** (~15 minutos): alertas por mail de verdad, es lo que más valor da por el
+   esfuerzo. Contras a decidir: suma una dependencia de terceros, hay que tocar la CSP de
+   `vercel.json`, y manda datos de error a un servicio externo — atención con eso justo después de
+   todo el trabajo de Ley 25.326.
+
+### Parte 6 — Plan de salida: confirmado
+
+`eliminar_mi_cuenta()` sigue igual que como se probó el 18/09 (`SECURITY DEFINER`,
+`search_path` fijo, borra gimnasio → profile → `auth.users`), y se verificó de nuevo lo que
+importa de verdad, que es la integridad del borrado en cascada:
+
+- **19 de 19 tablas** que referencian `gimnasios` tienen `ON DELETE CASCADE` (la única excepción,
+  `profiles.gimnasio_id`, es `SET NULL` a propósito porque la función borra ese profile aparte), y
+  las 7 que referencian `alumnos` también.
+- Las 4 migraciones nuevas desde entonces (0061-0065) **no agregaron ninguna tabla**, solo columnas
+  a `alumnos`, así que no abrieron ningún hueco nuevo.
+- Los 4 buckets de storage se limpian antes del borrado (`AuthContext.eliminarCuenta`), y las 6
+  subidas de la app usan rutas planas `gimnasio_id/archivo`, sin subcarpetas — así que el
+  `list(gimnasioId)` no recursivo las alcanza a todas.
+- **Probado en vivo hoy**: al borrar el gimnasio de prueba, las 9 tablas hijas quedaron en cero
+  huérfanos.
+
+**Recomendación aparte para la salida**: antes de borrarle la cuenta al cliente (siga o no),
+conviene exportarle sus datos — es cortesía comercial y además es lo que corresponde bajo la Ley
+25.326 si los pide. Hoy no hay botón de exportar; se puede resolver a mano con un par de consultas.
+
+### Detalles menores anotados, no corregidos
+
+- En una superserie se muestra "Intensidad: —" aunque ninguno de los dos ejercicios tenga
+  intensidad cargada (en un ejercicio suelto, si está vacía no se muestra la línea).
+- Un alumno con saldo pendiente pero con el período vigente por un año recibe igual el cartel
+  automático de cuota, redactado como vencimiento ("tu cuota vence el 18/09/2027... pasar por
+  recepción"). Es coherente con que el segmento "con deuda" está definido a propósito por el saldo
+  y no por la fecha, pero el texto queda raro. Si molesta, se arregla con un mensaje propio para
+  deuda, separado del de vencimiento.
+
+**Archivos**: supabase/migrations/{0064_fix_search_path_ingresos_por_mes,
+0065_fix_restriccion_con_saldo_pendiente}.sql, apps/web/src/lib/format.js, CONTEXT.md (sección 5
+corregida).
 
 ### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
 

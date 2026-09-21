@@ -70,7 +70,21 @@ export const armarTextoAlimentos = (items) => {
             if (gruposYaListados.has(it.grupo)) return;
             gruposYaListados.add(it.grupo);
             const delGrupo = lista.filter((x) => x.grupo === it.grupo);
-            partes.push(`elegir uno: ${delGrupo.map(conCantidad).join(' o ')}`);
+            // Un grupo de UNO no es una elección: "elegir uno: Banana" no
+            // quiere decir nada (encontrado probando el 21/09/2026). Pasa
+            // solo con marcar un alimento con grupo sin haberle cargado la
+            // alternativa todavía, o al borrar una de las dos -- y el texto
+            // sale así tanto en el portal del alumno como en el PDF que se
+            // lleva. Con un solo alimento se escribe igual que uno suelto,
+            // respetando su "opcional" (que la rama de grupo ignora, porque
+            // ahí lo opcional es la elección en sí, no cada alternativa).
+            if (delGrupo.length === 1) {
+                const solo = delGrupo[0];
+                const base = conCantidad(solo);
+                partes.push(solo.opcional ? `${base} (opcional)` : base);
+            } else {
+                partes.push(`elegir uno: ${delGrupo.map(conCantidad).join(' o ')}`);
+            }
         } else {
             const base = conCantidad(it);
             partes.push(it.opcional ? `${base} (opcional)` : base);
