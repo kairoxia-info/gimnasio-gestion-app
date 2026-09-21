@@ -1,4 +1,5 @@
 import React from 'react';
+import supabase from '@/lib/supabaseClient';
 
 // Reportado por Nalux (07/09/2026): en el celular, al entrar o al cambiar de
 // módulo, a veces la pantalla se pone en negro y hay que recargar a mano.
@@ -26,6 +27,33 @@ class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, info) {
         console.error('Error atrapado por ErrorBoundary:', error, info?.componentStack);
+
+        // Deja rastro en la base (migración 0066, pedido de Nalux 21/09/2026,
+        // antes de la semana de prueba con el primer cliente real): sin esto,
+        // si al cliente le queda la pantalla de error, ella se entera solo si
+        // él avisa -- Vercel no ve los errores de JavaScript del navegador.
+        //
+        // La RPC resuelve el gimnasio del lado del servidor desde auth.uid(),
+        // así que acá no hace falta el perfil: este componente está MÁS AFUERA
+        // que AuthProvider (ver App.jsx) y no tiene acceso al contexto.
+        //
+        // Todo colgado de un .catch() vacío y sin await a propósito: reportar
+        // el error nunca puede romper ni demorar la pantalla de error. Si no
+        // hay sesión (portal del alumno, login), la RPC no guarda nada -- es
+        // la limitación conocida de la 0066.
+        try {
+            supabase
+                .rpc('registrar_error_cliente', {
+                    p_mensaje: String(error?.message || error || 'Error sin mensaje'),
+                    p_detalle: [error?.stack, info?.componentStack].filter(Boolean).join('\n---\n'),
+                    p_ruta: `${window.location.pathname}${window.location.search}`,
+                    p_user_agent: navigator.userAgent,
+                })
+                .then(() => {})
+                .catch(() => {});
+        } catch (_) {
+            // ni siquiera se pudo llamar: se sigue mostrando la pantalla igual
+        }
     }
 
     render() {

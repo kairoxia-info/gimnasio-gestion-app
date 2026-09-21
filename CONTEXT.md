@@ -412,9 +412,15 @@ abiertas para definir con Nalux, está en **[`PLAN.md`](PLAN.md)**. Con esto, **
      ya no son editables, así que nadie se autoasciende a `admin` ni toca
      `regenerar_codigo_invitacion()` sin serlo.
    - "Confirm email" se activó en el Dashboard el **08/09/2026**, junto con el SMTP propio
-     (ver esa entrada del historial). Ojo: es un ajuste de Supabase Auth, no del repo, así
-     que no se puede verificar desde el código — conviene mirarlo en el Dashboard antes de
-     darle una cuenta a un cliente.
+     (ver esa entrada del historial). **PERO hoy está apagado otra vez**: el 21/09 se
+     consultó el endpoint `/auth/v1/settings` del propio servidor de Auth y devuelve
+     `mailer_autoconfirm: true`, o sea que las cuentas nuevas se autoconfirman sin mandar
+     ningún link. No se sabe si nunca llegó a guardarse o si se revirtió después (el
+     formulario de esa pantalla exige tocar "Save changes" aparte del toggle — es una
+     trampa fácil de comer, pasó el 21/09 al apagar el registro público). Hoy **no molesta**
+     — con el registro público cerrado, las cuentas las crea Nalux a mano y conviene que
+     queden confirmadas solas — pero **hay que volver a prenderlo si alguna vez se reabre el
+     registro**, o cualquiera entra con un correo inventado.
 
 **Las 7 preguntas abiertas de `PLAN.md` ya están todas respondidas** (26/08/2026, Decisión 21) —
 no queda ninguna pendiente con el cliente por ahora. Lo único que queda como trabajo futuro real
@@ -5868,6 +5874,69 @@ conviene exportarle sus datos — es cortesía comercial y además es lo que cor
 **Archivos**: supabase/migrations/{0064_fix_search_path_ingresos_por_mes,
 0065_fix_restriccion_con_saldo_pendiente}.sql, apps/web/src/lib/format.js, CONTEXT.md (sección 5
 corregida).
+
+## 21/09/2026 (más tarde) — Decisiones aplicadas antes de la semana de prueba
+
+Sobre el repaso de más arriba, Nalux decidió los cinco puntos. Lo que se hizo:
+
+### Registro público de profesores: CERRADO
+
+`Authentication → Sign In / Providers → User Signups → "Allow new users to sign up"` apagado en
+el proyecto **gimnasio-gestion-app** (`fftdmpqbemcnxdnfnvhd`). Las cuentas nuevas las crea Nalux a
+mano desde el Dashboard hasta nuevo aviso.
+
+**Trampa del Dashboard, anotada porque cuesta media hora si no se sabe**: en esa pantalla el
+toggle NO guarda solo. Al tocarlo aparece abajo un botón "Save changes" y hay que apretarlo; si se
+recarga la página sin hacerlo, vuelve a estar como estaba (pasó en el primer intento). La
+verificación buena no es la pantalla sino el propio servidor de Auth:
+
+```
+curl -s "https://<PROJECT>.supabase.co/auth/v1/settings" -H "apikey: <PUBLISHABLE_KEY>"
+```
+
+Devolvió `disable_signup: true` (registro cerrado) y `external.email: true` (el login por correo
+sigue habilitado, que es lo que importaba no romper). De paso apareció
+`mailer_autoconfirm: true` — ver la corrección sobre "Confirm email" en la sección 5.
+
+**Lo que NO se probó y por qué**: mandar el formulario de "Registrarse" para ver el error. Si por
+cualquier motivo el ajuste no hubiera tomado, esa prueba habría CREADO una cuenta real en
+producción — justo lo que se está cerrando. La evidencia del endpoint es más fuerte que la prueba,
+y el click lo puede hacer Nalux en 5 segundos.
+
+### Export manual de datos: `scripts/export-gimnasio.sql`
+
+Red de contención mientras el proyecto siga en plan Free (sin backups restaurables). Saca todo un
+gimnasio a un solo JSON desde el SQL Editor; las instrucciones de uso están en el encabezado del
+propio archivo. **Probado contra "Mi GYM FIT"**: 21 secciones, 290 kB, 9 alumnos / 14 rutinas
+asignadas / 6 planes / 12 pagos / 39 asistencias, y confirmado que NO incluye `password_hash` ni
+los contadores internos. No incluye los archivos de Storage (logo, fotos) ni la cuenta de Auth del
+profesor — eso está explicado adentro del script.
+
+### Tabla de errores + ErrorBoundary (migración 0066)
+
+Hasta hoy, un crash de React mostraba la pantalla amable y no dejaba rastro en ningún lado (y
+Vercel no ve errores de JavaScript: la app es un SPA estático). Ahora `componentDidCatch` llama a
+`registrar_error_cliente()` y el error queda en `public.errores_cliente`, que Nalux puede mirar
+desde el SQL Editor durante la semana (las dos consultas listas están al final de la migración).
+
+Detalles de diseño que importan: escribe **solo** la RPC `SECURITY DEFINER` (la tabla no tiene
+INSERT para nadie), el `gimnasio_id` lo resuelve el servidor desde `auth.uid()` y no el navegador,
+y hay un tope de 20 errores por usuario cada 5 minutos para que un crash en bucle no llene la
+base. La llamada va sin `await` y con `.catch()` vacío: reportar el error nunca puede romper la
+pantalla de error.
+
+**Limitación conocida y aceptada**: solo `authenticated`. Un crash en el portal del alumno o en la
+pantalla de login (donde no hay sesión) no queda registrado — darle permiso a `anon` sería abrir
+otra superficie de escritura pública, justo lo contrario de lo que se acaba de hacer cerrando el
+registro. Cubre el panel del profesor, que es lo que el cliente usa todo el día.
+
+**Verificado**: la RPC probada simulando una sesión real (resolvió bien el gimnasio, guardó
+usuario/mensaje/ruta/detalle) y el tope probado con 30 llamadas seguidas → 20 filas. Filas de
+prueba borradas. Falta la prueba de punta a punta con un crash real en una sesión de verdad, que
+se va a hacer en la ronda del panel del profesor.
+
+**Archivos**: supabase/migrations/0066_errores_cliente.sql,
+apps/web/src/components/ErrorBoundary.jsx, scripts/export-gimnasio.sql.
 
 ### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
 
