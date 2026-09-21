@@ -22,6 +22,12 @@ const traducirError = (err, modo) => {
     // el motivo real.
     if (msg.includes('Password should contain at least one character of each'))
         return 'La contraseña tiene que tener al menos una minúscula, una mayúscula y un número.';
+    // 21/09/2026: el registro público está apagado en Supabase ("Allow new
+    // users to sign up" en OFF) y las cuentas las crea Nalux a mano desde el
+    // Dashboard. Sin esto, el intento caía al genérico de abajo y parecía un
+    // error de la app -- le pasó a ella misma el mismo día.
+    if (/signups? not allowed/i.test(msg))
+        return 'El registro está cerrado por ahora. La cuenta la crea el administrador.';
     return modo === 'login' ? 'No se pudo iniciar sesión.' : 'No se pudo crear la cuenta.';
 };
 
@@ -238,7 +244,7 @@ const LoginPage = () => {
                         formulario a mitad de carga. */}
                     {!isLogin && (
                         <p className="text-center text-xs text-muted-foreground">
-                            Al crear una cuenta, aceptás los{' '}
+                            Al crear una cuenta, aceptas los{' '}
                             <Link
                                 to="/terminos"
                                 target="_blank"
