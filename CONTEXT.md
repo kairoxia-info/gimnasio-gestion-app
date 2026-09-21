@@ -5704,6 +5704,20 @@ lee natural en los dos casos.
 
 **Archivos**: apps/web/src/pages/AvisosPage.jsx, apps/web/src/pages/PagosPage.jsx.
 
+### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
+
+No es un cambio de código, es la revisión de una decisión de producto ya tomada antes de vender a
+un segundo gimnasio. Nalux devolvió la pregunta explícitamente: "esa es tuya, no mía... vos
+conocés el mercado de gimnasios mejor que yo", aportando un dato de la investigación (reservas/
+turnos con cupo aparece como bastante estándar en varios competidores: Gestión Gym, GymGestión,
+ViDay, Crossfy) pero sin pedir que se construya "por las dudas".
+
+**Conclusión**: la Decisión 21 se mantiene sin cambios -- RutNail sigue sin reservas/turnos con
+cupo. No se construye especulativamente aunque sea común en la competencia: es una feature grande
+(agenda, cupos por horario, lista de espera, notificaciones de turno) que no se justifica sin un
+cliente real pidiéndola. Queda anotado en el radar para cuando (si) aparece ese pedido concreto de
+un gimnasio nuevo -- ahí se evalúa con el caso real adelante, no en abstracto.
+
 ## 21/09/2026 — Repaso a fondo antes del primer cliente real (semana de prueba gratis)
 
 Nalux va a darle acceso al primer gimnasio cliente de verdad (no el suyo) por una semana, con la
@@ -6012,16 +6026,86 @@ apps/web/src/components/configuracion/DatosGimnasio.jsx,
 apps/web/src/components/{AppLayout,TourBienvenida}.jsx, apps/web/src/contexts/AuthContext.jsx,
 apps/web/src/App.jsx.
 
-### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
+## 21/09/2026 (más tarde) — Noticias v2, ejercicios compactos y menú lateral del alumno
 
-No es un cambio de código, es la revisión de una decisión de producto ya tomada antes de vender a
-un segundo gimnasio. Nalux devolvió la pregunta explícitamente: "esa es tuya, no mía... vos
-conocés el mercado de gimnasios mejor que yo", aportando un dato de la investigación (reservas/
-turnos con cupo aparece como bastante estándar en varios competidores: Gestión Gym, GymGestión,
-ViDay, Crossfy) pero sin pedir que se construya "por las dudas".
+Tres pedidos de Nalux después de probar Noticias con su cuenta real. Los tres probados en local
+con gimnasios de prueba descartables (borrados al final, confirmado por SQL).
 
-**Conclusión**: la Decisión 21 se mantiene sin cambios -- RutNail sigue sin reservas/turnos con
-cupo. No se construye especulativamente aunque sea común en la competencia: es una feature grande
-(agenda, cupos por horario, lista de espera, notificaciones de turno) que no se justifica sin un
-cliente real pidiéndola. Queda anotado en el radar para cuando (si) aparece ese pedido concreto de
-un gimnasio nuevo -- ahí se evalúa con el caso real adelante, no en abstracto.
+### 1. Noticias: dos tipos, carrusel, sin recortes (migración 0069)
+
+- **`noticias.tipo`** (`imagen` | `cartel`), `titulo`, `texto`, `color_fondo`. Un cartel es
+  título + texto opcional + un color de una **paleta fija de 6** (`PALETA_CARTEL` en
+  `components/NoticiaVista.jsx`; la base guarda solo la clave, con CHECK) + foto opcional. Sin
+  editor visual ni color libre, a propósito: plantilla que sale siempre prolija.
+- **`NoticiasPage.jsx`**: "Nueva noticia" abre un modal de dos pasos (elegir tipo → completar),
+  con **vista previa en vivo** del cartel (misma pieza que ve el alumno). Un cartel cuya foto
+  opcional falla al subir se conserva y avisa; una noticia de tipo imagen sin foto se borra.
+- **`ver_plan_por_codigo()`** devuelve `noticias` (JSONB con TODAS las activas; una de tipo imagen
+  solo si ya tiene foto) en vez de una sola URL.
+- **`components/NoticiasCarrusel.jsx`**: título "Noticias" arriba (pedido: no se distinguía de
+  Avisos); con una sola queda fija; con varias pasan solas cada 6 s, y a mano con swipe (touch,
+  umbral 40 px), flechas (solo desktop, `sm:`) y puntitos (44 px de área de toque). Sin librería:
+  track flex + translateX. Respeta `prefers-reduced-motion` (no pasa sola). El alto lo fija la
+  noticia más alta; los carteles se estiran (`h-full`) para llenarlo en vez de flotar.
+- **Imagen completa siempre** (`NoticiaVista.jsx`): `object-contain` con tope de alto
+  (`max-h-[60vh] sm:max-h-[440px]`), nunca recorte.
+
+### 2. Ejercicios compactos en el portal (`components/FilaEjercicioAlumno.jsx`)
+
+Antes cada ejercicio era una tarjeta de ~240 px en el celular (nombre, grupo, series, intensidad,
+comentario en caja grande, "Ver cómo se hace" e "Iniciar descanso" a lo ancho). Ahora es una fila
+estilo PDF (~70 px): nombre a la izquierda, **series×reps en negrita a la derecha**, y las dos
+acciones como **íconos de 44 px con `aria-label`** ("Ver demostración", "Iniciar descanso" —
+pedido explícito de Nalux al confirmar). Grupo · descanso · peso · intensidad en una sola línea
+gris; comentario en cursiva chica. Superserie: un bloque con cabecera ("SUPERSERIE · descanso
+90 s" + cronómetro) y una fila por ejercicio. Pirámide: las series en una línea
+("12×20 kg · 10×25 kg…"). Circuito/intervalo: sus filas debajo de la cabecera de bloque, que no
+cambió. Día 1 + Día 2 de la rutina de prueba entran ahora en una pantalla de 375 px.
+
+De paso se fue el "Intensidad: —" de las superseries sin intensidad (detalle anotado en el repaso
+del 21/09): `conValor()` filtra el "—" que devuelve `combinarValor()`.
+
+`StatsDelEjercicio` y `BotonVerDemo` (MiPlanPage.jsx) quedaron sin uso y se borraron. **No se
+tocó** la ficha del profesor ni el PDF. Verificado: cronómetro y demostración abren desde los
+íconos; sin desborde horizontal.
+
+### 3. Menú lateral del alumno = el cajón del profesor (migración 0070)
+
+- **`components/CajonMenu.jsx`** (nuevo): el cajón (fondo con fade + panel deslizante + cabecera
+  con X + lista con scroll + pie + Escape) **sacado tal cual de `AppLayout.jsx`**, con
+  `NavLinksAnimados` (la lista animada con el brillo, y los ids `nav-tour-item-*` del tour). Los
+  ítems pueden ser por ruta (`to`, NavLink — el profesor) o por estado (`clave` + `activo` +
+  `onSelect`, botón — el alumno). `AppLayout` lo usa igual que antes: cero cambio visual para el
+  profesor, el tour no se tocó (solo dejó de tener su propio listener de Escape, que ahora está en
+  el cajón).
+- **`MiPlanPage.jsx`**: ☰ a la izquierda del logo en una barra ahora **sticky**; el cajón con
+  Rutina / Alimentación / Progreso / **Cómo pagar**; se fueron las píldoras. "Cerrar sesión" pasó
+  del header al pie del cajón, como en el del profesor. Al cambiar de sección se vuelve arriba
+  (`scrollTo(0)`). Marcar hecho, cargar peso, las 5 variantes, PDF, aviso y carrusel no se
+  tocaron.
+- **"Cómo pagar"**: alias de MP con "Copiar alias" (salió de la tarjeta de cuota, que quedó solo
+  con el estado más un link "Ver cómo pagar →" si hay algo cargado) + dos datos nuevos y
+  opcionales en `gimnasios` (`whatsapp_pagos`, `email_pagos`, migración 0070) con botones directos
+  (`wa.me/<solo dígitos>`, `mailto:`). Se cargan en Configuración → "Datos del gimnasio", en un
+  recuadro "Cómo pagar" junto al alias; el campo de WhatsApp aclara que va con código de país (sin
+  validar; el portal se queda con los dígitos). Sin nada cargado: "todavía no cargó cómo pagar,
+  consultar en recepción".
+
+**Verificado en local (375 px y escritorio)**: el cajón abre/cierra (☰, X, fondo, Escape, elegir
+ítem), los 4 ítems con el activo resaltado, "Cómo pagar" con los tres datos y con ninguno, el link
+de WhatsApp sale como `https://wa.me/5491155551234` a partir de "54 9 11 5555-1234".
+
+**Verificado con sesión de profesora (Fitness Place, en el navegador del panel)**: el cajón del
+panel después del refactor se ve y funciona igual (12 ítems, cierre por X/fondo/Escape/ítem, pie
+con cuenta y "Cerrar sesión"), y el **tour completo** (`tour_visto` a false → 12 pasos → Completar
+→ true) sigue marcando el ítem real del menú. Noticias del lado del profesor: modal de dos pasos,
+paleta, vista previa, subida de foto (archivo en el bucket), Desactivar/Activar y Borrar (borra
+también el archivo). Configuración: los tres campos de "Cómo pagar" se guardan (confirmado por
+SQL). Todo lo de prueba se borró después: Fitness Place quedó sin noticias, sin archivos y con
+los tres campos en NULL.
+
+**Archivos**: supabase/migrations/{0069_noticias_tipo_cartel_y_carrusel,
+0070_como_pagar_whatsapp_email}.sql, apps/web/src/components/{NoticiaVista,NoticiasCarrusel,
+FilaEjercicioAlumno,CajonMenu,AppLayout,TourBienvenida}.jsx,
+apps/web/src/components/configuracion/DatosGimnasio.jsx,
+apps/web/src/pages/{NoticiasPage,MiPlanPage,ConfiguracionPage}.jsx.

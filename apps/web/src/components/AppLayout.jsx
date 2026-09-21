@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
     AlertTriangle,
@@ -23,11 +22,11 @@ import {
     Users,
     Wallet,
     WifiOff,
-    X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
 import TarjetaTour, { PASOS_TOUR } from '@/components/TourBienvenida';
+import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
 import { AyudaInfo } from '@/components/ui-kit';
 import { listAll, updateRec } from '@/lib/data';
 import { estadoCuota, fmtFecha, money, ultimoPagoDeAlumno } from '@/lib/format';
@@ -219,120 +218,9 @@ const ThemeToggle = () => {
 
 export { ThemeToggle };
 
-// Menú del celular con entrada en cascada + un brillo que recorre cada
-// botón una sola vez, pedido de Nalux (07/09/2026): "que vallan
-// desplegándose los botones del menu como si un rayo dorado pasara".
-// Reemplazado por un brillo neutro (blanco/plata, no dorado) a pedido suyo
-// también: un dorado fijo desentonaría en un gimnasio cuyo color de marca
-// no combine con él, mientras que este blanco translúcido queda bien
-// encima de cualquier color que el profesor elija en Configuración.
-//
-// A propósito SOLO se usa acá, en el drawer del celular (que se abre/cierra
-// a demanda) -- nunca en el sidebar fijo de la computadora. AppLayout se
-// remonta en cada cambio de página (cada pantalla lo envuelve por separado,
-// no hay un layout persistente a nivel de rutas), así que animar el sidebar
-// se vería como un parpadeo en cada click de navegación, no como un menú
-// "que se despliega". El drawer sí es un despliegue real, a pedido del
-// profesor, así que ahí el efecto tiene sentido y se ve una vez por apertura.
-const contenedorMenuVariants = {
-    oculto: {},
-    visible: { transition: { staggerChildren: 0.045, delayChildren: 0.05 } },
-};
-
-const itemMenuVariants = {
-    oculto: { opacity: 0, x: -14 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } },
-};
-
-// El brillo en sí: una franja diagonal translúcida que atraviesa el botón
-// una vez, con un pequeño delay para que se sienta "detrás" de la aparición
-// del texto, no encima. transform (no background-position) para que sea
-// composición GPU, no repintado -- barato incluso repetido 11 veces.
-const brilloVariants = {
-    oculto: { opacity: 0, x: '-120%' },
-    visible: {
-        opacity: [0, 1, 0],
-        x: ['-120%', '120%'],
-        transition: { duration: 0.65, delay: 0.1, ease: 'easeInOut' },
-    },
-};
-
-// `pasoTourTo` (18/09/2026, tour de bienvenida): el `to` del ítem que el
-// tour está señalando ahora mismo, o null si no hay ningún recorrido activo.
-// Cada NavLink lleva un `id` fijo (`nav-tour-item-<to>`) para que AppLayout
-// pueda medir su posición real en pantalla con getBoundingClientRect() y
-// ubicar la tarjeta del paso al lado -- sin eso no hay forma de saber dónde
-// cayó cada ítem, sobre todo con la animación de entrada de abajo.
-const NavLinksAnimados = ({ nav, onNavegar, pasoTourTo }) => {
-    const reduceMotion = useReducedMotion();
-    const claseItem = (to, isActive) => {
-        if (pasoTourTo) {
-            return to === pasoTourTo
-                ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
-                : 'text-muted-foreground opacity-40';
-        }
-        return isActive
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-secondary hover:text-foreground';
-    };
-
-    if (reduceMotion) {
-        // Sin animación si el sistema la pidió apagada -- mismo criterio que
-        // ya usa Reveal.jsx en el resto de la app.
-        return (
-            <nav className="flex flex-col gap-1">
-                {nav.map(({ to, label, icon: Icon }) => (
-                    <NavLink
-                        key={to}
-                        id={`nav-tour-item-${to}`}
-                        to={to}
-                        onClick={onNavegar}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${claseItem(to, isActive)}`
-                        }
-                    >
-                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                        {label}
-                    </NavLink>
-                ))}
-            </nav>
-        );
-    }
-
-    return (
-        <motion.nav
-            className="flex flex-col gap-1"
-            variants={contenedorMenuVariants}
-            initial="oculto"
-            animate="visible"
-        >
-            {nav.map(({ to, label, icon: Icon }) => (
-                <motion.div key={to} variants={itemMenuVariants} className="relative overflow-hidden rounded-xl">
-                    <NavLink
-                        id={`nav-tour-item-${to}`}
-                        to={to}
-                        onClick={onNavegar}
-                        className={({ isActive }) =>
-                            `relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${claseItem(to, isActive)}`
-                        }
-                    >
-                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                        {label}
-                    </NavLink>
-                    <motion.span
-                        aria-hidden="true"
-                        variants={brilloVariants}
-                        className="pointer-events-none absolute inset-y-0 left-0 w-2/3 skew-x-[-20deg]"
-                        style={{
-                            background:
-                                'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-                        }}
-                    />
-                </motion.div>
-            ))}
-        </motion.nav>
-    );
-};
+// El cajón del menú y la lista animada de opciones (NavLinksAnimados) viven
+// en components/CajonMenu.jsx desde el 21/09/2026, para compartirlos con el
+// portal del alumno. Acá solo queda el contenido que va adentro.
 
 // Pedido de Nalux (04/09/2026): que el panel se pueda seguir usando si se
 // corta el wifi del gimnasio, y que avise cuándo hay algo (asistencia,
@@ -425,26 +313,12 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
         marcarTourVisto();
     };
 
-    // Cerrar el menú con Escape, además de la X / tocar afuera / elegir una
-    // opción -- mismo criterio que el Modal de ui-kit.jsx.
+    // Al cerrar el menú, el aviso de "hay cambios sin mandar" vuelve a cero:
+    // si no, la próxima vez que se abre aparece ya confirmando algo que el
+    // profesor no volvió a pedir. (Escape lo maneja CajonMenu.)
     useEffect(() => {
-        // Al cerrar el menú, el aviso de "hay cambios sin mandar" vuelve a
-        // cero: si no, la próxima vez que se abre aparece ya confirmando algo
-        // que el profesor no volvió a pedir.
-        if (!open) {
-            setConfirmandoSalir(false);
-            return undefined;
-        }
-        const alPresionar = (e) => {
-            if (e.key === 'Escape') {
-                finalizarTour();
-                setOpen(false);
-            }
-        };
-        window.addEventListener('keydown', alPresionar);
-        return () => window.removeEventListener('keydown', alPresionar);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, guiaActiva]);
+        if (!open) setConfirmandoSalir(false);
+    }, [open]);
 
     // Posición de la tarjeta del paso actual: se mide el ítem real del menú
     // (getBoundingClientRect) recién cuando el cajón terminó de animar su
@@ -703,113 +577,77 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                 </main>
             </div>
 
-            {/* AnimatePresence: antes esto aparecía y desaparecía de golpe
-                (if (open) return null-equivalente). Ahora el fondo hace fade y
-                el panel entra deslizando desde la izquierda, y lo mismo a la
-                inversa al cerrar -- consistente con el brillo del menú de
-                abajo, en vez de un corte seco al lado de una animación nueva. */}
-            <AnimatePresence>
-                {open && (
-                    <div className="fixed inset-0 z-50">
-                        <motion.div
-                            className="absolute inset-0 bg-black/70"
-                            onClick={() => {
-                                finalizarTour();
-                                setOpen(false);
-                            }}
-                            role="presentation"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                        />
-                        {/* Header fijo / menú con scroll propio / pie fijo -- mismo
-                            criterio que tenía el <aside> viejo, para que con la
-                            ventana poco alta no se corten "Cerrar sesión" ni la
-                            marca por debajo del borde. */}
-                        <motion.div
-                            className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-border bg-background py-6"
-                            initial={{ x: '-100%' }}
-                            animate={{ x: 0 }}
-                            exit={{ x: '-100%' }}
-                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            {/* El cajón en sí (fondo, panel, animación, Escape) es
+                components/CajonMenu.jsx, compartido con el portal del alumno
+                desde el 21/09/2026. Acá va lo que es del profesor: la marca
+                del gimnasio, el menú con el tour, y el pie con la cuenta. */}
+            <CajonMenu
+                abierto={open}
+                onCerrar={() => {
+                    finalizarTour();
+                    setOpen(false);
+                }}
+                encabezado={<GimnasioMark className="h-10" />}
+                pie={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setMostrarCuenta((v) => !v)}
+                            aria-expanded={mostrarCuenta}
+                            className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary"
                         >
-                            <div className="mb-6 flex shrink-0 items-center justify-between gap-3 px-4">
-                                <GimnasioMark className="h-10" />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        finalizarTour();
-                                        setOpen(false);
-                                    }}
-                                    aria-label="Cerrar menú"
-                                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </div>
-                            <div className="min-h-0 flex-1 overflow-y-auto px-4">
-                                <NavLinksAnimados
-                                    nav={NAV}
-                                    onNavegar={() => setOpen(false)}
-                                    pasoTourTo={guiaActiva ? pasoActual.to : null}
-                                />
-                            </div>
-                            <div className="shrink-0 px-4 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setMostrarCuenta((v) => !v)}
-                                    aria-expanded={mostrarCuenta}
-                                    className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-primary"
-                                >
-                                    <span className="min-w-0 flex-1 truncate text-left">{user?.email}</span>
-                                    <ChevronDown
-                                        className={`h-4 w-4 shrink-0 transition-transform ${mostrarCuenta ? 'rotate-180' : ''}`}
-                                    />
-                                </button>
-                                {mostrarCuenta && (
-                                    <div className="mt-3 space-y-3">
-                                        {confirmandoSalir ? (
-                                            <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
-                                                <p className="text-xs text-muted-foreground">
-                                                    {pendientes > 0 &&
-                                                        `Hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin enviar (asistencia o pagos registrados sin conexión). `}
-                                                    {fallidos.length > 0 &&
-                                                        `Hay ${fallidos.length} ${fallidos.length === 1 ? 'cambio' : 'cambios'} que no se pudo${fallidos.length === 1 ? '' : 'n'} guardar y todavía no se resolvió. `}
-                                                    Si se cierra sesión ahora se pierden.
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => salir(true)}
-                                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition active:scale-[0.98]"
-                                                >
-                                                    <LogOut className="h-4 w-4" /> Cerrar igual
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setConfirmandoSalir(false)}
-                                                    className="flex w-full items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                                                >
-                                                    Cancelar
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                onClick={() => salir()}
-                                                className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
-                                            >
-                                                <LogOut className="h-4 w-4" /> Cerrar sesión
-                                            </button>
-                                        )}
-                                        <KairoxFooterMark />
+                            <span className="min-w-0 flex-1 truncate text-left">{user?.email}</span>
+                            <ChevronDown
+                                className={`h-4 w-4 shrink-0 transition-transform ${mostrarCuenta ? 'rotate-180' : ''}`}
+                            />
+                        </button>
+                        {mostrarCuenta && (
+                            <div className="mt-3 space-y-3">
+                                {confirmandoSalir ? (
+                                    <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+                                        <p className="text-xs text-muted-foreground">
+                                            {pendientes > 0 &&
+                                                `Hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin enviar (asistencia o pagos registrados sin conexión). `}
+                                            {fallidos.length > 0 &&
+                                                `Hay ${fallidos.length} ${fallidos.length === 1 ? 'cambio' : 'cambios'} que no se pudo${fallidos.length === 1 ? '' : 'n'} guardar y todavía no se resolvió. `}
+                                            Si se cierra sesión ahora se pierden.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => salir(true)}
+                                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition active:scale-[0.98]"
+                                        >
+                                            <LogOut className="h-4 w-4" /> Cerrar igual
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmandoSalir(false)}
+                                            className="flex w-full items-center justify-center rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                        >
+                                            Cancelar
+                                        </button>
                                     </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => salir()}
+                                        className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                    >
+                                        <LogOut className="h-4 w-4" /> Cerrar sesión
+                                    </button>
                                 )}
+                                <KairoxFooterMark />
                             </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                        )}
+                    </>
+                }
+            >
+                <NavLinksAnimados
+                    nav={NAV}
+                    onNavegar={() => setOpen(false)}
+                    pasoTourTo={guiaActiva ? pasoActual.to : null}
+                />
+            </CajonMenu>
 
             {guiaActiva && open && posicionTour && (
                 <TarjetaTour

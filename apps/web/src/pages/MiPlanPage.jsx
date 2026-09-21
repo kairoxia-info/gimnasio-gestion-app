@@ -5,6 +5,7 @@ import {
     AlertTriangle,
     Apple,
     ArrowLeft,
+    ArrowRight,
     CheckCircle2,
     Download,
     Dumbbell,
@@ -12,32 +13,33 @@ import {
     Lock,
     Loader2,
     LogOut,
+    Mail,
     Megaphone,
+    Menu,
+    MessageCircle,
     Pause,
     Play,
     RotateCcw,
     Scale,
-    Timer,
     Wallet,
     X,
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
-import { ThemeToggle } from '@/components/AppLayout';
+import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
+import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
 import {
     agruparCombos,
     agruparItemsRutina,
     agruparPorBloque,
     armarTextoAlimentos,
-    esRepsPorTiempo,
     fmtFecha,
-    resumenSeries,
     resumenTipoGrupo,
-    tieneSeriesDetalle,
     tipoDeGrupo,
 } from '@/lib/format';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 import NoticiasCarrusel from '@/components/NoticiasCarrusel';
+import FilaEjercicioAlumno from '@/components/FilaEjercicioAlumno';
 import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/RutinaPDF';
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
@@ -560,48 +562,10 @@ const LogoGimnasio = ({ nombre, logoUrl }) => {
     );
 };
 
-// Dato de ejercicio (series/reps/peso/descanso): etiqueta legible + valor
-// bien grande, pensado para leerse de un vistazo en un celular sin anteojos.
-//
-// Pedido de Nalux (07/09/2026): que los cuatro entren en UNA línea también en
-// el celular (antes iban de a dos, en dos filas). Para eso cada caja tiene que
-// ser más angosta, así que en pantalla chica bajan el padding y el cuerpo de
-// letra -- el valor sigue siendo lo más grande y en negrita, que es lo que el
-// alumno busca de un vistazo. Antes eran cuatro cajas grandes (series, reps,
-// peso, descanso) -- pedido de Nalux (16/09/2026): "el tamaño de letras y
-// cajas... se sigue viendo muy grande... tratemos de que se vea así como
-// tiene el profe [el "Ver" de una rutina]... si sacás las cajas se vería más
-// como una hoja de entrenamiento y eso es lo que quiero". Mismo criterio que
-// ya usa resumenSeries() en el PDF y en el "Ver" de RutinasPage.jsx
-// (components/rutinas/VerRutinaModal.jsx) -- una sola línea de texto en vez
-// de una caja por dato. Sigue sin mostrar peso en un ejercicio por tiempo
-// (bici, plancha) ni series cuando el profesor no cargó ninguna.
-const StatsDelEjercicio = ({ it }) => (
-    <p className="mt-1 text-sm text-muted-foreground">
-        {resumenSeries(it)}
-        {!esRepsPorTiempo(it.reps) && it.peso ? ` · ${it.peso} kg` : ''}
-        {it.descanso ? ` · ${it.descanso}` : ''}
-    </p>
-);
-
-// Botón/link de "Ver demostración" de un ejercicio. Se reusa tal cual para
-// un ejercicio suelto y, dentro de un combo (superserie), una vez por cada
-// ejercicio que la tenga -- mostrarNombre distingue el segundo caso, porque
-// ahí hace falta aclarar de cuál de los dos es la demostración.
-const BotonVerDemo = ({ item, mostrarNombre, onPreview }) => {
-    const clase =
-        'inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary px-5 py-3 text-lg font-bold text-primary transition active:scale-[0.98] sm:w-auto';
-    const texto = mostrarNombre ? `Ver ${item.nombre}` : 'Ver cómo se hace';
-    return tipoDePreview(item.mediaUrl) ? (
-        <button type="button" onClick={() => onPreview(item)} className={clase}>
-            <Play className="h-5 w-5" aria-hidden="true" /> {texto}
-        </button>
-    ) : (
-        <a href={item.mediaUrl} target="_blank" rel="noreferrer" className={clase}>
-            <Play className="h-5 w-5" aria-hidden="true" /> {texto}
-        </a>
-    );
-};
+// Cómo se dibuja cada ejercicio vive ahora en components/FilaEjercicioAlumno.jsx
+// (21/09/2026, versión compacta estilo PDF). Acá quedaron StatsDelEjercicio y
+// BotonVerDemo hasta ese día -- ver el historial de git si hace falta el
+// razonamiento de las versiones anteriores (07/09 y 16/09).
 
 // ---------------------------------------------------------------------------
 // PDF de rutina y de plan de alimentación: Nalux trajo dos ejemplos armados
@@ -710,13 +674,12 @@ const MiPlanPage = () => {
     const [marcandoAviso, setMarcandoAviso] = useState(false);
     const [avisoError, setAvisoError] = useState('');
 
-    // Alias de Mercado Pago (migración 0067): solo se muestra si el gimnasio
-    // lo cargó Y la cuota está vencida o con deuda -- no con "próximo a
-    // vencer", que todavía no es momento de pedir plata. Vive adentro de la
-    // tarjeta de cuota, así que además hereda su condición (el gimnasio tiene
-    // que tener el recordatorio automático prendido).
+    // Alias de Mercado Pago (migración 0067) + WhatsApp/correo para el
+    // comprobante (0070): viven en la sección "Cómo pagar" del cajón lateral
+    // (21/09/2026). Antes el alias iba adentro de la tarjeta de cuota, solo
+    // con la cuota vencida -- Nalux lo movió a una sección propia, siempre
+    // disponible, y la tarjeta de cuota quedó solo con el estado.
     const [aliasCopiado, setAliasCopiado] = useState(false);
-    const mostrarAliasMp = !!plan?.alias_mercadopago && ['vencido', 'con_deuda'].includes(plan?.cuota_estado);
     const copiarAlias = async () => {
         const ok = await copiarAlPortapapeles(plan?.alias_mercadopago);
         if (ok) {
@@ -936,7 +899,18 @@ const MiPlanPage = () => {
     // de pestañas que ya usa AlumnoPage.jsx del lado del profesor
     // (Entrenamiento / Nutrición / Progreso / Asistencia / Pagos), ahora
     // también acá.
-    const [vista, setVista] = useState('rutina'); // 'rutina' | 'alimentacion' | 'progreso'
+    // 'rutina' | 'alimentacion' | 'progreso' | 'pagar'. Se elige desde el
+    // cajón lateral (21/09/2026, pedido de Nalux: "menú lateral colapsable,
+    // mismo componente que el del profesor") -- antes eran píldoras arriba de
+    // todo. Al cambiar de sección se vuelve arriba: en el celular, si el alumno
+    // estaba abajo de todo de la rutina y toca "Progreso", tiene que ver el
+    // encabezado de Progreso, no la mitad de un gráfico.
+    const [vista, setVistaInterna] = useState('rutina');
+    const [menuAbierto, setMenuAbierto] = useState(false);
+    const setVista = (v) => {
+        setVistaInterna(v);
+        window.scrollTo({ top: 0 });
+    };
     const [progreso, setProgreso] = useState(null); // { historial_peso, entrenamientos_ultima_semana } | null
     const [cargandoProgreso, setCargandoProgreso] = useState(false);
     const [errorProgreso, setErrorProgreso] = useState('');
@@ -1277,9 +1251,21 @@ const MiPlanPage = () => {
 
             {!loading && !error && plan && (
                 <>
-                    <header className="border-b border-border bg-card px-4 py-5 sm:px-6">
-                        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 lg:max-w-5xl">
-                            <div className="flex min-w-0 items-center gap-3">
+                    {/* Barra pegada arriba (sticky, igual que la del profesor):
+                        el ☰ tiene que estar siempre a mano en el celular, sin
+                        volver a subir. mp-no-imprimir en los botones, no en la
+                        barra: la marca del gimnasio sí va en el PDF. */}
+                    <header className="sticky top-0 z-20 border-b border-border bg-card/90 px-4 py-3 backdrop-blur sm:px-6">
+                        <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
+                            <button
+                                type="button"
+                                onClick={() => setMenuAbierto(true)}
+                                aria-label="Abrir menú"
+                                className="mp-no-imprimir inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border transition hover:border-primary active:scale-95"
+                            >
+                                <Menu className="h-5 w-5" />
+                            </button>
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
                                 <LogoGimnasio
                                     nombre={plan.gimnasio_nombre}
                                     logoUrl={plan.gimnasio_logo_url}
@@ -1290,17 +1276,53 @@ const MiPlanPage = () => {
                             </div>
                             <div className="mp-no-imprimir flex shrink-0 items-center gap-2">
                                 <ThemeToggle />
-                                <button
-                                    type="button"
-                                    onClick={cerrarSesion}
-                                    aria-label="Cerrar sesión"
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted-foreground transition hover:text-foreground"
-                                >
-                                    <LogOut className="h-4 w-4" strokeWidth={2} />
-                                </button>
                             </div>
                         </div>
                     </header>
+
+                    {/* El mismo cajón del panel del profesor (components/CajonMenu.jsx,
+                        21/09/2026, pedido de Nalux): "reusá exactamente ese". Las
+                        secciones son estado (vista), no rutas, así que los ítems van
+                        por `clave`. "Cerrar sesión" pasó del header al pie del cajón,
+                        donde está en el del profesor. */}
+                    <CajonMenu
+                        abierto={menuAbierto}
+                        onCerrar={() => setMenuAbierto(false)}
+                        encabezado={
+                            <div className="flex min-w-0 items-center gap-3">
+                                <LogoGimnasio nombre={plan.gimnasio_nombre} logoUrl={plan.gimnasio_logo_url} />
+                                <p className="truncate text-base font-extrabold uppercase tracking-tight">
+                                    {plan.gimnasio_nombre || 'Tu gimnasio'}
+                                </p>
+                            </div>
+                        }
+                        pie={
+                            <div className="space-y-3">
+                                <button
+                                    type="button"
+                                    onClick={cerrarSesion}
+                                    className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-3 text-sm font-medium transition hover:border-primary active:scale-[0.98]"
+                                >
+                                    <LogOut className="h-4 w-4" /> Cerrar sesión
+                                </button>
+                                <KairoxFooterMark />
+                            </div>
+                        }
+                    >
+                        <NavLinksAnimados
+                            nav={[
+                                { clave: 'rutina', label: 'Rutina', icon: Dumbbell },
+                                { clave: 'alimentacion', label: 'Alimentación', icon: Apple },
+                                { clave: 'progreso', label: 'Progreso', icon: Flame },
+                                { clave: 'pagar', label: 'Cómo pagar', icon: Wallet },
+                            ].map((item) => ({
+                                ...item,
+                                activo: vista === item.clave,
+                                onSelect: () => setVista(item.clave),
+                            }))}
+                            onNavegar={() => setMenuAbierto(false)}
+                        />
+                    </CajonMenu>
 
                     {idProfesorQueVuelve && (
                         <div className="mp-no-imprimir bg-primary/10 px-4 py-2 text-center">
@@ -1360,30 +1382,14 @@ const MiPlanPage = () => {
                                         <p className="mt-2 text-lg text-foreground">
                                             {plan.cuota_aviso_mensaje}
                                         </p>
-                                        {mostrarAliasMp && (
-                                            <div className="mt-4 rounded-xl border border-warn/40 bg-background/60 p-4">
-                                                <p className="text-sm font-semibold text-muted-foreground">
-                                                    Para pagar tu cuota, transfiere a:
-                                                </p>
-                                                <div className="mt-2 flex flex-wrap items-center gap-3">
-                                                    <span className="break-all font-mono text-lg font-bold text-foreground">
-                                                        {plan.alias_mercadopago}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={copiarAlias}
-                                                        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-semibold transition active:scale-[0.98]"
-                                                    >
-                                                        {aliasCopiado ? (
-                                                            <>
-                                                                <CheckCircle2 className="h-4 w-4 text-ok" aria-hidden="true" /> Copiado
-                                                            </>
-                                                        ) : (
-                                                            'Copiar alias'
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            </div>
+                                        {(plan.alias_mercadopago || plan.whatsapp_pagos || plan.email_pagos) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setVista('pagar')}
+                                                className="mt-3 inline-flex items-center gap-1.5 text-base font-bold text-primary hover:underline"
+                                            >
+                                                Ver cómo pagar <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -1433,37 +1439,97 @@ const MiPlanPage = () => {
                             </p>
                         </section>
 
-                        {/* Pestañas (15/09/2026): antes rutina y alimentación vivían
-                            una abajo de la otra en la misma hoja larga -- la franja
-                            de color de cada una (ver más abajo) ayudaba a distinguirlas
-                            al bajar, pero seguían mezcladas. Ahora son vistas
-                            separadas de verdad, mismo patrón que ya usa AlumnoPage.jsx
-                            del lado del profesor. mp-no-imprimir: esto no tiene
-                            sentido en el PDF, que siempre es de una sola sección
-                            (RutinaImprimiblePDF/PlanAlimentacionImprimiblePDF, más
-                            arriba, son componentes aparte -- cambiar de pestaña acá
-                            no les afecta en nada). */}
-                        <div className="mp-no-imprimir flex gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1.5">
-                            {[
-                                { valor: 'rutina', label: 'Rutina', Icono: Dumbbell },
-                                { valor: 'alimentacion', label: 'Alimentación', Icono: Apple },
-                                { valor: 'progreso', label: 'Progreso', Icono: Flame },
-                            ].map(({ valor, label, Icono }) => (
-                                <button
-                                    key={valor}
-                                    type="button"
-                                    onClick={() => setVista(valor)}
-                                    className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-base font-bold transition ${
-                                        vista === valor
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    <Icono className="h-5 w-5 shrink-0" strokeWidth={2.2} aria-hidden="true" />
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
+                        {/* Las secciones (rutina / alimentación / progreso / cómo
+                            pagar) se eligen desde el cajón lateral (☰ arriba a la
+                            izquierda). Hasta el 21/09/2026 eran píldoras acá,
+                            arriba de todo. Siguen siendo vistas separadas de verdad
+                            (mismo patrón que AlumnoPage.jsx del profesor): el PDF no
+                            se ve afectado, siempre es de una sola sección. */}
+
+                        {vista === 'pagar' && (
+                            <section aria-labelledby="mp-pagar-titulo" className="mp-no-imprimir space-y-5">
+                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
+                                    <h2
+                                        id="mp-pagar-titulo"
+                                        className="font-display text-2xl font-extrabold uppercase text-primary"
+                                    >
+                                        Cómo pagar
+                                    </h2>
+                                </div>
+
+                                {!plan.alias_mercadopago && !plan.whatsapp_pagos && !plan.email_pagos ? (
+                                    <EstadoVacio>
+                                        {plan.gimnasio_nombre || 'El gimnasio'} todavía no cargó cómo pagar. Consultar en
+                                        recepción.
+                                    </EstadoVacio>
+                                ) : (
+                                    <>
+                                        {plan.alias_mercadopago && (
+                                            <div className="rounded-2xl border border-border bg-card p-5">
+                                                <p className="text-base font-semibold text-muted-foreground">
+                                                    Transferir a este alias de Mercado Pago:
+                                                </p>
+                                                <p className="mt-2 break-all font-mono text-2xl font-bold">
+                                                    {plan.alias_mercadopago}
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={copiarAlias}
+                                                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-4 text-lg font-bold text-primary-foreground transition active:scale-[0.98] sm:w-auto"
+                                                >
+                                                    {aliasCopiado ? (
+                                                        <>
+                                                            <CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Copiado
+                                                        </>
+                                                    ) : (
+                                                        'Copiar alias'
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {(plan.whatsapp_pagos || plan.email_pagos) && (
+                                            <div className="rounded-2xl border border-border bg-card p-5">
+                                                <p className="text-base font-semibold text-muted-foreground">
+                                                    Después de transferir, enviar el comprobante a:
+                                                </p>
+                                                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                                                    {plan.whatsapp_pagos && (
+                                                        <a
+                                                            // wa.me exige el número solo con dígitos y con
+                                                            // código de país -- el campo de Configuración lo
+                                                            // aclara; acá se limpia lo que haya escrito.
+                                                            href={`https://wa.me/${String(plan.whatsapp_pagos).replace(/\D/g, '')}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-5 py-4 text-lg font-bold text-primary transition active:scale-[0.98]"
+                                                        >
+                                                            <MessageCircle className="h-5 w-5" aria-hidden="true" /> WhatsApp
+                                                        </a>
+                                                    )}
+                                                    {plan.email_pagos && (
+                                                        <a
+                                                            href={`mailto:${plan.email_pagos}`}
+                                                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-5 py-4 text-lg font-bold text-primary transition active:scale-[0.98]"
+                                                        >
+                                                            <Mail className="h-5 w-5" aria-hidden="true" /> Correo
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <p className="mt-3 text-sm text-muted-foreground">
+                                                    {[plan.whatsapp_pagos, plan.email_pagos].filter(Boolean).join(' · ')}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        <p className="text-sm text-muted-foreground">
+                                            El pago lo confirma {plan.gimnasio_nombre || 'el gimnasio'} cuando recibe el
+                                            comprobante.
+                                        </p>
+                                    </>
+                                )}
+                            </section>
+                        )}
 
                         {/* Banda de encabezado con color propio por sección (queda
                             igual aunque ahora estén en pestañas separadas -- Rutina
@@ -1642,214 +1708,29 @@ const MiPlanPage = () => {
                                                                             )}
                                                                         </div>
                                                                     )}
+                                                                    {/* Fila compacta por ejercicio (21/09/2026, pedido de Nalux): ver
+                                                                        components/FilaEjercicioAlumno.jsx. Antes era una tarjeta grande
+                                                                        por ejercicio con dos botones a lo ancho; el cronómetro, la
+                                                                        demostración y el resto siguen funcionando igual, solo cambia cómo
+                                                                        se dibuja. */}
                                                                     {delBloque.map((it) => {
-                                                                        // Si el descanso quedó combinado ("60 s + 90 s"
-                                                                        // porque los ejercicios del combo tienen
-                                                                        // descansos distintos) no se ofrece el
-                                                                        // cronómetro: sería ambiguo cuál de los dos usar.
-                                                                        const descansoSeg =
-                                                                            it.descanso?.includes(' + ')
-                                                                                ? null
-                                                                                : parsearDescanso(
-                                                                                      it.descanso,
-                                                                                  );
+                                                                        // Si el descanso quedó combinado ("60 s + 90 s" porque los
+                                                                        // ejercicios del combo tienen descansos distintos) no se
+                                                                        // ofrece el cronómetro: sería ambiguo cuál de los dos usar.
+                                                                        const descansoSeg = it.descanso?.includes(' + ')
+                                                                            ? null
+                                                                            : parsearDescanso(it.descanso);
                                                                         return (
-                                                                            <article
+                                                                            <FilaEjercicioAlumno
                                                                                 key={it.key}
-                                                                                className="mp-evitar-corte rounded-2xl border border-border bg-card p-4 sm:p-5"
-                                                                            >
-                                                                                {it.esCombo ? (
-                                                                                    <>
-                                                                                        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary">
-                                                                                            Superserie
-                                                                                        </p>
-                                                                                        {/* En una sola fila también en el celular
-                                                                                            (09/09/2026, pedido de Nalux: "quisiera que
-                                                                                            las superseries se vean en una línea así como
-                                                                                            en la computadora"). Antes era flex-col abajo
-                                                                                            de 640px y los ejercicios del combo quedaban
-                                                                                            uno debajo del otro, que se lee como si fueran
-                                                                                            ejercicios sueltos, no una superserie. Texto
-                                                                                            achicado de nuevo el 16/09/2026 (pedido de
-                                                                                            Nalux, "el tamaño... se sigue viendo muy
-                                                                                            grande") -- ver el comentario de
-                                                                                            StatsDelEjercicio más arriba. */}
-                                                                                        <div className="flex flex-row items-stretch gap-1.5">
-                                                                                            {it.comboItems.map(
-                                                                                                (sub, i) => (
-                                                                                                    <React.Fragment
-                                                                                                        key={
-                                                                                                            sub.key
-                                                                                                        }
-                                                                                                    >
-                                                                                                        {i >
-                                                                                                            0 && (
-                                                                                                            <span
-                                                                                                                className="flex shrink-0 items-center justify-center text-base font-bold text-primary"
-                                                                                                                aria-hidden="true"
-                                                                                                            >
-                                                                                                                +
-                                                                                                            </span>
-                                                                                                        )}
-                                                                                                        <div className="min-w-0 flex-1 rounded-xl bg-secondary p-2">
-                                                                                                            {/* Sin truncar en el celular: con
-                                                                                                                dos al lado el nombre entra en
-                                                                                                                dos renglones, pero completo --
-                                                                                                                cortarlo dejaría al alumno sin
-                                                                                                                saber qué ejercicio es. */}
-                                                                                                            <p className="text-sm font-bold leading-tight">
-                                                                                                                {
-                                                                                                                    sub.nombre
-                                                                                                                }
-                                                                                                            </p>
-                                                                                                            {sub.grupo && (
-                                                                                                                <p className="text-xs text-muted-foreground">
-                                                                                                                    {
-                                                                                                                        sub.grupo
-                                                                                                                    }
-                                                                                                                </p>
-                                                                                                            )}
-                                                                                                            <p className="mt-1 text-sm font-bold">
-                                                                                                                {resumenSeries(sub)}
-                                                                                                                {sub.peso && (
-                                                                                                                    <span className="ml-1 font-semibold text-muted-foreground">
-                                                                                                                        · {sub.peso} kg
-                                                                                                                    </span>
-                                                                                                                )}
-                                                                                                            </p>
-                                                                                                        </div>
-                                                                                                    </React.Fragment>
-                                                                                                ),
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <p className="mt-2 text-sm">
-                                                                                            <span className="text-muted-foreground">
-                                                                                                Descanso:{' '}
-                                                                                            </span>
-                                                                                            <span className="font-semibold">
-                                                                                                {it.descanso ||
-                                                                                                    '—'}
-                                                                                            </span>
-                                                                                        </p>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <p className="text-base font-bold">
-                                                                                            {it.nombre}
-                                                                                        </p>
-                                                                                        {it.grupo && (
-                                                                                            <p className="text-sm text-muted-foreground">
-                                                                                                {it.grupo}
-                                                                                            </p>
-                                                                                        )}
-                                                                                        {tieneSeriesDetalle(it) ? (
-                                                                                            // Series desglosadas (Fase 2.3, 13/09/2026):
-                                                                                            // pirámides, drop sets -- cada serie con su
-                                                                                            // propio peso/reps. Achicado (16/09/2026,
-                                                                                            // pedido de Nalux) junto con el resto de la
-                                                                                            // pantalla -- ver el comentario de
-                                                                                            // StatsDelEjercicio más arriba.
-                                                                                            <div className="mt-2 space-y-1">
-                                                                                                {it.seriesDetalle.map((s, i) => (
-                                                                                                    <div
-                                                                                                        key={i}
-                                                                                                        className="flex items-center gap-2 rounded-lg bg-secondary px-2.5 py-1.5"
-                                                                                                    >
-                                                                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-                                                                                                            {i + 1}
-                                                                                                        </span>
-                                                                                                        <span className="text-sm font-bold">
-                                                                                                            {s.reps || '—'} reps
-                                                                                                        </span>
-                                                                                                        {s.peso && (
-                                                                                                            <span className="ml-auto text-sm font-bold">
-                                                                                                                {s.peso} kg
-                                                                                                            </span>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                                <p className="pt-1 text-sm">
-                                                                                                    <span className="text-muted-foreground">
-                                                                                                        Descanso entre series:{' '}
-                                                                                                    </span>
-                                                                                                    <span className="font-semibold">
-                                                                                                        {it.descanso || '—'}
-                                                                                                    </span>
-                                                                                                </p>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <StatsDelEjercicio it={it} />
-                                                                                        )}
-                                                                                    </>
-                                                                                )}
-                                                                                {it.intensidad && (
-                                                                                    <p className="mt-1 text-sm">
-                                                                                        <span className="text-muted-foreground">
-                                                                                            Intensidad:{' '}
-                                                                                        </span>
-                                                                                        <span className="font-semibold">
-                                                                                            {it.intensidad}
-                                                                                        </span>
-                                                                                    </p>
-                                                                                )}
-                                                                                {it.comentario && (
-                                                                                    <p className="mt-2 rounded-xl border-2 border-primary/40 bg-primary/10 p-3 text-sm">
-                                                                                        {it.comentario}
-                                                                                    </p>
-                                                                                )}
-                                                                                <div className="mp-no-imprimir mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                                                                                    {it.esCombo
-                                                                                        ? it.comboItems
-                                                                                              .filter(
-                                                                                                  (sub) =>
-                                                                                                      sub.mediaUrl,
-                                                                                              )
-                                                                                              .map((sub) => (
-                                                                                                  <BotonVerDemo
-                                                                                                      key={
-                                                                                                          sub.key
-                                                                                                      }
-                                                                                                      item={
-                                                                                                          sub
-                                                                                                      }
-                                                                                                      mostrarNombre
-                                                                                                      onPreview={
-                                                                                                          setPreviewItem
-                                                                                                      }
-                                                                                                  />
-                                                                                              ))
-                                                                                        : it.mediaUrl && (
-                                                                                              <BotonVerDemo
-                                                                                                  item={it}
-                                                                                                  onPreview={
-                                                                                                      setPreviewItem
-                                                                                                  }
-                                                                                              />
-                                                                                          )}
-                                                                                    {descansoSeg && (
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => {
-                                                                                                cronometroIdRef.current += 1;
-                                                                                                setCronometro(
-                                                                                                    {
-                                                                                                        duracion:
-                                                                                                            descansoSeg,
-                                                                                                        id: cronometroIdRef.current,
-                                                                                                    },
-                                                                                                );
-                                                                                            }}
-                                                                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3 text-lg font-bold transition active:scale-[0.98] sm:w-auto"
-                                                                                        >
-                                                                                            <Timer
-                                                                                                className="h-5 w-5"
-                                                                                                aria-hidden="true"
-                                                                                            />{' '}
-                                                                                            Iniciar descanso
-                                                                                        </button>
-                                                                                    )}
-                                                                                </div>
-                                                                            </article>
+                                                                                it={it}
+                                                                                descansoSeg={descansoSeg}
+                                                                                onPreview={setPreviewItem}
+                                                                                onDescanso={(duracion) => {
+                                                                                    cronometroIdRef.current += 1;
+                                                                                    setCronometro({ duracion, id: cronometroIdRef.current });
+                                                                                }}
+                                                                            />
                                                                         );
                                                                     })}
                                                                 </div>

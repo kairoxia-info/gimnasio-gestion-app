@@ -91,6 +91,8 @@ const DatosGimnasio = ({
                 // el bloque de "transferir a" solo si hay alias, y un string
                 // vacío contaría como que hay (migración 0067).
                 alias_mercadopago: dgForm.alias_mercadopago.trim() || null,
+                whatsapp_pagos: dgForm.whatsapp_pagos.trim() || null,
+                email_pagos: dgForm.email_pagos.trim() || null,
             });
 
             if (logoFile) {
@@ -226,25 +228,53 @@ const DatosGimnasio = ({
                         </span>
                     </Field>
 
-                    {/* Pedido de Nalux (21/09/2026, visto en Control Gym): que el
-                        alumno sepa a qué cuenta transferir. Es un texto y nada
+                    {/* "Cómo pagar" (migraciones 0067 y 0070, pedido de Nalux
+                        21/09/2026, visto en Control Gym): lo que el alumno ve en
+                        la sección "Cómo pagar" de su portal. Son textos y nada
                         más -- no se valida contra Mercado Pago ni se cobra nada
                         solo; el pago lo sigue confirmando el profesor en Pagos.
-                        Se muestra en el portal del alumno junto al recordatorio
-                        de cuota, solo con la cuota vencida o con deuda. */}
-                    <Field label="Alias de Mercado Pago (opcional)">
-                        <Input
-                            value={dgForm.alias_mercadopago}
-                            onChange={(e) => setDgForm({ ...dgForm, alias_mercadopago: e.target.value })}
-                            placeholder="ej: mi.gimnasio.mp"
-                            maxLength={100}
-                            autoCapitalize="none"
-                        />
-                        <span className="text-xs text-muted-foreground">
-                            El alumno lo ve en su portal cuando tiene la cuota vencida, para saber a
-                            dónde transferir. Si queda vacío, no se muestra nada.
-                        </span>
-                    </Field>
+                        Cada campo vacío simplemente no se muestra. */}
+                    <div className="rounded-2xl border border-border p-4">
+                        <p className="text-sm font-semibold">Cómo pagar (lo ve el alumno en su portal)</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Los tres son opcionales. Lo que quede vacío no se muestra.
+                        </p>
+                        <div className="mt-3 space-y-3">
+                            <Field label="Alias de Mercado Pago">
+                                <Input
+                                    value={dgForm.alias_mercadopago}
+                                    onChange={(e) => setDgForm({ ...dgForm, alias_mercadopago: e.target.value })}
+                                    placeholder="mi.gimnasio.mp"
+                                    maxLength={100}
+                                    autoCapitalize="none"
+                                />
+                            </Field>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <Field label="WhatsApp para mandar el comprobante">
+                                    <Input
+                                        value={dgForm.whatsapp_pagos}
+                                        onChange={(e) => setDgForm({ ...dgForm, whatsapp_pagos: e.target.value })}
+                                        placeholder="54 9 11 5555 1234"
+                                        maxLength={40}
+                                        inputMode="tel"
+                                    />
+                                    <span className="text-xs text-muted-foreground">
+                                        Con código de país (54 para Argentina), si no el link no abre el chat.
+                                    </span>
+                                </Field>
+                                <Field label="Correo para mandar el comprobante">
+                                    <Input
+                                        type="email"
+                                        value={dgForm.email_pagos}
+                                        onChange={(e) => setDgForm({ ...dgForm, email_pagos: e.target.value })}
+                                        placeholder="pagos@migimnasio.com"
+                                        maxLength={120}
+                                        autoCapitalize="none"
+                                    />
+                                </Field>
+                            </div>
+                        </div>
+                    </div>
 
                     {dgError && <ErrorBox>{dgError}</ErrorBox>}
 
