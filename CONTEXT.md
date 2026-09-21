@@ -5938,6 +5938,80 @@ se va a hacer en la ronda del panel del profesor.
 **Archivos**: supabase/migrations/0066_errores_cliente.sql,
 apps/web/src/components/ErrorBoundary.jsx, scripts/export-gimnasio.sql.
 
+## 21/09/2026 (más tarde) — Dos cosas chicas vistas en Control Gym: alias de Mercado Pago y Noticias
+
+Pedido de Nalux antes de la ronda de pruebas del panel del profesor, a partir de un video de un
+competidor. Las dos son independientes y se hicieron en este orden, probando en local cada una.
+
+### Alias de Mercado Pago visible para el alumno (migración 0067)
+
+Hasta hoy el alumno no tenía forma de saber a qué cuenta transferirle al gimnasio — se resolvía
+por WhatsApp o de palabra. Ahora:
+
+- **Columna `gimnasios.alias_mercadopago`** (texto libre, sin validar). Se edita desde
+  Configuración → "Datos del gimnasio" (`DatosGimnasio.jsx`), con el mismo `updateRec` directo
+  que nombre/color/días — `authenticated` ya tiene UPDATE sobre `gimnasios` sin recorte por
+  columna (0002), verificado antes de decidir que no hacía falta RPC. Se guarda `NULL` cuando
+  queda vacío, no `''`, para que el portal no muestre un bloque vacío.
+- **Portal del alumno** (`MiPlanPage.jsx`): dentro de la tarjeta del recordatorio de cuota, un
+  bloque "Para pagar tu cuota, transfiere a: [alias]" con botón "Copiar alias" (reusa
+  `copiarAlPortapapeles` de `lib/copiar.js`). Se muestra **solo** si hay alias cargado **y**
+  `cuota_estado` es `vencido` o `con_deuda` — no con "próximo a vencer", que todavía no es
+  momento de pedir plata. Como vive adentro de la tarjeta de cuota, hereda su condición: el
+  gimnasio tiene que tener el recordatorio automático prendido.
+- `ver_plan_por_codigo()` devuelve el alias siempre; el frontend decide cuándo mostrarlo.
+
+**LO QUE NO ES**, para que no se confunda: no es cobro automático, no toca la API de Mercado
+Pago, y no tiene nada que ver con la Fase 0 de suscripción pendiente (esa es Kairox cobrándole
+al gimnasio; esto es el alumno pagándole al gimnasio). El pago lo sigue confirmando el profesor
+a mano en Pagos.
+
+**Verificado en local** con un gimnasio descartable: alumno vencido ve el bloque y el botón
+copia de verdad (confirmado con un click real, no simulado — con JS `.click()` el portapapeles
+falla por falta de foco, es un artefacto del navegador automatizado); alumno "próximo a vencer"
+ve la tarjeta de cuota pero **no** el alias; gimnasio sin alias no muestra nada. El campo de
+Configuración quedó verificado solo por lint/build (sin sesión de profesora) — se prueba en la
+ronda del panel.
+
+### Noticias: banner con imagen para el portal del alumno (migración 0068)
+
+Módulo nuevo, **separado de Avisos** (que sigue igual: texto, "Entendido", quién leyó). Una
+noticia es solo una imagen con un interruptor activa/inactiva. Sin título, sin texto, sin video,
+sin editor de tamaño — a propósito, Nalux lo pidió así.
+
+- **Tabla `noticias`** (`gimnasio_id`, `imagen_url`, `activa`, `orden`, `created_at`), RLS de
+  aislamiento por tenant `FOR ALL`, GRANT completo a `authenticated`. `orden` quedó en la tabla
+  como se pidió pero **ninguna pantalla lo edita** (todas en 0; desempata `created_at DESC`) —
+  está para no necesitar migración si algún día se quiere ordenar a mano.
+- **Bucket `noticias-imagenes`**, público para lectura (es contenido para alumnos sin sesión, sin
+  datos personales), 5 MB (no 2 como el logo: un banner suele ser una foto del celular). Policies
+  calcadas de `ejercicios-media` (0005): el archivo se llama `{gimnasio_id}/{uuid}.ext` y el
+  INSERT exige que esa fila de `noticias` exista en el gimnasio de quien sube — nadie puede
+  amontonar archivos sueltos.
+- **`NoticiasPage.jsx`** (ruta `/noticias`, ítem "Noticias" en el menú entre Avisos y Precios,
+  paso nuevo en el tour — ahora son 12): "Subir imagen" (crea la fila → sube con ese id → guarda
+  la URL; si la subida falla, borra la fila), Activar/Desactivar, Borrar (con confirmación; saca
+  el archivo del bucket y después la fila, best effort como `EjerciciosPage`). Un badge "En el
+  portal ahora" marca cuál está al aire, con la misma regla que el SQL.
+- **Portal del alumno**: `ver_plan_por_codigo()` devuelve `noticia_imagen_url` (la activa más
+  reciente **con imagen ya subida**) y `MiPlanPage.jsx` la pinta arriba de todo de `<main>`,
+  antes de la tarjeta de cuota, como `<img>` a lo ancho con tope de alto (`max-h-72`/`sm:max-h-96`)
+  para que una foto vertical no se coma la pantalla. Sin noticia activa, no se pinta nada.
+- **`AuthContext.eliminarCuenta`**: `noticias-imagenes` sumado a la lista de buckets que se
+  limpian al borrar la cuenta — misma regla que ya costó el bug del 16/09.
+
+**Verificado en local**: el banner aparece arriba de todo y desaparece al desactivar la noticia
+(por SQL, con una URL de imagen ya existente); la pantalla `/noticias` renderiza con el "i", el
+botón y el vacío, sin error de carga (la consulta pasa la RLS); "Noticias" aparece en el menú en
+su lugar. **Falta probar con sesión de profesora**: la subida real al bucket (policies de
+INSERT/UPDATE), el toggle y el borrado desde la pantalla — va en la ronda con la cuenta nueva.
+
+**Archivos**: supabase/migrations/{0067_alias_mercadopago,0068_noticias}.sql,
+apps/web/src/pages/{NoticiasPage,MiPlanPage,ConfiguracionPage}.jsx,
+apps/web/src/components/configuracion/DatosGimnasio.jsx,
+apps/web/src/components/{AppLayout,TourBienvenida}.jsx, apps/web/src/contexts/AuthContext.jsx,
+apps/web/src/App.jsx.
+
 ### Punto 4 — Revisión de la Decisión 21 ("sin reservas/turnos"): se mantiene, no es código
 
 No es un cambio de código, es la revisión de una decisión de producto ya tomada antes de vender a
