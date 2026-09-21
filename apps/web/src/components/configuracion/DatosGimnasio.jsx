@@ -128,7 +128,7 @@ const DatosGimnasio = ({
         <Card>
             <h2 className="font-display text-lg font-bold">Datos del gimnasio</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-                Nombre, logo y color que se ven adentro de la app.
+                Nombre, logo, color, días que abre y cómo pagar (lo que ve el alumno en su portal).
             </p>
 
             {gimnasioError && (

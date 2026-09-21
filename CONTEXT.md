@@ -6104,6 +6104,12 @@ también el archivo). Configuración: los tres campos de "Cómo pagar" se guarda
 SQL). Todo lo de prueba se borró después: Fitness Place quedó sin noticias, sin archivos y con
 los tres campos en NULL.
 
+**Después del push, Nalux no encontraba "Cómo pagar" en Configuración**: está dentro de la
+tarjeta "Datos del gimnasio", debajo de los días, y el subtítulo de esa tarjeta seguía diciendo
+solo "Nombre, logo y color que se ven adentro de la app." Se cambió a "Nombre, logo, color, días
+que abre y cómo pagar (lo que ve el alumno en su portal)." para que se sepa que está ahí. Va con
+el próximo push.
+
 **Archivos**: supabase/migrations/{0069_noticias_tipo_cartel_y_carrusel,
 0070_como_pagar_whatsapp_email}.sql, apps/web/src/components/{NoticiaVista,NoticiasCarrusel,
 FilaEjercicioAlumno,CajonMenu,AppLayout,TourBienvenida}.jsx,
