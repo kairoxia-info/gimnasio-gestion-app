@@ -1,7 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from '@/App';
+import { instalarCapturaGlobalDeErrores } from '@/lib/errores';
 import '@/index.css';
+
+// Antes de montar nada, para que un error del primer render también quede
+// registrado. Qué guarda y con qué límites: ver lib/errores.js.
+instalarCapturaGlobalDeErrores();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
 	<App />

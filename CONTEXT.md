@@ -6115,3 +6115,46 @@ el próximo push.
 FilaEjercicioAlumno,CajonMenu,AppLayout,TourBienvenida}.jsx,
 apps/web/src/components/configuracion/DatosGimnasio.jsx,
 apps/web/src/pages/{NoticiasPage,MiPlanPage,ConfiguracionPage}.jsx.
+
+## 21/09/2026 (cierre del día) — Arranca la semana de prueba: Fitness Place es la cuenta real
+
+Decisión de Nalux al cerrar el día: **"Mi GYM FIT" queda parada** (no la usa por ahora) y **la
+cuenta que va a usar el profesor del gimnasio es "Fitness Place"**. Desde este momento Fitness
+Place deja de ser gimnasio de prueba: no se le crea ni borra nada para probar (para eso, un
+gimnasio descartable "ZZZ QA …" que se borra al final). Quedó limpio antes de entregarlo: sin
+noticias, sin archivos en `noticias-imagenes`, los tres campos de "Cómo pagar" en NULL y
+`errores_cliente` en 0 filas para los dos gimnasios (verificado por SQL).
+
+Nalux confirmó que la cuenta "Fitness Place" de ahora la creó ella a propósito con ese nombre:
+coincide con el gimnasio de prueba de más temprano, pero es **otra cuenta nueva**, real.
+
+### Captura global de errores (`lib/errores.js`), pedido "guardá todo error"
+
+Hasta acá `errores_cliente` (migración 0066) solo recibía los crashes de React vía
+`ErrorBoundary`. Ahora hay un único camino hacia la RPC, `reportarErrorCliente()` en
+`apps/web/src/lib/errores.js`, y `main.jsx` instala antes de montar React dos listeners que
+también lo usan: `window` `error` (errores de JavaScript sueltos; sin `capture`, así los fallos de
+carga de `<img>`/`<script>` no cuentan) y `unhandledrejection` (promesas que fallan sin catch, por
+ejemplo una llamada a Supabase que nadie atrapó; si el motivo es un objeto sin stack, como un
+PostgrestError, se guarda como JSON). Los mensajes llevan prefijo para filtrar en SQL: **"Crash de
+pantalla:"** (ErrorBoundary), **"Error global:"** y **"Promesa sin catch:"**.
+
+Reglas del helper, iguales para las tres fuentes:
+- **Solo en producción** (`import.meta.env.PROD`). Local apunta a la misma base; en desarrollo
+  avisa por `console.warn` y no escribe, para no ensuciar la tabla que se revisa al final de la
+  semana. (Antes ErrorBoundary escribía también desde local.)
+- **Solo con sesión**: `getSession()` (lee del storage, sin red) y si no hay, no viaja nada. La
+  RPC sigue siendo solo `authenticated` (decisión 2 de la 0066): portal del alumno y login siguen
+  sin cubrirse.
+- **Tope de 20 por pestaña** y el mismo mensaje no se repite dentro de 10 s (en desarrollo React 18
+  relanza al `window` lo que atrapa un boundary; sin esto se duplicaría). El tope del servidor
+  (20 por usuario cada 5 min) sigue vigente.
+
+Lo que sigue sin guardarse: los errores que la app ya atrapa y muestra en un `ErrorBox` (no son
+crashes; se tragan con un mensaje genérico). Verificado en local: los tres listeners disparan el
+helper y en desarrollo se frenan en el aviso de consola. El camino de producción (sesión → RPC) es
+el mismo que ya se probó con la 0066. Al cabo de una semana (~28/09/2026) se revisa la tabla junto
+con lo que cuente el profesor.
+
+**Archivos**: apps/web/src/lib/errores.js (nuevo), apps/web/src/components/ErrorBoundary.jsx,
+apps/web/src/main.jsx.

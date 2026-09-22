@@ -1,5 +1,5 @@
 import React from 'react';
-import supabase from '@/lib/supabaseClient';
+import { reportarErrorCliente } from '@/lib/errores';
 
 // Reportado por Nalux (07/09/2026): en el celular, al entrar o al cambiar de
 // módulo, a veces la pantalla se pone en negro y hay que recargar a mano.
@@ -37,23 +37,14 @@ class ErrorBoundary extends React.Component {
         // así que acá no hace falta el perfil: este componente está MÁS AFUERA
         // que AuthProvider (ver App.jsx) y no tiene acceso al contexto.
         //
-        // Todo colgado de un .catch() vacío y sin await a propósito: reportar
-        // el error nunca puede romper ni demorar la pantalla de error. Si no
-        // hay sesión (portal del alumno, login), la RPC no guarda nada -- es
-        // la limitación conocida de la 0066.
-        try {
-            supabase
-                .rpc('registrar_error_cliente', {
-                    p_mensaje: String(error?.message || error || 'Error sin mensaje'),
-                    p_detalle: [error?.stack, info?.componentStack].filter(Boolean).join('\n---\n'),
-                    p_ruta: `${window.location.pathname}${window.location.search}`,
-                    p_user_agent: navigator.userAgent,
-                })
-                .then(() => {})
-                .catch(() => {});
-        } catch (_) {
-            // ni siquiera se pudo llamar: se sigue mostrando la pantalla igual
-        }
+        // Sin await a propósito: reportar el error nunca puede romper ni
+        // demorar la pantalla de error. Las reglas (solo producción, solo con
+        // sesión, tope por pestaña) viven en lib/errores.js, compartidas con
+        // los listeners globales que instala main.jsx.
+        reportarErrorCliente({
+            mensaje: `Crash de pantalla: ${error?.message || error || 'sin mensaje'}`,
+            detalle: [error?.stack, info?.componentStack].filter(Boolean).join('\n---\n'),
+        });
     }
 
     render() {
