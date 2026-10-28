@@ -53,17 +53,28 @@ const AlumnoLoginPage = () => {
                 p_contrasena: contrasena,
             });
             if (err) throw err;
-            // La RPC devuelve NULL cuando el usuario no existe o la contraseña
-            // está mal (migración 0042: ahí no puede lanzar excepción, porque
-            // eso revertiría el contador de intentos fallidos que acaba de
-            // sumar). Sin este chequeo se navegaba a /mi-plan/null.
+            // La RPC devuelve NULL cuando el usuario no existe, la contraseña
+            // está mal O se pasó el tope de intentos (migración 0072: nunca
+            // lanza excepción, porque eso revertiría el contador y porque un
+            // mensaje distinto para "bloqueado" delataría qué usuarios existen).
+            // Por eso el texto es el mismo para los tres casos y menciona la
+            // espera. Sin este chequeo se navegaba a /mi-plan/null.
             if (!codigo) {
-                setError('Usuario o contraseña incorrectos.');
+                setError(
+                    'Usuario o contraseña incorrectos. Si fallaste varias veces, espera unos minutos antes de volver a intentar.',
+                );
                 return;
             }
             navigate(`/mi-plan/${codigo}`, { replace: true });
-        } catch (err) {
-            setError(err?.message || 'No se pudo ingresar. Intentar de nuevo.');
+        } catch (_) {
+            // Texto fijo a propósito: el mensaje crudo de la base (o "Failed to
+            // fetch") no le sirve al alumno y en una pantalla pública podría
+            // mostrar detalles internos.
+            setError(
+                navigator.onLine
+                    ? 'No se pudo ingresar en este momento. Intenta de nuevo en un rato.'
+                    : 'Sin conexión. Revisa tu señal o el wifi e intenta de nuevo.',
+            );
         } finally {
             setLoading(false);
         }

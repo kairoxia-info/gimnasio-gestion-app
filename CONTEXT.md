@@ -6320,3 +6320,55 @@ alumnos de prueba).
 
 ### Lista de trabajo (orden propuesto)
 Ver la respuesta del cierre de esta sesión; de todo esto solo está implementada la 0071.
+
+## 28/10/2026 (noche) — Endurecimiento del login del alumno (migración 0072, APLICADA y probada)
+
+Siguiente paso de la auditoría después del hotfix 0071. **Aplicada en producción el 28/10/2026 con OK explícito
+de Nalux** (el clasificador bloquea `apply_migration` hasta que ella lo confirma; no se rodeó). Cliente y
+migración **todavía sin commit/push**.
+
+**`supabase/migrations/0072_endurecer_login_alumno.sql`** resuelve lo confirmado en la auditoría:
+- **Bloqueo por un tercero**: el tope duro pasa a ser por par usuario + IP (10 intentos / 5 min); además tope por
+  IP contando solo fallos (40 / 5 min, para frenar el barrido de usuarios; los logins correctos no cuentan, así
+  que el wifi de un gimnasio no se bloquea solo) y tope por cuenta más alto (200 / hora, contra ataques
+  repartidos). La IP sale de `cf-connecting-ip` (lo agrega Cloudflare, el cliente no lo falsifica); sin IP se
+  omiten los topes por IP y por par, nunca se agrupa a todos en "sin IP".
+- **Contador atómico**: tabla `login_alumno_intentos` (RLS activo, sin ningún permiso para la API) con un solo
+  `INSERT ... ON CONFLICT`, sumando ANTES de verificar. Éxito = se borran los contadores de ese usuario.
+- **Usuarios no distinguibles**: nunca lanza excepción; bloqueado, inexistente, contraseña nula/mala = `NULL`, con
+  un hash falso de costo 10 en esos casos para igualar tiempos (diferencia residual de milisegundos mientras haya
+  hashes viejos de costo 6).
+- **Hash**: costo 10 en `crear_acceso_alumno`, y el login rehashea solo (tras un login correcto) los que tengan
+  menos de 10. Nadie tiene que cambiar su clave.
+- **Largos**: `crear_acceso_alumno` limita usuario a 50 y contraseña a 72 (bcrypt ignora el resto); además limpia
+  los contadores del usuario (poner clave nueva destraba al alumno). El error de usuario repetido pasa a
+  "prueba con otro" (sin voseo) y conserva el texto "ya lo tiene otro alumno" que busca `lib/accesoAlumno.js`.
+
+**Cliente (listo, compatible con la función vieja y con la nueva)**:
+- `lib/accesoAlumno.js`: contraseñas autogeneradas con `crypto.getRandomValues` (rechazo, sin sesgo), 10
+  caracteres (2 mayúsculas + 4 minúsculas + 4 números, ~39 bits en vez de ~30). Sigue sin caracteres ambiguos.
+- `pages/AlumnoLoginPage.jsx`: un solo texto para usuario inexistente / contraseña mala / tope superado ("...Si
+  fallaste varias veces, espera unos minutos..."), y en error técnico un texto fijo (con o sin conexión) en vez
+  del mensaje crudo de la base. Ya no hay rama para "Demasiados intentos".
+
+**Verificado después de aplicar** (alumno descartable en un gimnasio "ZZZ QA", borrado al final junto con todos
+los contadores; por la API REST pública con la clave anon y por SQL):
+1. `cf-connecting-ip` SÍ llega: una falla crea las claves `i:<ip>`, `p:<usuario>|<ip>` y `u:<usuario>`. Los
+   topes por IP y por par están activos.
+2. Un hash viejo (`$2a$06$`) pasa solo a `$2a$10$` tras un login correcto; el login correcto limpia los
+   contadores de ese usuario y NO suma al de la IP (solo cuentan fallos). Usuario en mayúsculas funciona.
+3. Contraseña correcta entra; mala, NULL, vacía y usuario inexistente dan `null` (nunca excepción).
+4. 10 intentos malos desde una IP → el 11.º con la contraseña real devuelve `null` (par bloqueado). Con otra IP
+   (simulada con `set_config`) la real entra: quien ataca se bloquea solo a sí mismo. Sin IP disponible solo rige
+   el tope por cuenta (la real entra). 40 fallos con usuarios inventados bloquean esa IP; otra IP no se afecta.
+   Desde la pantalla del navegador (otra IP que mi `curl`) el alumno entró aunque el `curl` estaba bloqueado.
+5. **Atómico**: 25 pedidos simultáneos dejaron los contadores en 25 exactos. El contador de cuenta solo suma
+   mientras el par no está bloqueado (quien ataca no infla el de la cuenta).
+6. `crear_acceso_alumno` rechaza usuario de 51 caracteres y contraseña de 81. (No se probó en vivo que limpie los
+   contadores: requiere sesión de profesor.)
+7. Pantalla `/alumno` con los textos nuevos: ver abajo ("Cliente").
+
+**Limitaciones que siguen**: el usuario es único entre TODOS los gimnasios (un profesor puede saber que un usuario
+existe en otro gimnasio por el mensaje de usuario repetido); el `codigo_acceso` en la URL sigue siendo una
+credencial al portador sin vencimiento (rediseño con sesiones del alumno: decisión aparte); las columnas
+`login_intentos_*` de `alumnos` quedan sin uso.

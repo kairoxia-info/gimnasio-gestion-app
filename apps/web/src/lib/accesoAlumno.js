@@ -21,16 +21,30 @@ export const usuarioBaseDesdeNombre = (nombreCompleto) => {
 };
 
 // Sin caracteres ambiguos (l/1/I, 0/O) a propósito: se dicta o se tipea a
-// mano en el celular de alguien. 8 caracteres con mayúscula, regla de Nalux
-// (09/09/2026): 1 mayúscula + 3 minúsculas + 4 números.
+// mano en el celular de alguien. Regla de Nalux (09/09/2026): con mayúscula,
+// letras y números. Hasta el 28/10/2026 eran 8 caracteres (1 mayúscula + 3
+// minúsculas + 4 números, ~30 bits) sacados con Math.random(), que no es un
+// generador criptográfico. Ahora son 10 (2 + 4 + 4, ~39 bits) con
+// crypto.getRandomValues -- sigue siendo fácil de dictar, y si algún día se
+// filtrara la base el hash cuesta mucho más de romper (auditoría del 28/10).
+//
+// Elige con rechazo (no con módulo) para que todos los caracteres salgan con
+// la misma probabilidad.
+const elegirAlAzar = (conjunto) => {
+    const limite = Math.floor(256 / conjunto.length) * conjunto.length;
+    const byte = new Uint8Array(1);
+    do {
+        crypto.getRandomValues(byte);
+    } while (byte[0] >= limite);
+    return conjunto[byte[0] % conjunto.length];
+};
+
 export const generarContrasenaAlumno = () => {
     const letrasMayus = 'ABCDEFGHJKMNPQRSTUVWXYZ';
     const letrasMinus = 'abcdefghjkmnpqrstuvwxyz';
     const numeros = '23456789';
-    const al = (set) => set[Math.floor(Math.random() * set.length)];
-    const minusculas = Array.from({ length: 3 }, () => al(letrasMinus)).join('');
-    const digitos = Array.from({ length: 4 }, () => al(numeros)).join('');
-    return `${al(letrasMayus)}${minusculas}${digitos}`;
+    const veces = (n, conjunto) => Array.from({ length: n }, () => elegirAlAzar(conjunto)).join('');
+    return `${veces(2, letrasMayus)}${veces(4, letrasMinus)}${veces(4, numeros)}`;
 };
 
 // Crea el acceso completo a partir del nombre del alumno, reintentando con
