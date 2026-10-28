@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { Navigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
@@ -10,7 +11,6 @@ import Comprobante from '@/components/configuracion/Comprobante';
 import AvisoAutomaticoCuota from '@/components/configuracion/AvisoAutomaticoCuota';
 import ArchivoPagos from '@/components/configuracion/ArchivoPagos';
 import EliminarCuenta from '@/components/configuracion/EliminarCuenta';
-import MisGimnasios from '@/components/configuracion/MisGimnasios';
 import { ZONA_POR_DEFECTO } from '@/lib/zonasHorarias';
 
 // Mismo bug y mismo fix que components/configuracion/DatosGimnasio.jsx: este
@@ -21,7 +21,7 @@ const COLOR_DEFAULT = '#F6B51E';
 const DIAS_ABIERTOS_DEFAULT = [1, 2, 3, 4, 5, 6];
 
 const ConfiguracionPage = () => {
-    const { profile, refreshProfile, eliminarCuenta, signOut, cambiarGimnasio, eliminarGimnasioActivo } = useAuth();
+    const { profile, refreshProfile, eliminarCuenta, signOut } = useAuth();
 
     // Fila completa de "gimnasios" (id, codigo_invitacion, autorregistro_activo,
     // etc.): useAuth().gimnasio solo trae nombre/logo_url/color_principal (ver
@@ -110,6 +110,11 @@ const ConfiguracionPage = () => {
 
     const esAdminConGimnasio = profile?.role === 'admin' && !!profile?.gimnasio_id;
 
+    // El staff no ve ni cambia la configuración del gimnasio (migración 0080).
+    if (profile && profile.role !== 'admin') {
+        return <Navigate to="/panel" replace />;
+    }
+
     return (
         <AppLayout
             ayuda="Nombre, logo y color de tu gimnasio (el color se aplica a toda la aplicación y a los PDF), el texto del comprobante, los días de gracia de la cuota, y el enlace para que los alumnos nuevos se registren por su cuenta desde el teléfono."
@@ -165,13 +170,6 @@ const ConfiguracionPage = () => {
             />
 
             <ArchivoPagos />
-
-            {/* Varios gimnasios por profesor (migración 0076): lista, abrir otro, agregar uno y eliminar el abierto. */}
-            <MisGimnasios
-                profile={profile}
-                cambiarGimnasio={cambiarGimnasio}
-                eliminarGimnasioActivo={eliminarGimnasioActivo}
-            />
 
             <EliminarCuenta
                 esAdminConGimnasio={esAdminConGimnasio}

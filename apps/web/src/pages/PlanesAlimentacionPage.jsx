@@ -51,7 +51,7 @@ const asignacionDesdePlan = (plan, extra = {}) => ({
 // armar la comida real de un alumno (AlumnoPage.jsx, PlanAlimentacion, ver
 // armarTextoAlimentos en lib/format.js).
 const PlanesAlimentacionPage = () => {
-    const { gimnasio } = useAuth();
+    const { gimnasio, profile } = useAuth();
     const [planes, setPlanes] = useState([]);
     const [alimentos, setAlimentos] = useState([]);
     // Fase 2.4 (13/09/2026): mapa por id para el cálculo de macros
@@ -584,7 +584,11 @@ const PlanesAlimentacionPage = () => {
                     </span>
                 </span>
             }
-            subtitle='Crear un plan una sola vez y asignarlo a cualquier alumno (o descargar el PDF) desde aquí. Si una comida es opcional, marcar "Opcional" para que quede bien claro.'
+            subtitle={`Crear un plan una sola vez y asignarlo a cualquier alumno (o descargar el PDF) desde aquí. Si una comida es opcional, marcar "Opcional" para que quede bien claro.${
+                (profile?.misGimnasios?.length ?? 0) > 1
+                    ? ' Los planes y los alimentos propios se comparten entre todos tus gimnasios; cada gimnasio los asigna a sus propios alumnos.'
+                    : ''
+            }`}
             actions={
                 <Btn onClick={abrirNuevo}>
                     <Plus className="h-4 w-4" /> Nuevo plan de alimentación
@@ -644,7 +648,11 @@ const PlanesAlimentacionPage = () => {
                             </div>
                             {eliminandoId === p.id ? (
                                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">¿Seguro?</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {(profile?.misGimnasios?.length ?? 0) > 1
+                                            ? '¿Seguro? Los planes se comparten entre todos tus gimnasios: también se borra de los demás. Los alumnos que ya lo tienen asignado lo conservan.'
+                                            : '¿Seguro?'}
+                                    </span>
                                     <ConfirmInlineActions
                                         className="px-3 py-2 text-xs"
                                         onConfirmar={() => eliminar(p.id)}

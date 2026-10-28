@@ -14,6 +14,7 @@ import {
     Modal,
     Select,
 } from '@/components/ui-kit';
+import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 
@@ -78,6 +79,7 @@ const vacio = {
 const num = (v) => (v === '' || v === null ? 0 : Number(v));
 
 const AlimentosPage = () => {
+    const { profile } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -182,7 +184,13 @@ const AlimentosPage = () => {
 
     // Los de la biblioteca base son los que no pertenecen a ningún gimnasio
     // (gimnasio_id NULL, migración 0054); el resto los cargó este gimnasio.
-    const cantidadBase = items.filter((a) => !a.gimnasio_id).length;
+    //
+    // Biblioteca compartida (migración 0078): los propios son de la cuenta y los comparten todos los
+    // gimnasios del dueño, así que "base" es "sin organización" (gimnasio_id pasa a NULL si se borra
+    // el gimnasio donde se creó). Con la base sin migrar no existe esa columna.
+    const esBase = (a) => ('organizacion_id' in a ? !a.organizacion_id : !a.gimnasio_id);
+    const compartida = (profile?.misGimnasios?.length ?? 0) > 1;
+    const cantidadBase = items.filter(esBase).length;
     const cantidadPropios = items.length - cantidadBase;
     const cantidadOcultos = items.filter((a) => ocultosIds.has(a.id)).length;
 
@@ -255,9 +263,13 @@ const AlimentosPage = () => {
                 cantidadBase > 0
                     ? `${cantidadBase} alimentos ya vienen precargados${
                           cantidadPropios > 0
-                              ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
+                              ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} ${
+                                    compartida ? 'de tu cuenta, compartidos entre todos tus gimnasios' : 'de este gimnasio'
+                                }`
                               : ''
-                      }. Se pueden sumar más propios, y ocultar los que no se usen.`
+                      }. Se pueden sumar más propios, y ocultar los que no se usen.${
+                          compartida ? ' Eliminar un alimento propio lo borra en todos tus gimnasios.' : ''
+                      }`
                     : 'Registrar cada alimento una vez con su información nutricional y reutilizarlo en los planes.'
             }
             actions={
@@ -450,7 +462,7 @@ const AlimentosPage = () => {
                                 horizontal -- y la tabla queda de sm para arriba. */}
                             <div className="space-y-3 sm:hidden">
                                 {visibles.map((a) => {
-                                    const esGlobal = !a.gimnasio_id;
+                                    const esGlobal = esBase(a);
                                     return (
                                     <div key={a.id} className="rounded-2xl border border-border bg-card p-4">
                                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -541,7 +553,7 @@ const AlimentosPage = () => {
                                 </thead>
                                 <tbody className="divide-y divide-border bg-card">
                                     {visibles.map((a) => {
-                                        const esGlobal = !a.gimnasio_id;
+                                        const esGlobal = esBase(a);
                                         return (
                                         <tr key={a.id}>
                                             <td className="px-4 py-3 font-semibold">

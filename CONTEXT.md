@@ -6933,3 +6933,67 @@ gimnasios. Alimentos y planes de alimentación NO se tocaron (no se pidió compa
 
 **Archivos**: supabase/migrations/0077_biblioteca_compartida_por_organizacion.sql (APLICADA), apps/web/src/contexts/AuthContext.jsx,
 apps/web/src/pages/{Ejercicios,Rutinas}Page.jsx.
+
+## 28/10/2026 (noche) — Pedido "1, 2, 3 y 4": alimentación compartida (0078), archivos movidos, apartado Mis gimnasios, bitácora (0079) y cuentas de staff (0080)
+
+Nalux respondió: (1) "compartelos" (alimentos y planes de alimentación), (2) mover los 3 archivos a la carpeta del profesor, (3) "Mis gimnasios" como apartado
+aparte al costado, solo para el administrador, y (4) "hazlo a las dos" (bitácora de pagos y cuentas de staff). Probó "Eliminar este gimnasio" por su cuenta y le anduvo bien.
+**Estado: 0078, 0079 y 0080 APLICADAS y Edge Function `equipo` DESPLEGADA (v1, verify_jwt) el 28/10/2026** (Nalux: "Aplicá la 0078", "Aplicá la 0079", "Aplicá la 0080", "Desplegá la función equipo" y "subí cuando apliques todo").
+Orden seguido: 0078 → 0079 → 0080 → función → commit/push (la app nueva llama a funciones que antes no existían). Sobre el staff: Nalux confirmó "no, está bien así, dejalo así" (el staff conserva poder eliminar alumnos y archivar pagos).
+
+### Hecho y verificado (sin migración)
+- **Archivos de ejercicios movidos** a la carpeta del profesor (`<organizacion_id>/<ejercicio_id>.<ext>`), con la sesión de Mi GYM FIT: copiar → actualizar `media_url` → comprobar HTTP 200
+  → borrar el viejo. Los 3 (Peso Muerto .mp4, Press Francés .jpg, Sentadilla Frontal .webp) quedaron en la carpeta nueva, enlaces actualizados, 0 archivos en la carpeta vieja.
+- **"Mis gimnasios" apartado propio**: `pages/MisGimnasiosPage.jsx`, ruta `/mis-gimnasios`, ítem de menú solo para el administrador (`NAV_ADMIN` en `AppLayout`, no entra en `NAV`
+  para no cambiar el tour), sacado de Configuración. Un staff que entre por URL vuelve al panel. Verificado en pantalla (menú y página).
+
+### 0078 — alimentos y planes de alimentación compartidos (`0078_alimentacion_compartida_por_organizacion.sql`)
+- Mismo diseño que la 0077 sobre `alimentos` y `planes_alimentacion_biblioteca`: `organizacion_id` (relleno, DEFAULT, FK CASCADE), `gimnasio_id` = "creado en" con ON DELETE SET NULL,
+  políticas por organización, trigger `biblioteca_fijar_dueno` (de la 0077), alimentos sin organización = base (CHECK `alimentos_ambito_check`).
+- Trigger nuevo `planes_alimentacion_validar_origen`: el plan de origen de un plan asignado tiene que ser de la organización de ese gimnasio. `biblioteca_ocultos` sigue por gimnasio.
+  Comprobado: no hay funciones, vistas ni archivos que dependan de estas tablas.
+- Cliente: `AlimentosPage` (esBase por organización, texto "compartidos entre todos tus gimnasios" y aviso de que eliminar borra en todos), `PlanesAlimentacionPage` (subtítulo y confirmación
+  de borrado con aviso). Lint OK. Pendiente: aplicar y repetir las pruebas de aislamiento de la 0077 sobre estas dos tablas.
+
+### 0079 — bitácora de cambios (`0079_bitacora_de_cambios.sql`) + pantalla `/historial`
+- Estado previo comprobado: nada registraba quién cargaba, editaba o borraba un pago o un precio. En la pantalla no existe editar un pago; "anular" era borrarlo desde la ficha del alumno.
+- Tabla `bitacora` escrita por triggers (`bitacora_registrar`, SECURITY DEFINER) sobre `pagos`, `configuracion_precios`, `configuracion_periodos` y `configuracion_descuentos`: autor (`auth.uid()`),
+  nombre y rol al momento del hecho, acción (alta/edicion/baja/anulacion), resumen legible, motivo, fila antes y después (jsonb). Un UPDATE sin cambios no se anota.
+- Solo la lee un administrador del gimnasio abierto (RLS con `get_mi_rol()`); `authenticated` solo tiene SELECT: nadie la escribe ni la borra a mano, ni el admin. El staff no la ve.
+- `pagos.registrado_por` (lo fija un trigger; no se puede mandar ni cambiar).
+- `anular_pago(id, motivo)`: única forma de borrar un pago, motivo obligatorio (mín. 3 caracteres); se revoca el DELETE directo sobre `pagos`. El comprobante no se reutiliza (contador de la 0073).
+  Borrado en cascada por alumno se anota con el motivo "Se eliminó al alumno"; por gimnasio no se anota (se va todo).
+- **Hallazgo**: `archivar_pagos_hasta` (archivo mensual) borraba pagos con los permisos del usuario y, además, cualquier miembro podía ejecutarlo. Se pasa a SECURITY DEFINER (ya filtra todo por el gimnasio
+  abierto) y deja UN renglón resumen en la bitácora en vez de uno por pago (flag `app.bitacora_omitir`). Sin esto, quitar el DELETE directo lo habría roto.
+- Cliente: `PagosAlumno` pide el motivo y llama a `anular_pago` (botón "Anular pago"); `pages/HistorialPage.jsx` (filtros por persona y acción, detalle "antes → después"); ítem "Historial de cambios" solo admin.
+
+### 0080 — cuentas de staff (`0080_equipo_de_staff.sql`) + Edge Function `equipo` + pantalla `/equipo`
+- Cada empleado tiene su propio usuario y contraseña (no una clave compartida): se puede pausar o quitar a uno sin afectar al resto y la bitácora sabe quién fue.
+- **Edge Function `equipo`** (`supabase/functions/equipo/index.ts`, verify_jwt): acciones `crear`, `cambiar_clave`, `quitar`. Verifica en el servidor que quien llama es admin del gimnasio abierto (con SU token:
+  `get_mi_rol`/`get_mi_gimnasio_id`); el gimnasio nunca viene del cuerpo. Solo toca staff de ESE gimnasio; no cambia la contraseña de alguien con acceso a otros gimnasios; tope 20 staff por gimnasio;
+  política de contraseña del proyecto (8, mayúscula, minúscula, número); si el correo ya tenía cuenta solo se le da acceso (membresía) con su contraseña de siempre; al quitar a alguien sin más gimnasios
+  se borra la cuenta (si no, podría entrar y abrir un gimnasio propio sin pagar). Búsqueda por correo con `eq` (no `ilike`: los comodines % y _ habrían permitido coincidir con una cuenta ajena).
+- SQL: `equipo_listar()`, `equipo_cambiar_estado(user, activo)` (pausar corta el acceso al instante), `equipo_anotar(evento, nombre, email)` (anota altas/bajas/pausas/cambios de clave en la bitácora;
+  el texto lo arma la base, solo admin). `create_gimnasio` rechaza a una cuenta que sea solo staff (cierra el hueco de "empleado abre un gimnasio gratis"; el primer gimnasio de una persona nueva sigue igual).
+- Cliente: `pages/EquipoPage.jsx` (lista, agregar, pausar/reactivar, contraseña, quitar); el staff ya no ve Configuración (`NAV_STAFF`, y `ConfiguracionPage` lo manda al panel) ni Equipo, Historial ni
+  Mis gimnasios; el tour de bienvenida solo se muestra al administrador (recorre Configuración, que el staff no ve).
+- **Matriz de permisos del staff (decisión por defecto, confirmar con Nalux)**: SÍ puede alumnos, rutinas, ejercicios, alimentos, planes, asistencia, avisos, noticias, registrar y anular pagos, ver caja
+  y editar precios (decidido por ella); NO puede configuración del gimnasio, logo, código de invitación, eliminar el gimnasio, equipo, historial ni mis gimnasios. Pendiente de decidir: si el staff puede
+  eliminar alumnos y archivar pagos (hoy puede; queda anotado en el historial el archivo mensual).
+- Sin probar todavía (todo depende de aplicar): crear un empleado real de prueba, entrar con su cuenta, verificar que no ve lo del admin, que su acción sale en el Historial con su nombre, pausar/reactivar, cambio de
+  contraseña y quitarlo (con borrado de la cuenta). Para las pruebas hará falta que Nalux dé el OK de crear una cuenta de prueba (se crea desde la propia pantalla Equipo, correo "zzz-qa-..." y se borra al final).
+
+### Resultados de las pruebas de 0078, 0079 y 0080 (28/10/2026, bloques DO con rollback + pantalla real)
+- **0078**: gimnasio F ve 45 alimentos / 5 planes de biblioteca / 6 planes asignados; otro gimnasio del mismo dueño ve la misma biblioteca pero 0 planes asignados; una organización ajena ve solo la base (4 alimentos)
+  y lo suyo, no edita ni crea en la de otro y no puede usar como origen un plan ajeno aunque conozca su id (trigger: "El plan de origen no pertenece a este gimnasio"); borrar un gimnasio deja
+  los alimentos que se crearon en él (gimnasio_id NULL) y los 5 planes de biblioteca. (Un primer intento del test A3c salió "MAL" por un defecto de la prueba —el usuario ajeno ni veía el plan—; repetido con el id explícito, bloquea.)
+- **0079**: el admin carga y edita un pago → bitácora "alta"/"edicion" con su nombre y rol; `registrado_por` = quien cargó (el cliente ni siquiera puede enviarlo: permiso por columna); borrar un pago directo está bloqueado;
+  anular sin motivo falla; el staff cobra, anula con motivo ("Cobro duplicado"), edita un precio y todo sale en la bitácora a su nombre con rol "staff"; el staff NO ve la bitácora (0 filas), no escribe ni borra;
+  un administrador de otro gimnasio no ve nada ni puede anular un pago ajeno ("El pago no existe"); el archivo mensual funciona para el staff (permisos propios) y deja un solo renglón "Archivó N pagos…";
+  borrar un alumno con pagos queda anotado ("Se eliminó al alumno").
+- **0080**: `equipo_listar` devuelve 2 personas al admin y 0 al staff; el staff no puede pausar, anotar en la bitácora del equipo ni crear un gimnasio ("Una cuenta de staff no puede crear gimnasios"); pausar al staff corta su acceso al
+  instante (gimnasio abierto = null, 0 precios visibles); reactivar funciona; no se puede pausar a un administrador; la bitácora del equipo anota "Pausó/Reactivó el acceso de …"; una persona nueva sin gimnasio sí puede crear el suyo.
+- **Función `equipo`** desplegada: sin sesión devuelve 401; con la sesión de Nalux (admin) valida el rol y rechaza una acción inválida con "Acción no válida." (sin efectos). **No se probó** crear/cambiar clave/quitar una cuenta real
+  (hace falta crear un usuario real de prueba en Supabase Auth: pendiente del OK de Nalux; se haría desde la pantalla Equipo con un correo "zzz-qa-…" y se borra al final).
+- Pantalla real con su sesión: `/equipo` lista "Nadia Tecera (tú) — Administrador"; `/historial` carga vacío (la bitácora empieza hoy; los 13 pagos viejos no tienen registrador); sus datos siguen iguales
+  (45 alimentos, 5 planes de biblioteca, 6 planes asignados, 13 pagos, 5 rutinas, 503 ejercicios). Todo lo de prueba se deshizo: 1 gimnasio, 1 organización, 1 membresía, 1 usuario, bitácora 0.

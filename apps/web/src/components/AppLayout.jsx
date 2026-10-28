@@ -10,6 +10,7 @@ import {
     ChevronDown,
     ClipboardList,
     Dumbbell,
+    History,
     LayoutDashboard,
     LogOut,
     Megaphone,
@@ -19,6 +20,7 @@ import {
     Settings,
     Sun,
     Tag,
+    UserCog,
     Users,
     Wallet,
     WifiOff,
@@ -48,6 +50,22 @@ const NAV = [
     { to: '/precios', label: 'Precios', icon: Tag },
     { to: '/configuracion', label: 'Configuración', icon: Settings },
 ];
+
+// El administrador además ve "Mis gimnasios" (pedido de Nalux, 28/10/2026): apartado aparte para
+// abrir, agregar y eliminar gimnasios. Va antes de Configuración. No entra en NAV a propósito:
+// el tour de bienvenida recorre NAV y esta opción no es parte de él.
+// También "Equipo" (0080, cuentas de staff) e "Historial de cambios" (0079, quién tocó pagos y precios).
+const NAV_ADMIN = [
+    ...NAV.slice(0, -1),
+    { to: '/equipo', label: 'Equipo', icon: UserCog },
+    { to: '/historial', label: 'Historial de cambios', icon: History },
+    { to: '/mis-gimnasios', label: 'Mis gimnasios', icon: Building2 },
+    NAV[NAV.length - 1],
+];
+
+// El staff trabaja el día a día (alumnos, rutinas, pagos, precios...) pero no ve Configuración:
+// los datos del gimnasio solo los cambia el administrador (la base ya se lo impide, 0076).
+const NAV_STAFF = NAV.filter((n) => n.to !== '/configuracion');
 
 // Marca propia de la app: RutNail (14/09/2026, reemplaza al wordmark de
 // texto "Gestión GYM Kairox IA" + ícono de mancuerna que había antes). Nalux
@@ -296,7 +314,8 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     // cajón real: abrirlo solo, señalar el ítem correspondiente y medir
     // dónde cae para ubicar la tarjeta al lado.
     const [pasoTour, setPasoTour] = useState(0);
-    const guiaActiva = profile?.tour_visto === false && location.pathname === '/panel';
+    // Solo para el administrador: el recorrido incluye Configuración, que el staff no ve (0080).
+    const guiaActiva = profile?.role === 'admin' && profile?.tour_visto === false && location.pathname === '/panel';
     const pasoActual = PASOS_TOUR[pasoTour];
 
     useEffect(() => {
@@ -652,7 +671,7 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                 {/* Solo aparece con 2 o más gimnasios (migración 0076). */}
                 <SelectorGimnasio />
                 <NavLinksAnimados
-                    nav={NAV}
+                    nav={profile?.role === 'admin' ? NAV_ADMIN : NAV_STAFF}
                     onNavegar={() => setOpen(false)}
                     pasoTourTo={guiaActiva ? pasoActual.to : null}
                 />

@@ -25,6 +25,9 @@ import PagosPage from '@/pages/PagosPage';
 import AvisosPage from '@/pages/AvisosPage';
 import NoticiasPage from '@/pages/NoticiasPage';
 import ConfiguracionPage from '@/pages/ConfiguracionPage';
+import MisGimnasiosPage from '@/pages/MisGimnasiosPage';
+import HistorialPage from '@/pages/HistorialPage';
+import EquipoPage from '@/pages/EquipoPage';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
@@ -89,6 +92,9 @@ function App() {
                             <Route path="/avisos" element={guard(<AvisosPage />)} />
                             <Route path="/noticias" element={guard(<NoticiasPage />)} />
                             <Route path="/configuracion" element={guard(<ConfiguracionPage />)} />
+                            <Route path="/mis-gimnasios" element={guard(<MisGimnasiosPage />)} />
+                            <Route path="/historial" element={guard(<HistorialPage />)} />
+                            <Route path="/equipo" element={guard(<EquipoPage />)} />
                             <Route path="*" element={<Navigate to="/panel" replace />} />
                         </Routes>
                     </Router>

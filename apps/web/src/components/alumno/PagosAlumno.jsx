@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Badge, Card, ConfirmInlineActions, Empty, ErrorBox } from '@/components/ui-kit';
-import { removeRec } from '@/lib/data';
+import { Badge, Btn, Card, Empty, ErrorBox, Input } from '@/components/ui-kit';
+import supabase from '@/lib/supabaseClient';
+import { avisarCambioDeDatos } from '@/lib/offline';
 import { ESTADOS_PAGO, estadoCuota, fmtFecha, money } from '@/lib/format';
 
 const PagosAlumno = ({ pagos, config, onChange }) => {
@@ -9,19 +10,29 @@ const PagosAlumno = ({ pagos, config, onChange }) => {
     // un window.confirm(), el cartel nativo que en algunos navegadores no
     // aparece y deja el botón mudo. Acá pesa el doble porque cada pago es
     // también el comprobante numerado: si el borrado falla hay que verlo.
+    //
+    // Anular un pago (migración 0079) pide un MOTIVO y va por anular_pago(): la base anota
+    // quién lo anuló, cuándo y cómo era el pago, y el administrador lo ve en "Historial".
     const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
+    const [motivo, setMotivo] = useState('');
     const [borrando, setBorrando] = useState(false);
     const [error, setError] = useState('');
 
+    const motivoValido = motivo.trim().length >= 3;
+
     const borrar = async (id) => {
+        if (!motivoValido) return;
         setBorrando(true);
         setError('');
         try {
-            await removeRec('pagos', id);
+            const { error: errorAnular } = await supabase.rpc('anular_pago', { p_id: id, p_motivo: motivo.trim() });
+            if (errorAnular) throw errorAnular;
+            avisarCambioDeDatos('pagos');
             setConfirmandoBorrarId(null);
+            setMotivo('');
             onChange();
         } catch (_) {
-            setError('No se pudo eliminar el pago. Reintentar en unos minutos.');
+            setError('No se pudo anular el pago. Reintentar en unos minutos.');
         } finally {
             setBorrando(false);
         }
@@ -60,22 +71,45 @@ const PagosAlumno = ({ pagos, config, onChange }) => {
                                         {ESTADOS_PAGO[estadoCuota(p, config)].label}
                                     </Badge>
                                     {confirmandoBorrarId === p.id ? (
-                                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                                            <span className="text-xs text-muted-foreground">
-                                                Se pierde el comprobante N° {p.numero ?? '—'}.
+                                        <div className="flex max-w-[260px] flex-col items-end gap-1.5">
+                                            <span className="text-right text-xs text-muted-foreground">
+                                                Se anula el comprobante N° {p.numero ?? '—'} y queda registrado quién lo anuló.
                                             </span>
-                                            <ConfirmInlineActions
-                                                className="px-3 py-1.5 text-xs"
-                                                ejecutando={borrando}
-                                                onConfirmar={() => borrar(p.id)}
-                                                onCancelar={() => setConfirmandoBorrarId(null)}
+                                            <Input
+                                                value={motivo}
+                                                onChange={(e) => setMotivo(e.target.value)}
+                                                placeholder="Motivo de la anulación"
+                                                maxLength={500}
+                                                aria-label="Motivo de la anulación"
+                                                autoFocus
                                             />
+                                            <div className="flex gap-1.5">
+                                                <Btn
+                                                    variant="danger"
+                                                    className="px-3 py-1.5 text-xs"
+                                                    disabled={borrando || !motivoValido}
+                                                    onClick={() => borrar(p.id)}
+                                                >
+                                                    {borrando ? 'Anulando...' : 'Anular pago'}
+                                                </Btn>
+                                                <Btn
+                                                    variant="ghost"
+                                                    className="px-3 py-1.5 text-xs"
+                                                    disabled={borrando}
+                                                    onClick={() => setConfirmandoBorrarId(null)}
+                                                >
+                                                    Cancelar
+                                                </Btn>
+                                            </div>
                                         </div>
                                     ) : (
                                         <button
                                             type="button"
-                                            aria-label="Eliminar pago"
-                                            onClick={() => setConfirmandoBorrarId(p.id)}
+                                            aria-label="Anular pago"
+                                            onClick={() => {
+                                                setMotivo('');
+                                                setConfirmandoBorrarId(p.id);
+                                            }}
                                             className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-destructive"
                                         >
                                             <Trash2 className="h-4 w-4" />
