@@ -6259,3 +6259,64 @@ sus paths ya no existen, pero conviene borrarlas a mano en Supabase → Edge Fun
 
 **Archivos**: apps/web/public/sw.js, apps/web/src/pages/MiPlanPage.jsx,
 apps/web/src/components/{RutinaPDF,NotificacionesCampana}.jsx, apps/web/src/lib/{offline,data}.js.
+
+## 28/10/2026 (tarde) — Auditoría pre-lanzamiento con 5 agentes especializados
+
+Pedido de Nalux: antes de sumar el módulo de suscripción, una revisión de seguridad y de cómo debe estar
+una app como esta. Se lanzaron 5 auditores en solo lectura (base de datos/RLS, seguridad del código,
+infraestructura y cumplimiento, arquitectura backend, frontend) con el estado REAL de la base volcado a un
+archivo de contexto. Nalux confirmó que durante las pruebas **ningún gimnasio vio datos de otro**; ningún
+auditor encontró un camino por el que un profesor lea datos de otro gimnasio (RLS en las 23 tablas, tenant
+resuelto en el servidor en cada RPC). Los hallazgos se verificaron antes de aceptarlos; lo refutado y lo
+confirmado figura abajo. El relevamiento de la semana de prueba (Parte 1) sigue abierto: faltan las
+respuestas de Nalux sobre errores, funciones no probadas, rendimiento, feedback y dispositivos.
+
+### CRÍTICO confirmado: el login del alumno entraba con contraseña NULL
+
+`iniciar_sesion_alumno` (0028, arrastrado por la 0042) comparaba `crypt(p_contrasena, v_hash) <> v_hash`.
+`crypt()` es STRICT: con NULL devuelve NULL, el IF no entra y la función devolvía el `codigo_acceso` real.
+Reproducido con un alumno descartable (`{"p_contrasena": null}` entra, la correcta entra, la incorrecta no).
+Cualquiera con la clave anon (pública) y un usuario válido obtenía el código al portador del alumno.
+**Arreglo escrito en `supabase/migrations/0071_fix_login_alumno_contrasena_nula.sql`** (NULL = rechazo y cuenta
+como intento fallido; `IS DISTINCT FROM`; resto idéntico a la 0042). **APLICADO en producción el 28/10/2026, con OK
+explícito de Nalux** (la primera vez el clasificador de permisos bloqueó `apply_migration`; se frenó y se pidió
+confirmación, no se rodeó). Verificado en la base con un alumno descartable (contraseña correcta entra;
+incorrecta, NULL y vacía se rechazan; el NULL cuenta como intento fallido en el contador) y por la API pública
+REST con la clave anon, que es el camino real de un atacante (`null` → `null`, correcta → código de 32 hex).
+Alumno y gimnasio descartables borrados. Pendiente: commit y push del archivo 0071 (la base ya lo tiene) y
+considerar rotar los `codigo_acceso` de los alumnos con acceso por si el agujero se usó antes (hoy solo hay
+alumnos de prueba).
+
+### Verificado como cierto (de los informes)
+- Login del alumno: el contador bloquea la cuenta 5 min tras 20 intentos fallidos ANTES de mirar la contraseña
+  (un tercero que sepa el usuario puede dejar afuera al alumno) y "Demasiados intentos" delata que el usuario
+  existe; hash bcrypt con costo por defecto (6); contraseña autogenerada de ~30 bits con `Math.random()`;
+  sin tope de largo.
+- `create_gimnasio` no verifica si el usuario ya tiene gimnasio (bloquea el cobro de suscripciones).
+- `pagos` sin CHECK (monto negativo, fechas invertidas, descuentos absurdos); `numero` de comprobante = MAX+1
+  (se reutiliza si se borra el último) y la columna `numero` es escribible por el cliente.
+- `listAll` sin paginar (PostgREST corta en 1000 filas sin error); la baja automática por cuota vencida
+  corre en el navegador del profesor sobre esos datos.
+- La caché offline del profesor (`kairox_cache_*`: contacto, observaciones de salud, notas) solo se borra con
+  "Cerrar sesión" manual; `onAuthStateChange` no limpia cuando la sesión termina sola.
+- Borrar un alumno no borra su foto (`alumnos-fotos` es bucket público) ni sus fotos de progreso: choca con el
+  derecho de supresión (art. 16 Ley 25.326).
+- Plan Free: sin backups, logs de 1 día; hay dos Edge Functions de limpieza aún desplegadas.
+- Las políticas no distinguen admin de staff (solo `gimnasios` y el logo); `profiles.active` no se usa.
+
+### Refutado
+- "Un staff puede borrar el gimnasio con `eliminar_mi_cuenta`": la función solo borra el gimnasio si el rol es
+  admin; un staff borra únicamente su propia cuenta.
+- "Los plugins de Hostinger Horizons entran al build": no, solo con `command === 'serve'` (0 coincidencias en
+  el bundle desplegado).
+- Secretos en el código o en las 148 commits: ninguno (la clave anon/publishable es pública por diseño).
+
+### Sin verificar (hipótesis de los auditores)
+- Realtime sobre `alumnos` (¿el payload de UPDATE trae `password_hash`? ¿los DELETE filtran por RLS?): probar
+  con dos cuentas.
+- "Allow anonymous sign-ins" en el Dashboard de Auth: no es consultable desde acá; si estuviera prendido,
+  cualquiera sería `authenticated` y podría llamar `create_gimnasio`.
+- Max Rows de PostgREST (se asume 1000).
+
+### Lista de trabajo (orden propuesto)
+Ver la respuesta del cierre de esta sesión; de todo esto solo está implementada la 0071.
