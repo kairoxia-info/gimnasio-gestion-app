@@ -21,6 +21,7 @@ import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { borrarArchivosDeAlumno, borrarFotoPerfilAnterior } from '@/lib/storageAlumno';
 
 // Pedido de Nalux (08/09/2026): la foto pasa de "pegar una URL" a "subir el
 // archivo" -- en la práctica el profesor tiene la foto guardada en el
@@ -223,6 +224,9 @@ const AlumnosPage = () => {
                     } = supabase.storage.from('alumnos-fotos').getPublicUrl(path);
 
                     await updateRec('alumnos', id, { foto_url: publicUrl });
+                    // Si la foto anterior era de otro formato (jpg -> png), quedó
+                    // con otro nombre en el bucket público: se saca.
+                    await borrarFotoPerfilAnterior(profile.gimnasio_id, id, path);
                 } catch (_) {
                     setWarning(
                         'El alumno se guardó, pero la foto no se pudo subir. Se puede volver a intentar editando el alumno.',
@@ -244,11 +248,17 @@ const AlumnosPage = () => {
         setBorrando(true);
         setError('');
         try {
+            // Primero los archivos (foto de perfil -- bucket público -- y fotos
+            // de progreso), después la fila: con la fila borrada ya no habría
+            // forma de encontrarlos. Si algo falla acá NO se borra el alumno y
+            // el profesor puede reintentar (28/10/2026, auditoría: antes las
+            // fotos quedaban en el storage para siempre, art. 16 Ley 25.326).
+            await borrarArchivosDeAlumno(profile?.gimnasio_id, id);
             await removeRec('alumnos', id);
             setConfirmandoBorrarId(null);
             cargar();
         } catch (_) {
-            setError('No se pudo eliminar el alumno. Reintentar en unos minutos.');
+            setError('No se pudo eliminar el alumno ni sus fotos. Reintentar en unos minutos.');
         } finally {
             setBorrando(false);
         }
@@ -457,7 +467,7 @@ const AlumnosPage = () => {
                                 {confirmandoBorrarId === a.id ? (
                                     <div className="flex flex-wrap items-center gap-1.5">
                                         <span className="text-xs text-muted-foreground">
-                                            ¿Eliminar para siempre? Se borra también su historial.
+                                            ¿Eliminar para siempre? Se borra también su historial y sus fotos.
                                         </span>
                                         <ConfirmInlineActions
                                             className="px-3 py-2 text-xs"

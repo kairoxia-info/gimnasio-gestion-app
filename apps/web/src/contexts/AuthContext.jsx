@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
-import { limpiarTodoOffline } from '@/lib/offline';
+import { limpiarCacheDeLectura, limpiarTodoOffline } from '@/lib/offline';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 
 const AuthContext = createContext(null);
@@ -47,8 +47,15 @@ export const AuthProvider = ({ children }) => {
 
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return;
+            // La sesión terminó (vencida, revocada, cerrada desde otra pestaña
+            // o dispositivo): la caché de lectura -- alumnos con contacto y
+            // observaciones de salud -- no puede quedar en el navegador. Antes
+            // solo se borraba con el "Cerrar sesión" manual (28/10/2026,
+            // auditoría). A propósito NO se toca la cola de pagos pendientes
+            // (ver limpiarCacheDeLectura en lib/offline.js).
+            if (event === 'SIGNED_OUT') limpiarCacheDeLectura();
             setUser(session?.user ?? null);
             if (session?.user) {
                 await fetchProfile(session.user.id);
@@ -183,12 +190,24 @@ export const AuthProvider = ({ children }) => {
                     // 0068 -- misma regla que ya costó un bug el 16/09: cada
                     // bucket nuevo con carpeta por gimnasio tiene que estar acá,
                     // o sus archivos quedan huérfanos al borrar la cuenta.
+                    //
+                    // Bug de la auditoría del 28/10/2026: list() devuelve 100
+                    // archivos por defecto, así que un gimnasio con más de 100
+                    // fotos dejaba el resto huérfano. Ahora se repite listar +
+                    // borrar hasta que la carpeta queda vacía (borrar achica la
+                    // lista, así que siempre se pide desde el principio), con un
+                    // tope de vueltas para no quedar en un bucle si un borrado
+                    // fallara siempre.
                     for (const bucket of ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos', 'noticias-imagenes']) {
                         try {
-                            const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId);
-                            if (archivos?.length) {
+                            for (let vuelta = 0; vuelta < 50; vuelta += 1) {
+                                const { data: archivos } = await supabase.storage
+                                    .from(bucket)
+                                    .list(gimnasioId, { limit: 100 });
+                                if (!archivos?.length) break;
                                 const paths = archivos.map((a) => `${gimnasioId}/${a.name}`);
-                                await supabase.storage.from(bucket).remove(paths);
+                                const { error: errorBorrado } = await supabase.storage.from(bucket).remove(paths);
+                                if (errorBorrado) break;
                             }
                         } catch (_) {
                             // Ignorado a propósito -- ver comentario arriba.

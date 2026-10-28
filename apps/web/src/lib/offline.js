@@ -49,11 +49,28 @@ export const guardarEnCache = (tabla, opciones, datos) => {
     }
 };
 
+// La caché de lectura guarda alumnos con contacto, observaciones de salud y
+// notas (dato sensible, Ley 25.326) en claro en localStorage. Auditoría del
+// 28/10/2026: si se la deja para siempre, un celular robado o una compu
+// compartida conserva esos datos mucho después de que la sesión terminó. Como
+// la caché solo sirve de red de seguridad cuando falla la conexión, y se
+// reescribe en cada lectura exitosa (quien usa la app a diario la renueva
+// sola), pasadas 24 horas sin renovarse se descarta: quedarse un día entero
+// sin señal y necesitar justo esos datos viejos es mucho más raro que un
+// dispositivo perdido.
+const MAX_EDAD_CACHE_MS = 24 * 60 * 60 * 1000;
+
 export const leerDeCache = (tabla, opciones) => {
     try {
-        const crudo = localStorage.getItem(claveCache(tabla, opciones));
+        const clave = claveCache(tabla, opciones);
+        const crudo = localStorage.getItem(clave);
         if (!crudo) return null;
-        return JSON.parse(crudo).datos ?? null;
+        const { datos, guardadoEn } = JSON.parse(crudo);
+        if (!guardadoEn || Date.now() - guardadoEn > MAX_EDAD_CACHE_MS) {
+            localStorage.removeItem(clave);
+            return null;
+        }
+        return datos ?? null;
     } catch (_) {
         return null;
     }
@@ -183,6 +200,40 @@ export const limpiarTodoOffline = () => {
     localStorage.removeItem(CLAVE_COLA_FALLIDA);
     avisar();
     avisarFallida();
+};
+
+// Solo la caché de LECTURA (datos de alumnos, pagos, etc. ya vistos). NO toca la
+// cola de pagos/asistencia pendientes de mandar: se usa cuando la sesión se
+// termina SOLA (vencida, revocada, cerrada desde otra pestaña), y ahí borrar la
+// cola haría desaparecer cobros sin avisar -- limpiarTodoOffline() puede
+// hacerlo porque "Cerrar sesión" a mano avisa antes si hay pendientes.
+export const limpiarCacheDeLectura = () => {
+    Object.keys(localStorage)
+        .filter((k) => k.startsWith(PREFIJO_CACHE))
+        .forEach((k) => localStorage.removeItem(k));
+};
+
+// Portal del alumno: el service worker (public/sw.js) guarda la respuesta de
+// ver_plan_por_codigo de cada alumno que entra en ese dispositivo (nombre,
+// fecha de nacimiento, rutina, plan de comida, estado de cuota). "Cerrar
+// sesión" del alumno solo navegaba al login y esas copias quedaban en un
+// celular o tablet compartidos. Se borran SOLO las respuestas del plan, no el
+// resto de la caché (los archivos de la app siguen guardados para abrir sin
+// señal). Mejor esfuerzo: si el navegador no soporta Cache API, no pasa nada.
+export const limpiarPlanesDelAlumnoGuardados = async () => {
+    try {
+        if (typeof caches === 'undefined') return;
+        const nombres = (await caches.keys()).filter((n) => n.startsWith('kairox-'));
+        for (const nombre of nombres) {
+            const cache = await caches.open(nombre);
+            const pedidos = await cache.keys();
+            await Promise.all(
+                pedidos.filter((p) => p.url.includes('ver_plan_por_codigo')).map((p) => cache.delete(p)),
+            );
+        }
+    } catch (_) {
+        // sin Cache API o bloqueada: no hay nada que limpiar ni que romper
+    }
 };
 
 /* ---------------- Aviso de "se guardó algo" ---------------- */

@@ -6372,3 +6372,59 @@ los contadores; por la API REST pública con la clave anon y por SQL):
 existe en otro gimnasio por el mensaje de usuario repetido); el `codigo_acceso` en la URL sigue siendo una
 credencial al portador sin vencimiento (rediseño con sesiones del alumno: decisión aparte); las columnas
 `login_intentos_*` de `alumnos` quedan sin uso.
+
+## 28/10/2026 (noche) — Borrado real de los datos del alumno y limpieza de la caché del navegador
+
+Siguiente punto de la auditoría. Todo en el cliente (sin migración). Verificado de punta a punta con la sesión de
+Nalux en Mi GYM FIT (alumno descartable "ZZZ QA Fotos Borrar", borrado por la propia pantalla) y con un alumno
+descartable en la build de producción local (puerto 3000, la única con service worker). Sin commit al momento de
+escribir esto.
+
+### 1. "Eliminar alumno" ahora borra sus archivos (art. 16 Ley 25.326, supresión)
+
+Antes `AlumnosPage.borrar` hacía solo `removeRec('alumnos')`: la base borraba en cascada el progreso, pero la foto de
+perfil (`alumnos-fotos`, bucket PÚBLICO: la URL funciona sin sesión) y las fotos de progreso (`progreso-fotos`,
+fotos del cuerpo = dato de salud) quedaban en el storage para siempre.
+- **`lib/storageAlumno.js`** (nuevo): `borrarArchivosDeAlumno(gimnasioId, alumnoId)` consulta DIRECTO (no con
+  `listAll`, que cae a la caché local si falla la red y dejaría fotos nuevas sin borrar) los `foto_path` de
+  `progreso` del alumno y borra la foto de perfil en las 4 extensiones posibles (png/jpg/jpeg/webp: borrar un path
+  inexistente no da error) y las fotos de progreso en lotes de 100. **Lanza si algo falla** y `AlumnosPage` entonces
+  NO borra la fila ("No se pudo eliminar el alumno ni sus fotos. Reintentar..."): con la fila borrada ya no habría
+  forma de encontrar los archivos. Primero archivos, después fila.
+- **Reemplazo de foto**: al subir una foto de otro formato (jpg → png) el archivo anterior quedaba con otro nombre
+  en el bucket público; `borrarFotoPerfilAnterior()` lo saca (mejor esfuerzo, no muestra error).
+- **`AuthContext.eliminarCuenta`**: `storage.list()` devuelve 100 archivos por defecto, así que un gimnasio con más de
+  100 fotos dejaba el resto huérfano. Ahora repite listar + borrar hasta vaciar la carpeta (tope de 50 vueltas).
+- **Verificado**: alumno con foto de perfil `.png` → reemplazada por `.jpg` (queda solo el `.jpg`) + un registro de
+  progreso con foto → "Eliminar" desde la pantalla: alumno, foto de perfil y foto de progreso desaparecen; 0
+  archivos huérfanos en todo el storage (la única foto de progreso que queda es de "Alumno 6", del 15/09, que
+  pertenece a un registro real).
+- La confirmación de "Eliminar" ahora dice "Se borra también su historial y sus fotos." (a pedido de Nalux, para que nadie
+  se sorprenda). Nalux preguntó si se borraban imágenes suyas: se comprobó por SQL que no -- las únicas borradas fueron
+  las de prueba y las 3 de Fitness Place; "alumno 8" conserva su foto y la foto de progreso de "Alumno 6" sigue en su
+  registro. (8 alumnos tienen `foto_url` = texto vacío, no NULL: nunca tuvieron foto.)
+- **No cubierto todavía**: `alumnos-fotos` sigue siendo un bucket público (la foto de perfil se ve con la URL, sin
+  sesión). Pasarlo a privado con URL firmada (como `progreso-fotos`) es un cambio mayor (listas, ficha, portal) y
+  queda como decisión aparte. La CDN puede seguir sirviendo una foto borrada hasta que venza su caché (unos minutos).
+
+### 2. Limpieza de la caché del navegador
+
+- **Profesor**: `AuthContext.onAuthStateChange` llama a `limpiarCacheDeLectura()` en el evento `SIGNED_OUT` (sesión
+  vencida, revocada o cerrada desde otra pestaña); antes solo se limpiaba con el "Cerrar sesión" manual. A
+  PROPÓSITO no toca la cola de pagos/asistencia pendientes (esa se pierde solo en el cierre manual, que avisa antes).
+- **Vencimiento de 24 h** en la caché de lectura (`leerDeCache`): entradas más viejas, o sin fecha, se descartan y se
+  borran del `localStorage`. Se reescribe en cada lectura exitosa, así que quien usa la app a diario no lo nota.
+  Contenido: alumnos con contacto, observaciones de salud y notas. Se decidió NO sacar las observaciones de salud de
+  la caché: sin señal, la ficha las mostraría vacías y el profesor podría leerlo como "sin problemas de salud".
+- **Alumno**: el "Cerrar sesión" del portal (`MiPlanPage.cerrarSesion`) borra con `limpiarPlanesDelAlumnoGuardados()`
+  las copias de `ver_plan_por_codigo` del service worker (nombre, fecha de nacimiento, rutina, plan de comida, cuota)
+  y conserva los archivos de la app para abrir sin señal. Verificado en la build de producción: 1 plan guardado →
+  "Cerrar sesión" → 0 planes y 9 archivos de la app intactos. OJO: el link `/mi-plan/<código>` que queda en el
+  historial del navegador sigue abriendo el plan con señal (el código es la credencial; ver limitaciones del login).
+- **Verificado en el navegador**: lo fresco se lee; lo de 25 h y lo sin fecha se descartan y se borran;
+  `limpiarCacheDeLectura()` borra solo las claves `kairox_cache_*` y deja intacta la cola de pagos pendientes.
+  El gancho de `SIGNED_OUT` se verificó por lectura de código (provocarlo de verdad cerraría la sesión de Nalux en
+  el navegador del panel).
+
+**Archivos**: apps/web/src/lib/{storageAlumno (nuevo),offline}.js, apps/web/src/contexts/AuthContext.jsx,
+apps/web/src/pages/{AlumnosPage,MiPlanPage}.jsx.

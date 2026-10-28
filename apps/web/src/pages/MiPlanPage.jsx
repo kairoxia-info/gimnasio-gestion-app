@@ -25,6 +25,7 @@ import {
     X,
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
+import { limpiarPlanesDelAlumnoGuardados } from '@/lib/offline';
 import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
 import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
 import {
@@ -1047,10 +1048,19 @@ const MiPlanPage = () => {
 
     // Por si el celular es compartido con otra persona, o el alumno quiere
     // volver a entrar con otro usuario -- manda de nuevo al login
-    // (AlumnoLoginPage.jsx). Ya no hay ninguna "sesión" que borrar acá: desde
-    // el 14/09/2026 /alumno siempre pide usuario y contraseña, no queda
-    // guardado nada en localStorage (ver el comentario en AlumnoLoginPage.jsx).
+    // (AlumnoLoginPage.jsx). No hay una "sesión" que borrar: desde el 14/09/2026
+    // /alumno siempre pide usuario y contraseña, y no queda nada en localStorage
+    // (ver el comentario en AlumnoLoginPage.jsx).
+    //
+    // Pero el service worker SÍ guarda el plan de este alumno para verlo sin
+    // señal (nombre, fecha de nacimiento, rutina, comidas, cuota). En un
+    // celular o tablet compartidos eso quedaba para el siguiente que lo abriera
+    // (auditoría del 28/10/2026): ahora "Cerrar sesión" borra esas copias. No
+    // espera a que terminen -- si falla, igual se va al login. OJO: el link
+    // /mi-plan/<código> que quedó en el historial del navegador sigue abriendo
+    // el plan (con señal): ese código es la credencial, ver CONTEXT.md.
     const cerrarSesion = () => {
+        limpiarPlanesDelAlumnoGuardados();
         navigate('/alumno', { replace: true });
     };
 
