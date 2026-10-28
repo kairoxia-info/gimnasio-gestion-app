@@ -6158,3 +6158,104 @@ con lo que cuente el profesor.
 
 **Archivos**: apps/web/src/lib/errores.js (nuevo), apps/web/src/components/ErrorBoundary.jsx,
 apps/web/src/main.jsx.
+
+## 28/10/2026 — Tres correcciones: alumno borrado seguía viendo su plan, PDF con series repetidas, campanita "congelada"
+
+Reportadas por Nalux al cerrar el relevamiento de la semana de prueba. Las tres reproducidas o
+verificadas en local antes de tocar nada; gimnasio de prueba descartable "ZZZ QA" borrado al final
+(Fitness Place, cuenta real del cliente, no se tocó).
+
+### 1. Login de alumno borrado "sigue activo" (era el service worker, no el servidor)
+
+**Lo que NO era**: la base. Las 7 RPC del alumno (`iniciar_sesion_alumno`, `ver_plan_por_codigo`,
+`marcar_entrenamiento_hecho`, `alumno_cargar_peso`, `ver_progreso_alumno`, `marcar_notificacion_leida`,
+`aceptar_terminos_alumno`) ya filtran `activo = true`; "Eliminar" hace DELETE real de la fila y
+"dar de baja" pone `activo = false`. Ningún alumno tiene cuenta de Supabase Auth (`alumnos.user_id`
+nulo en todos), así que no hay otra vía de entrada. Un login nuevo con usuario/contraseña de un alumno
+borrado ya fallaba antes de este arreglo.
+
+**Lo que sí era** (reproducido en una build de producción local, puerto 3000): `public/sw.js` guarda
+la respuesta de `ver_plan_por_codigo` para que el alumno vea su plan sin señal, y trataba CUALQUIER
+respuesta de error de la red como "usá la copia guardada". Para un alumno borrado/inactivo la RPC
+lanza `Codigo de acceso invalido` (HTTP 400), el service worker lo tapaba con el último plan guardado
+y el portal seguía mostrando la rutina. Segundo hueco: con la pestaña ya abierta, el refresco
+silencioso de `MiPlanPage.jsx` ignoraba todo error, incluido "código inválido".
+
+**Arreglo**:
+- `public/sw.js`: si la respuesta es el rechazo explícito del código (400 con "digo de acceso inv",
+  sin depender de acentos), **borra la copia guardada y devuelve el error tal cual**. Cualquier otro
+  error de la RPC (límite de consultas, caída del servidor, 5xx) sigue cayendo a la copia, que es
+  para lo que existe el caché. Versión del caché `kairox-v2` → **`kairox-v3`**: al abrir el sitio con
+  señal, cada dispositivo descarta de una vez todo lo guardado antes (planes de alumnos que ya no
+  existen incluidos).
+- `MiPlanPage.jsx`: en el refresco silencioso, "código inválido" ahora saca el plan de la pantalla
+  y muestra "Este código no es válido o ya no está activo. Pedir al profesor un código nuevo."; el
+  resto de los errores (sin señal) siguen sin tapar el plan que ya se veía.
+
+**Verificado (build de producción local)**: alumno con el plan guardado → se lo borra → recarga =
+antes del arreglo seguía viendo la rutina; con el arreglo, el service worker se actualiza solo a v3,
+el caché queda en 0 planes y ve el cartel de código inválido. Alumno válido: sigue viendo su plan y
+queda guardado. Dar de baja con la pestaña abierta + volver a la pestaña → pasa al cartel y se borra
+su copia.
+
+**Límite conocido**: un celular que NUNCA vuelva a abrir el sitio con señal conserva la copia vieja
+hasta que lo haga (no hay forma de borrar un caché de un dispositivo a distancia). Para quien se
+conecta, el arreglo actúa en la siguiente visita. El código de acceso sigue siendo una credencial
+al portador mientras el alumno esté activo (regenerarlo desde la ficha lo invalida).
+
+### 2. PDF de rutina: las series se repetían en cada ejercicio del bloque
+
+`components/RutinaPDF.jsx`: en un bloque de varios ejercicios con las mismas series ("4x10", "4x8",
+"4x12") el "4x" salía en cada renglón. Ahora, si **todos** los ejercicios del bloque son simples (sin
+superserie ni pirámide) y comparten el mismo número de series, ese número sube **una vez** a la fila
+de encabezado del bloque ("4 SERIES | REPS") y los renglones muestran solo las reps. Es la misma idea
+que ya usaba `seriesXReps()` para las superseries. Sin cambios cuando: hay un solo ejercicio, las
+series difieren entre ejercicios, hay pirámide/superserie, o los ejercicios son por tiempo (sin
+series) — ahí queda "SERIES X REPS" por renglón como siempre. Solo toca el PDF (el de la ficha del
+profesor y el del portal usan el mismo componente); la pantalla del alumno no cambió.
+
+Verificado leyendo la hoja real generada con un alumno de prueba: Calentamiento "2 SERIES", Fuerza
+"4 SERIES", Circuito "3 SERIES", el ejercicio suelto queda "1x30" con "SERIES X REPS".
+
+### 3. Campanita "congelada" tras corregir un plan por vencer
+
+La campanita (`NotificacionesCampana.jsx`, vive en AppLayout) pedía sus datos solo al montarse, al
+llegar un alumno nuevo (realtime INSERT) y al volver a la pestaña. Si el profesor corregía la fecha
+de un plan en la ficha, o cargaba un pago, sin cambiar de pantalla, el aviso ya resuelto seguía
+ahí hasta navegar. Mismo origen para las alertas de cuota (pagos).
+
+**Arreglo**: aviso interno. `lib/offline.js` exporta `EVENTO_DATOS_CAMBIARON` y
+`avisarCambioDeDatos(tabla)`; `createRec`/`updateRec`/`removeRec` (`lib/data.js`) y la
+sincronización de pagos sin conexión lo disparan tras cada escritura exitosa sobre `alumnos`,
+`pagos`, `rutinas_asignadas` o `planes_alimentacion`. La campanita escucha, espera 300 ms (junta
+varias escrituras seguidas, ej. desactivar la rutina vieja y crear la nueva) y vuelve a pedir todo.
+Solo cubre el navegador del propio profesor; los cambios hechos desde otro dispositivo siguen
+llegando por "volver a la pestaña".
+
+**Verificado de punta a punta (28/10/2026, con la sesión de Nalux en Mi GYM FIT, localhost:3001)**:
+ficha de "Alumno 3" con la rutina vencida (campanita con 15 avisos, figuraba "Alumno 3 | Rutina |
+Venció") → se corrigió la fecha de fin y se guardó SIN salir de la ficha (misma URL): la campanita
+pasó a 14 y ese aviso desapareció. Igual con el plan de comida del mismo alumno: 14 → 13. Las dos
+fechas se restauraron a sus valores originales (2026-09-18 y 2026-09-30) al terminar. No se probó
+"Cobrar" (crearía un pago y gastaría un número de comprobante que no se puede deshacer); usa el
+mismo `createRec`, que dispara el mismo aviso.
+
+### Cuentas, 28/10/2026
+
+Nalux dejó abierta en el navegador del panel su cuenta de prueba **Mi GYM FIT**
+(nadiatecera13@gmail.com) para probar con sesión. La cuenta nadia.creceonline (gimnasio Fitness
+Place, pensada para que el profesor la usara de prueba) la elimina ella: **deja de valer** lo escrito
+el 21/09 de que Fitness Place era la cuenta real del cliente. Ese día se comprobó que el gimnasio
+Fitness Place seguía en la base SIN profesor (0), con 2 alumnos y 3 pagos: cuenta de acceso
+borrada, gimnasio no. **Nalux autorizó borrarlo y se borró el mismo día**: primero sus 3 archivos
+del storage (foto de un alumno, logo, imagen de una noticia) con la Edge Function de un solo uso
+`cleanup-fitness-place-test`, reescrita a su versión 2 con esos 3 paths fijos y sin parámetros
+(mismo método que el 16/09 y el 18/09: `storage.objects` no se puede borrar por SQL y la cascada no
+toca el storage); después el DELETE del gimnasio con cascada, con guardas (ese id, ese nombre y sin
+profesores). Verificado por SQL: 0 alumnos, 0 pagos y 0 archivos de ese gimnasio, 0 archivos
+huérfanos en todo el storage. Hoy existe un solo gimnasio, Mi GYM FIT (11 alumnos). Las dos Edge
+Functions de limpieza siguen desplegadas (no hay forma de borrarlas desde acá): son inofensivas,
+sus paths ya no existen, pero conviene borrarlas a mano en Supabase → Edge Functions.
+
+**Archivos**: apps/web/public/sw.js, apps/web/src/pages/MiPlanPage.jsx,
+apps/web/src/components/{RutinaPDF,NotificacionesCampana}.jsx, apps/web/src/lib/{offline,data}.js.

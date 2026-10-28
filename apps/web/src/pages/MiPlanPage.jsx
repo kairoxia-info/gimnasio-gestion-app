@@ -1000,12 +1000,20 @@ const MiPlanPage = () => {
                 })
                 .catch((err) => {
                     if (cancelado) return;
-                    // El refresco silencioso, si falla (sin señal justo en ese
-                    // instante, por ejemplo), no reemplaza el plan que ya se
-                    // estaba viendo por una pantalla de error -- eso sí sería
-                    // peor que no actualizar nada.
-                    if (!mostrarCargando) return;
                     const msg = err?.message || '';
+                    // Que el servidor diga "código inválido" NO es una falla de
+                    // señal: el profesor borró al alumno, lo dio de baja o le
+                    // regeneró el código. Hay que sacarle el plan de la
+                    // pantalla ya, también en el refresco silencioso -- con la
+                    // pestaña abierta, antes seguía viendo su rutina hasta
+                    // cerrarla a mano (28/10/2026).
+                    if (!mostrarCargando && esCodigoInvalido(msg)) setPlan(null);
+                    // El refresco silencioso, si falla por cualquier otra cosa
+                    // (sin señal justo en ese instante, por ejemplo), no
+                    // reemplaza el plan que ya se estaba viendo por una
+                    // pantalla de error -- eso sí sería peor que no
+                    // actualizar nada.
+                    if (!mostrarCargando && !esCodigoInvalido(msg)) return;
                     if (esCodigoInvalido(msg)) {
                         setError(
                             'Este código no es válido o ya no está activo. Pedir al profesor un código nuevo.',

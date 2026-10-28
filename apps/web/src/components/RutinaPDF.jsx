@@ -1,5 +1,12 @@
 import { createPortal } from 'react-dom';
-import { agruparCombos, agruparItemsRutina, agruparPorBloque, resumenSeries, resumenTipoGrupo } from '@/lib/format';
+import {
+    agruparCombos,
+    agruparItemsRutina,
+    agruparPorBloque,
+    resumenSeries,
+    resumenTipoGrupo,
+    tieneSeriesDetalle,
+} from '@/lib/format';
 
 // Diseño de PDF de rutina, con la marca del gimnasio (logo, nombre, color) y
 // el rango de fechas del plan -- el mismo que ya se armó para MiPlanPage.jsx
@@ -69,6 +76,25 @@ const seriesXReps = (it) => {
     const repsTexto = it.comboItems.map((x) => x.reps).join('+');
     return `${seriesTexto}x${repsTexto}`;
 };
+
+// Reportado por Nalux (28/10/2026): en un bloque de varios ejercicios con las
+// mismas series ("4x10", "4x8", "4x12") el "4x" se repetía en cada renglón;
+// tiene que aparecer una sola vez arriba del bloque. Misma idea que ya usa
+// seriesXReps() para las superseries (series una vez si coinciden), ahora a
+// nivel bloque: si TODOS los ejercicios son simples (sin superserie ni
+// pirámide) y comparten el mismo número de series, ese número sube al
+// encabezado y cada renglón muestra solo las reps. Con un solo ejercicio no
+// hay nada repetido, y con series distintas (o por tiempo, sin series) el
+// bloque queda como siempre: "SERIES X REPS" por renglón.
+const seriesComunDelBloque = (delBloque) => {
+    if (delBloque.length < 2) return null;
+    if (delBloque.some((it) => it.esCombo || tieneSeriesDetalle(it))) return null;
+    const series = delBloque.map((it) => String(it.series ?? '').trim());
+    if (!series[0] || series.some((s) => s !== series[0])) return null;
+    return series[0];
+};
+
+const textoSeriesComunes = (series) => `${series} ${Number(series) === 1 ? 'serie' : 'series'}`;
 
 // Sin fallback con ícono de pesa como en pantalla: en un PDF impreso, si no
 // hay logo cargado simplemente no se muestra nada, no aporta mostrar un
@@ -162,7 +188,9 @@ export const RutinaImprimiblePDF = ({
                             >
                                 {dia}
                             </div>
-                            {agruparPorBloque(agruparCombos(itemsDia)).map(([bloque, delBloque], i) => (
+                            {agruparPorBloque(agruparCombos(itemsDia)).map(([bloque, delBloque], i) => {
+                                const seriesComun = seriesComunDelBloque(delBloque);
+                                return (
                                 <div key={`${bloque}-${i}`} style={{ marginTop: '8pt' }}>
                                     {/* Reportado por Nalux (15/09/2026): "saca ejercicio de las
                                         cajas negras que deberían ser cajas del color del gym, y
@@ -202,8 +230,15 @@ export const RutinaImprimiblePDF = ({
                                             repite la palabra "Ejercicio" en una caja negra. */}
                                         <thead>
                                             <tr style={{ background: '#eee', color: '#444' }}>
-                                                <th style={{ textAlign: 'left', padding: '3pt 6pt', fontWeight: 600 }}>
-                                                    &nbsp;
+                                                <th
+                                                    style={{
+                                                        textAlign: 'left',
+                                                        padding: '3pt 6pt',
+                                                        fontWeight: 600,
+                                                        fontSize: '8.5pt',
+                                                    }}
+                                                >
+                                                    {seriesComun ? textoSeriesComunes(seriesComun).toUpperCase() : <>&nbsp;</>}
                                                 </th>
                                                 <th
                                                     style={{
@@ -213,7 +248,7 @@ export const RutinaImprimiblePDF = ({
                                                         fontSize: '8.5pt',
                                                     }}
                                                 >
-                                                    SERIES X REPS
+                                                    {seriesComun ? 'REPS' : 'SERIES X REPS'}
                                                 </th>
                                             </tr>
                                         </thead>
@@ -233,14 +268,15 @@ export const RutinaImprimiblePDF = ({
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '3pt 6pt', textAlign: 'right' }}>
-                                                        {seriesXReps(it)}
+                                                        {seriesComun ? it.reps || '—' : seriesXReps(it)}
                                                     </td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ))}
                 </div>

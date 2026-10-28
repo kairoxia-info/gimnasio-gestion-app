@@ -1,6 +1,6 @@
 import supabase from '@/lib/supabaseClient';
 import { getCurrentGimnasioId } from '@/lib/currentGimnasio';
-import { esErrorDeRed, guardarEnCache, leerDeCache } from '@/lib/offline';
+import { avisarCambioDeDatos, esErrorDeRed, guardarEnCache, leerDeCache } from '@/lib/offline';
 
 // Traduce el string de sort heredado del cliente anterior ('-created_at' |
 // 'nombre') a los args de .order() de supabase-js. Sin sort => sin .order(): varias
@@ -97,6 +97,7 @@ export const createRec = async (collection, data) => {
         .select(columnasDe(collection))
         .single();
     if (error) throw error;
+    avisarCambioDeDatos(collection);
     return creado;
 };
 
@@ -108,12 +109,14 @@ export const updateRec = async (collection, id, data) => {
         .select(columnasDe(collection))
         .single();
     if (error) throw error;
+    avisarCambioDeDatos(collection);
     return actualizado;
 };
 
 export const removeRec = async (collection, id) => {
     const { error } = await supabase.from(collection).delete().eq('id', id);
     if (error) throw error;
+    avisarCambioDeDatos(collection);
 };
 
 // Fila de rutinas_asignadas a partir de una rutina de la biblioteca: además

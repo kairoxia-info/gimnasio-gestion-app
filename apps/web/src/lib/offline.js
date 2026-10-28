@@ -185,6 +185,26 @@ export const limpiarTodoOffline = () => {
     avisarFallida();
 };
 
+/* ---------------- Aviso de "se guardó algo" ---------------- */
+
+// Reportado por Nalux (28/10/2026): el profesor corrige un plan por vencer y
+// el aviso de la campanita queda ahí aunque ya se resolvió. La campanita
+// (NotificacionesCampana.jsx) vive en AppLayout y pide sus datos al montarse,
+// al llegar un alumno nuevo y al volver a la pestaña -- pero NO cuando el
+// profesor guarda algo en la misma pantalla (corregir la fecha de un plan en
+// la ficha, cargar un pago): hasta cambiar de pantalla seguía mostrando datos
+// viejos. Esto es el aviso interno: cada escritura exitosa sobre una tabla
+// que la campanita mira dispara este evento en window y ella vuelve a
+// preguntar. Solo cuenta el navegador de ESTE profesor; los cambios hechos
+// desde otro dispositivo los cubre el "volver a la pestaña" de la campanita.
+export const EVENTO_DATOS_CAMBIARON = 'kairox:datos-cambiaron';
+const TABLAS_QUE_MIRA_LA_CAMPANA = new Set(['alumnos', 'pagos', 'rutinas_asignadas', 'planes_alimentacion']);
+
+export const avisarCambioDeDatos = (tabla) => {
+    if (typeof window === 'undefined' || !TABLAS_QUE_MIRA_LA_CAMPANA.has(tabla)) return;
+    window.dispatchEvent(new Event(EVENTO_DATOS_CAMBIARON));
+};
+
 /* ---------------- Sincronización ---------------- */
 
 // En orden, uno por uno (no en paralelo): para pagos importa que se manden
@@ -206,6 +226,7 @@ export const sincronizarCola = async () => {
                             { onConflict: 'client_id', ignoreDuplicates: true },
                         );
                     if (error) throw error;
+                    avisarCambioDeDatos('pagos');
                 } else if (item.tipo === 'asistencia') {
                     const { error } = await supabase
                         .from('asistencias')

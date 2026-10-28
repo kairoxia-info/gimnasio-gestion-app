@@ -31,7 +31,16 @@
 // catch de más abajo) y la app nunca llega a arrancar. Subiendo v2 para que
 // cualquier celular con la v1 vieja todavía guardada la descarte entera en
 // vez de mezclar archivos de las dos versiones.
-const CACHE_NAME = 'kairox-v2';
+//
+// v3 (28/10/2026): bug de seguridad reportado por Nalux -- un alumno que el
+// profesor borra (o da de baja) seguía viendo su rutina. El servidor lo
+// rechaza bien (ver_plan_por_codigo lanza "Codigo de acceso invalido"), pero
+// este service worker trataba CUALQUIER respuesta de error de la red como "usá
+// la copia guardada" y devolvía el último plan del alumno borrado. Ver el
+// bloque de esConsultaDelPlan más abajo. Subir la versión además descarta de
+// una vez todo lo guardado antes del arreglo (planes de alumnos que ya no
+// existen incluidos) en cada dispositivo que vuelva a abrir el sitio con señal.
+const CACHE_NAME = 'kairox-v3';
 const MARCADOR_PLAN = '/rest/v1/rpc/ver_plan_por_codigo';
 // Key fija donde queda guardada una copia del documento HTML de la SPA
 // (siempre el mismo, sea cual sea la ruta -- React Router decide qué
@@ -65,6 +74,20 @@ async function keyParaConsultaDelPlan(request) {
     return new Request(`${request.url}#body=${encodeURIComponent(body)}`, { method: 'GET' });
 }
 
+// ¿La respuesta de error es el rechazo explícito del código de acceso? La RPC
+// lo devuelve como HTTP 400 con message "Codigo de acceso invalido" (se
+// compara sin depender de acentos ni mayúsculas). Se lee de un clone() para
+// no consumir el cuerpo que va a recibir la página.
+async function esCodigoRechazado(respuesta) {
+    if (respuesta.status !== 400) return false;
+    try {
+        const cuerpo = await respuesta.clone().json();
+        return /digo de acceso inv/i.test(String(cuerpo?.message || ''));
+    } catch (_) {
+        return false;
+    }
+}
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET' && request.method !== 'POST') return;
@@ -91,6 +114,19 @@ self.addEventListener('fetch', (event) => {
                     // genérica de la SPA -- todas devuelven el mismo index.html,
                     // React Router arma la pantalla del lado del cliente.
                     if (esNavegacion) cache.put(APP_SHELL_KEY, respuestaRed.clone());
+                    return respuestaRed;
+                }
+                // El servidor RESPONDIÓ que ese código no sirve (alumno
+                // borrado, dado de baja, o código regenerado): esa es la
+                // respuesta definitiva, no una falla de conexión. Se borra la
+                // copia guardada -- si no, al quedarse sin señal después, el
+                // plan de alguien sin acceso volvería a aparecer -- y se
+                // devuelve el error tal cual para que la pantalla lo muestre.
+                // Cualquier otro error de la RPC (límite de consultas, caída
+                // momentánea del servidor, 5xx) sigue cayendo a la copia, que
+                // es justo para lo que existe este caché.
+                if (esConsultaDelPlan && (await esCodigoRechazado(respuestaRed))) {
+                    await cache.delete(cacheKey);
                     return respuestaRed;
                 }
                 // La red respondió (no es un error de conexión) pero con un

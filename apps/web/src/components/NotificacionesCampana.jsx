@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Bell, CalendarClock } from 'lucide-react';
 import { listAll } from '@/lib/data';
+import { EVENTO_DATOS_CAMBIARON } from '@/lib/offline';
 import { ESTADOS_PAGO, estadoCuota, planesPorVencer } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
@@ -101,6 +102,26 @@ const NotificacionesCampana = () => {
             supabase.removeChannel(canal);
         };
     }, [profile?.gimnasio_id, cargar]);
+
+    // El propio profesor guardó algo que esta campanita mira (corrigió la
+    // fecha de un plan, cargó un pago, aprobó un alumno): se vuelve a pedir
+    // todo para que el aviso que ya se resolvió se cierre solo, sin tener que
+    // cambiar de pantalla (28/10/2026, ver EVENTO_DATOS_CAMBIARON en
+    // lib/offline.js). Pequeña espera para juntar varias escrituras seguidas
+    // (por ejemplo, desactivar la rutina vieja y crear la nueva) en una sola
+    // consulta.
+    useEffect(() => {
+        let espera;
+        const alCambiar = () => {
+            clearTimeout(espera);
+            espera = setTimeout(cargar, 300);
+        };
+        window.addEventListener(EVENTO_DATOS_CAMBIARON, alCambiar);
+        return () => {
+            clearTimeout(espera);
+            window.removeEventListener(EVENTO_DATOS_CAMBIARON, alCambiar);
+        };
+    }, [cargar]);
 
     // Red de seguridad para cuando el websocket se cortó sin avisar (el wifi
     // del gimnasio, el celular que se durmió): al volver a la pestaña se
