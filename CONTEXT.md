@@ -6742,9 +6742,40 @@ gimnasio borra solo sus alumnos/pagos/asignaciones (la biblioteca compartida sig
      backend), de modo que sin pagar quede solo lectura/exportar, y nunca "gratis para siempre".
   6. Nada se decide con un dato que el cliente pueda editar: el estado del servicio solo lo escribe el servidor (webhook firmado de
      la pasarela), y las columnas del estado no entran en los permisos de `authenticated`.
-- **A confirmar con Nalux (contradicción aparente)**: antes dijo "cobro por gimnasio"; ahora "una suscripción mensual del profesor".
-  ¿Una suscripción POR CADA gimnasio (el dueño paga una por gimnasio) o UNA SOLA del dueño que cubre todos sus gimnasios? Con la
-  organización (dueño) por encima de los gimnasios el diseño sirve para las dos; cambia dónde vive la tabla `suscripciones`.
+- **DECIDIDO por Nalux (28/10/2026): UNA SOLA suscripción del profesor cubre todos sus gimnasios** (reemplaza el "cobro por gimnasio"
+  de antes). Consecuencias de diseño: la tabla `suscripciones` cuelga de `organizaciones` (el dueño), no de `gimnasios`; el estado
+  del servicio (activo / vencido / sin pagar) se resuelve por `gimnasios.organizacion_id` en todos los puntos de entrada (crear
+  gimnasio, cuentas de staff, portal y login del alumno, autoregistro por link, API directa); todos los gimnasios de la organización
+  quedan activos o bloqueados juntos. Staff y alumnos nunca ven nada de la suscripción de la app.
+- **DECIDIDO por Nalux (28/10/2026) — planes y vencimiento**:
+  - Tres planes por cantidad de gimnasios: **básico hasta 1**, **segundo hasta 3**, **tercero hasta 10**. `create_gimnasio` hoy tiene un
+    tope fijo de 10 por cuenta (0076); cuando se construya el módulo, el tope pasa a salir del plan de la organización y se valida
+    en el servidor (no en el cliente). Bajar de plan con más gimnasios de los que admite el plan nuevo: definir al construir.
+  - Si la suscripción vence: **solo lectura durante 7 días**; si no paga en esa semana, **bloqueo total**. El estado lo calcula el
+    servidor a partir de la fecha de vencimiento (activo → gracia en solo lectura → bloqueado), nunca el cliente. En solo lectura
+    el servidor rechaza toda escritura (RLS/RPC), no solo la oculta la pantalla. En bloqueo total solo el dueño debe poder entrar a
+    la pantalla de pago para regularizar. Los 7 días cuentan desde el vencimiento y se muestran como aviso al dueño (no al staff).
+- **Cobro a alumnos por el staff (aclarado 28/10/2026)**: Nalux pidió que "al cobro también lo puedan hacer los staff". Se interpreta
+  como **registrar los pagos de los alumnos** (pantalla Pagos, comprobantes), no la suscripción de la app: el staff puede registrar
+  y ver pagos de alumnos de SU gimnasio, pero no ve ni toca la suscripción. A reflejar en la matriz de permisos admin/staff de la
+  fase B (hoy el staff ya tiene acceso a Pagos por RLS del gimnasio).
+- **DECIDIDO por Nalux (28/10/2026) — permisos del staff sobre dinero + BITÁCORA**: el staff **puede anular pagos, editar precios y
+  ver el cierre de caja**. Condición ("algo importante"): **al administrador le tiene que quedar registrado qué staff editó o anuló
+  un pago**. Diseño propuesto (sin construir):
+  - Estado actual: `pagos` NO guarda quién lo hizo (columnas: id, gimnasio_id, alumno_id, monto, monto_adeudado, fecha_pago,
+    periodo_*, estado, descuento, interes, metodo, notas, created_at, numero, client_id) y `configuracion_precios` tampoco. Hay que
+    sumar la bitácora; no existe nada parecido hoy.
+  - Tabla `bitacora` (gimnasio_id, user_id, rol, accion, tabla, registro_id, antes jsonb, despues jsonb, creado_en) escrita por
+    **triggers en la base** sobre `pagos` (alta, edición, anulación/borrado) y `configuracion_precios` (alta, edición, baja), con
+    `auth.uid()` como autor. Así no depende del cliente y no se puede saltear llamando a la API directo.
+  - Nadie escribe ni borra la bitácora a mano (sin permisos de INSERT/UPDATE/DELETE para `authenticated`, ni siquiera el admin):
+    solo la leen los **administradores** del gimnasio (RLS con `get_mi_rol() = 'admin'`); el staff NO la ve (si la viera podría saber
+    qué se mira). El nombre del autor se guarda también como texto (email/nombre al momento del hecho) por si la cuenta se borra.
+  - También `pagos.registrado_por` (quién cargó el pago) para que el cierre de caja pueda mostrar la caja por persona.
+  - Pantalla para el admin (en Pagos o Configuración): lista "quién, qué, cuándo, antes → después", filtrable por staff y por fecha.
+  - Pendiente: decidir si anular un pago es borrarlo o marcarlo "anulado" (conviene lo segundo: no se pierde el número de comprobante
+    y el cierre de caja sigue cuadrando); si el staff anula, exigir un motivo obligatorio.
+  - Va en la fase B, junto con las cuentas de staff; si se hace antes, la bitácora igual sirve para el admin (queda su propio rastro).
 
 ## 28/10/2026 (noche) — Etapa A1 (varios gimnasios por profesor): migración 0076 APLICADA y probada; cliente listo
 
@@ -6811,3 +6842,94 @@ se cambiaba de gimnasio, esta pestaña habría empezado a ver el otro. Ahora `Au
 **Archivos**: supabase/migrations/0076_multi_gimnasio_membresias.sql (aplicada), apps/web/src/contexts/AuthContext.jsx,
 apps/web/src/components/{SelectorGimnasio (nuevo),ProtectedRoute,AppLayout}.jsx, apps/web/src/components/configuracion/MisGimnasios.jsx (nuevo),
 apps/web/src/pages/{Onboarding,Configuracion}Page.jsx.
+
+## 28/10/2026 (noche) — Etapa A2 (biblioteca compartida entre gimnasios del mismo dueño): migración 0077 APLICADA y probada; cliente listo
+
+Nalux pidió seguir con A2 ("sigue con a2"). **La 0077 está APLICADA** (Nalux: "Aplicá la 0077", 28/10/2026) en el proyecto `fftdmpqbemcnxdnfnvhd`. Pedido de Nalux al aplicar: que cuando algo se borre no influya en los demás gimnasios.
+Decisión de A (28/10): rutinas y ejercicios propios se comparten entre los gimnasios del dueño; las PERSONAS asignadas no se ven entre
+gimnasios. Alimentos y planes de alimentación NO se tocaron (no se pidió compartirlos; queda como pregunta).
+
+### Hallazgos antes de diseñar
+- `ejercicios` (503: 500 de la biblioteca base con `gimnasio_id` NULL y 3 propios) y `rutinas` (5) colgaban de `gimnasio_id` con FK
+  ON DELETE CASCADE: borrar el gimnasio que creó una rutina compartida se la habría llevado a los demás.
+- `rutinas_asignadas` ya guarda una copia congelada (nombre, descripción, items) y `rutina_id` es ON DELETE SET NULL: un alumno
+  conserva su rutina aunque la rutina se borre. Es por gimnasio (RLS sin cambios), así que las personas asignadas NO se mezclan.
+- Los archivos de ejercicios están en `ejercicios-media/<gimnasio_id>/<ejercicio_id>.<ext>` y sus políticas exigían carpeta = gimnasio
+  abierto y `e.gimnasio_id = gimnasio abierto`: desde el gimnasio B no se podía subir el archivo de un ejercicio creado en A, y
+  borrar A habría dejado B con imágenes rotas.
+- `ver_plan_por_codigo` (portal del alumno) buscaba la demostración solo entre ejercicios del gimnasio del alumno o de la base.
+- Ninguna vista ni otra función usa estas tablas; `biblioteca_ocultos` es por gimnasio y se deja así.
+
+### Migración `supabase/migrations/0077_biblioteca_compartida_por_organizacion.sql`
+- `get_mi_organizacion_id()` y `carpeta_es_de_mi_organizacion(texto)`.
+- `organizacion_id` en `ejercicios` y `rutinas` (relleno desde el gimnasio, FK ON DELETE CASCADE a `organizaciones`, DEFAULT = la del
+  gimnasio abierto, así el cliente no cambia al crear). `rutinas.organizacion_id` NOT NULL; en `ejercicios` NULL solo para la base
+  (`CHECK organizacion_id IS NOT NULL OR (gimnasio_id IS NULL AND origen='global')`). `gimnasio_id` pasa a "creado en" con FK
+  ON DELETE SET NULL (y `rutinas.gimnasio_id` admite NULL). Al borrar el ÚLTIMO gimnasio la 0076 ya borra la organización y por
+  cascada se va su biblioteca.
+- Políticas por organización (SELECT/INSERT/UPDATE/DELETE). INSERT exige además `gimnasio_id` = gimnasio abierto; UPDATE no (editar en
+  B una rutina creada en A deja `gimnasio_id` = A).
+- Trigger `biblioteca_fijar_dueno`: `organizacion_id` nunca cambia y `gimnasio_id` solo puede pasar a NULL (lo hace la FK).
+- Trigger `rutinas_asignadas_validar_rutina`: la rutina asignada tiene que ser de la organización de ese gimnasio (antes la FK aceptaba
+  el id de cualquier gimnasio: hueco de aislamiento menor, cerrado).
+- Storage `ejercicios-media`: lo nuevo va a la carpeta de la ORGANIZACIÓN; se aceptan también las carpetas de gimnasios de la
+  organización (archivos viejos y clientes sin actualizar) para subir/reemplazar/borrar.
+- `ver_plan_por_codigo`: se cambia SOLO el filtro de ejercicios (con `RAISE` si el texto no coincide, como en la 0076).
+- `mi_contexto()`: suma `organizacion_id` y, por gimnasio, `otros_en_organizacion`.
+
+### Cliente (compatible con la base sin migrar; sin commit)
+- `AuthContext`: `profile.organizacion_id`; `limpiarArchivosDelGimnasio(gimnasioId, { organizacionId, otrosEnOrganizacion })`: los archivos
+  de ejercicios solo se borran al eliminar el ÚLTIMO gimnasio (carpeta del gimnasio y de la organización); con otros gimnasios se
+  conservan porque esos ejercicios siguen en uso. Lo usan `eliminarGimnasioActivo` y `eliminarCuenta`.
+- `EjerciciosPage`: archivos a `<organizacion_id>/<id>.<ext>` (si no hay organización, la carpeta del gimnasio como antes), saca el
+  archivo anterior si estaba en otra ruta, "base" = sin organización (con la columna presente), y con 2+ gimnasios el subtítulo dice que
+  los propios se comparten.
+- `RutinasPage`: con 2+ gimnasios el subtítulo y el aviso de borrado explican que se comparte (el borrado también la saca de los otros
+  gimnasios; quien ya la tiene asignada la conserva).
+- Lint OK. Build y pruebas en pantalla: pendientes (dependen de aplicar la 0077).
+
+### Resultados de las pruebas (28/10/2026)
+- Estructura tras aplicar: 5 rutinas y 3 ejercicios propios con la organización de Mi GYM FIT, 500 ejercicios base intactos, 15 asignaciones
+  intactas, FK `gimnasio_id` de ambas tablas en ON DELETE SET NULL, 8 políticas nuevas (4 por tabla), portal actualizado, `anon` sin
+  permiso sobre las funciones nuevas. Su sesión siguió funcionando (5 rutinas visibles, sin errores de consola).
+- Aislamiento con sesiones simuladas (bloque DO con rollback: gimnasio F, otro gimnasio Z del mismo dueño, y un usuario de otra
+  organización): Z ve la biblioteca compartida (5 rutinas, 503 ejercicios) pero 0 asignaciones y solo sus alumnos; Z puede crear y
+  editar rutinas compartidas y asignarlas a SU alumno; F ve la rutina creada en Z (6) pero NO la asignación de Z (15); un usuario de
+  otra organización ve solo lo suyo (1 rutina, 500 ejercicios base), no puede ver/editar/borrar rutinas ajenas ni crear rutinas o
+  ejercicios en una organización ajena, no puede asignar una rutina ajena (trigger: "La rutina no pertenece a este gimnasio") y
+  nadie puede editar ni borrar un ejercicio de la base; `organizacion_id` no se puede cambiar (el trigger lo fija, sin error);
+  carpetas de Storage correctas (organización y gimnasios propios sí, ajenos no); subir archivo de un ejercicio creado en F desde Z
+  sí, a carpeta ajena no; el portal del alumno de Z muestra la demostración de un ejercicio creado en F.
+- Borrados: borrar el gimnasio Z deja su rutina en la biblioteca con `gimnasio_id` NULL, las 6 rutinas de la organización, las 15
+  asignaciones de F y los 3 ejercicios propios; sus asignaciones se van con él. Borrar la organización (último gimnasio) se lleva su
+  biblioteca y nada de la otra.
+- Pantalla real con la cuenta de prueba y un gimnasio "ZZZ QA B": las 5 rutinas compartidas aparecen en el gimnasio nuevo con el aviso
+  "se comparten" y "Plan superseries" con 0 alumnos (en Mi GYM FIT tiene 2); un ejercicio con archivo creado en ZZZ guarda el archivo en
+  la carpeta del DUEÑO (`<organizacion_id>/<ejercicio_id>.png`), aparece en Mi GYM FIT como propio y editable; tras borrar el gimnasio
+  ZZZ el ejercicio y su archivo siguen (archivo responde 200) y se ve editable; al borrar el ejercicio desde la pantalla se borra
+  también su archivo (política de borrado por carpeta de organización).
+- Todo lo de prueba se limpió: vuelve a 1 gimnasio, 1 organización, 503 ejercicios, 3 archivos de ejercicios, 5 rutinas, 15 asignaciones,
+  11 alumnos, 0 logos huérfanos.
+- **Bug encontrado y corregido en el cliente**: `EjerciciosPage` decidía "predefinido, no editable" con `gimnasio_id`; al borrar el
+  gimnasio donde se creó un ejercicio, `gimnasio_id` pasa a NULL y habría quedado como predefinido. Ahora usa `organizacion_id` (`esBase`).
+- Cambio extra: con 2+ gimnasios, "Eliminar" un ejercicio pide confirmación ("Eliminar para todos") porque se borra de todos.
+- **Sin probar en pantalla** (necesitan 2 gimnasios abiertos o la contraseña de Nalux): el cartel de confirmación de borrar un ejercicio con 2
+  gimnasios, y la limpieza de Storage del cliente al "Eliminar este gimnasio" cuando quedan otros gimnasios (se omite el bucket de
+  ejercicios; la lógica está en `limpiarArchivosDelGimnasio`, la base ya probada).
+- Pendiente opcional: mover a mano los 3 archivos de Mi GYM FIT (carpeta del gimnasio) a la carpeta de la organización y actualizar su
+  `media_url`; las políticas aceptan las dos carpetas. Si se borra Mi GYM FIT siendo el último, el cliente limpia las dos carpetas.
+
+### Pruebas que se habían previsto (referencia)
+1. Estructura: 5 rutinas y 3 ejercicios propios con la organización de Mi GYM FIT; 500 ejercicios base intactos; su sesión sigue igual.
+2. JWT simulados (con rollback): un usuario de OTRA organización no ve ni toca rutinas/ejercicios propios; dos gimnasios de la misma
+   organización ven la misma biblioteca pero NO las rutinas asignadas del otro; `organizacion_id` no se puede cambiar; no se puede asignar una
+   rutina de otra organización; borrar un gimnasio conserva la biblioteca y borrar el último la borra; la demostración del ejercicio se ve
+   en el portal del alumno del gimnasio B para un ejercicio creado en el A; la base sigue siendo visible para todos y no editable.
+3. Pantalla real con la cuenta de prueba y un gimnasio "ZZZ QA": crear rutina/ejercicio en un gimnasio y verlo en el otro, asignar en el
+   otro, subir archivo desde el otro gimnasio, borrar el gimnasio donde se creó y comprobar que el otro conserva todo. Mover a mano
+   (por Storage) los 3 archivos de Mi GYM FIT a la carpeta de la organización y actualizar su `media_url` (opcional: las políticas
+   aceptan las dos carpetas).
+4. Limpieza de todo lo creado en las pruebas (rutinas, ejercicios, gimnasio ZZZ y sus archivos).
+
+**Archivos**: supabase/migrations/0077_biblioteca_compartida_por_organizacion.sql (APLICADA), apps/web/src/contexts/AuthContext.jsx,
+apps/web/src/pages/{Ejercicios,Rutinas}Page.jsx.

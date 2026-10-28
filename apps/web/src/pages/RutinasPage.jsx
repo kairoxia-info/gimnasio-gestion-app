@@ -71,7 +71,7 @@ const vacio = { nombre: '', descripcion: '', duracion_semanas: 4 };
 // N alumnos (rutinas_asignadas). Reemplaza al viejo modelo "un plan por
 // alumno" que vivía embebido en AlumnoPage — ver PLAN.md, Decisión 4.
 const RutinasPage = () => {
-    const { gimnasio } = useAuth();
+    const { gimnasio, profile } = useAuth();
     const [rutinas, setRutinas] = useState([]);
     const [ejercicios, setEjercicios] = useState([]);
     const [asignadasActivas, setAsignadasActivas] = useState([]);
@@ -717,9 +717,16 @@ const RutinasPage = () => {
     const avisoBorrar = (r) => {
         const asignados = contarAsignados(r.id);
         const plural = asignados === 1 ? '' : 's';
-        return asignados > 0
-            ? `Está asignada a ${asignados} alumno${plural} activo${plural}: la siguen teniendo tal cual está hoy, pero desaparece de la biblioteca y no se va a poder asignar de nuevo.`
-            : 'Se borra de la biblioteca. No se puede deshacer.';
+        // Biblioteca compartida (0077): con más de un gimnasio, borrarla la saca de todos. Los
+        // alumnos que ya la tienen asignada (en cualquiera) la conservan tal cual: tienen su copia.
+        const compartida = (profile?.misGimnasios?.length ?? 0) > 1;
+        const base =
+            asignados > 0
+                ? `Está asignada a ${asignados} alumno${plural} activo${plural} de este gimnasio: la siguen teniendo tal cual está hoy, pero desaparece de la biblioteca y no se va a poder asignar de nuevo.`
+                : 'Se borra de la biblioteca. No se puede deshacer.';
+        return compartida
+            ? `${base} La biblioteca se comparte entre todos tus gimnasios: también desaparece de los demás, y los alumnos que ya la tengan asignada allí la conservan.`
+            : base;
     };
 
     const borrar = async (r) => {
@@ -896,7 +903,11 @@ const RutinasPage = () => {
                     </span>
                 </span>
             }
-            subtitle="Crear cada rutina una sola vez y asignarla a todos los alumnos que la necesiten."
+            subtitle={
+                (profile?.misGimnasios?.length ?? 0) > 1
+                    ? 'Las rutinas se comparten entre todos tus gimnasios. Cada gimnasio las asigna a sus propios alumnos y no ve los de los demás.'
+                    : 'Crear cada rutina una sola vez y asignarla a todos los alumnos que la necesiten.'
+            }
             actions={
                 <Btn onClick={abrirNueva}>
                     <Plus className="h-4 w-4" /> Nueva rutina

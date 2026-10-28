@@ -19,22 +19,39 @@ const AuthContext = createContext(null);
 // importante es que los datos salgan de la base.
 const BUCKETS_POR_GIMNASIO = ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos', 'noticias-imagenes'];
 
-const limpiarArchivosDelGimnasio = async (gimnasioId) => {
+//
+// Biblioteca compartida (migración 0077): los archivos de ejercicios cuelgan de la ORGANIZACIÓN
+// (carpeta <organizacion_id>, y la del gimnasio los subidos antes). Si el dueño tiene más
+// gimnasios, esos ejercicios siguen en uso en los otros: no se borran. Solo al borrar el ÚLTIMO
+// gimnasio se limpian las dos carpetas.
+const limpiarArchivosDelGimnasio = async (gimnasioId, { organizacionId = null, otrosEnOrganizacion = false } = {}) => {
     if (!gimnasioId) return;
     for (const bucket of BUCKETS_POR_GIMNASIO) {
-        try {
-            for (let vuelta = 0; vuelta < 50; vuelta += 1) {
-                const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId, { limit: 100 });
-                if (!archivos?.length) break;
-                const paths = archivos.map((a) => gimnasioId + '/' + a.name);
-                const { error: errorBorrado } = await supabase.storage.from(bucket).remove(paths);
-                if (errorBorrado) break;
+        let carpetas = [gimnasioId];
+        if (bucket === 'ejercicios-media') {
+            carpetas = otrosEnOrganizacion ? [] : [gimnasioId, organizacionId].filter(Boolean);
+        }
+        for (const carpeta of carpetas) {
+            try {
+                for (let vuelta = 0; vuelta < 50; vuelta += 1) {
+                    const { data: archivos } = await supabase.storage.from(bucket).list(carpeta, { limit: 100 });
+                    if (!archivos?.length) break;
+                    const paths = archivos.map((a) => carpeta + '/' + a.name);
+                    const { error: errorBorrado } = await supabase.storage.from(bucket).remove(paths);
+                    if (errorBorrado) break;
+                }
+            } catch (_) {
+                // Ignorado a propósito -- ver comentario arriba.
             }
-        } catch (_) {
-            // Ignorado a propósito -- ver comentario arriba.
         }
     }
 };
+
+// Contexto de limpieza del gimnasio abierto, a partir de lo que trae mi_contexto().
+const contextoDeLimpieza = (profile) => ({
+    organizacionId: profile?.organizacion_id ?? null,
+    otrosEnOrganizacion: !!(profile?.misGimnasios ?? []).find((g) => g.id === profile?.gimnasio_id)?.otros_en_organizacion,
+});
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -76,6 +93,7 @@ export const AuthProvider = ({ children }) => {
             perfil = {
                 ...data,
                 gimnasio_id: ctx.gimnasio_id ?? null,
+                organizacion_id: ctx.organizacion_id ?? null,
                 role: ctx.rol ?? data.role,
                 gimnasios: ctx.gimnasio ?? null,
                 misGimnasios: ctx.gimnasios ?? [],
@@ -239,7 +257,7 @@ export const AuthProvider = ({ children }) => {
                 const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });
                 if (authError) return { error: { message: 'La contraseña no es correcta.' } };
 
-                await limpiarArchivosDelGimnasio(profile.gimnasio_id);
+                await limpiarArchivosDelGimnasio(profile.gimnasio_id, contextoDeLimpieza(profile));
                 const { error } = await supabase.rpc('eliminar_gimnasio_activo');
                 if (error) return { error: { message: 'No se pudo eliminar el gimnasio. Reintentar en unos minutos.' } };
 
@@ -327,7 +345,7 @@ export const AuthProvider = ({ children }) => {
                 // eliminar la cuenta si es la única administradora de MÁS de un gimnasio: hay que
                 // borrarlos de a uno antes con "Eliminar este gimnasio" (migración 0076).
                 if (profile?.role === 'admin' && profile?.gimnasio_id) {
-                    await limpiarArchivosDelGimnasio(profile.gimnasio_id);
+                    await limpiarArchivosDelGimnasio(profile.gimnasio_id, contextoDeLimpieza(profile));
                 }
                 const { error } = await supabase.rpc('eliminar_mi_cuenta');
                 if (error) {

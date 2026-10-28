@@ -52,6 +52,8 @@ const EjerciciosPage = () => {
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaError, setMediaError] = useState('');
     const [mediaUrlActual, setMediaUrlActual] = useState('');
+    // Con varios gimnasios, borrar un ejercicio lo saca de todos: pide confirmación antes.
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
     const mediaInputRef = useRef(null);
 
     // Ejercicio cuya demostración se está mostrando en el modal de preview,
@@ -150,7 +152,13 @@ const EjerciciosPage = () => {
 
     // Los de la biblioteca base son los que no pertenecen a ningún gimnasio
     // (gimnasio_id NULL); el resto los cargó este gimnasio.
-    const cantidadBase = items.filter((e) => !e.gimnasio_id).length;
+    //
+    // Biblioteca compartida (migración 0077): los propios son de la cuenta y los comparten todos
+    // los gimnasios del dueño, así que "base" es "sin organización" (gimnasio_id ya no sirve: pasa a
+    // NULL si se borra el gimnasio donde se creó). Con la base sin migrar no existe esa columna.
+    const esBase = (e) => ('organizacion_id' in e ? !e.organizacion_id : !e.gimnasio_id);
+    const compartida = (profile?.misGimnasios?.length ?? 0) > 1;
+    const cantidadBase = items.filter(esBase).length;
     const cantidadPropios = items.length - cantidadBase;
     const cantidadOcultos = items.filter((e) => ocultosIds.has(e.id)).length;
 
@@ -255,11 +263,25 @@ const EjerciciosPage = () => {
             if (mediaFile && profile?.gimnasio_id && id) {
                 try {
                     const ext = MIME_TO_EXT[mediaFile.type];
-                    const path = `${profile.gimnasio_id}/${id}.${ext}`;
+                    // Carpeta de la organización (0077): el ejercicio es compartido y su archivo no
+                    // tiene que depender de un gimnasio que se pueda borrar. Con la base sin migrar
+                    // no hay organización y sigue la carpeta del gimnasio, como antes.
+                    const path = `${profile.organizacion_id ?? profile.gimnasio_id}/${id}.${ext}`;
                     const { error: uploadError } = await supabase.storage
                         .from('ejercicios-media')
                         .upload(path, mediaFile, { upsert: true });
                     if (uploadError) throw uploadError;
+
+                    // Si el archivo anterior estaba en otra ruta (carpeta del gimnasio, otra extensión),
+                    // se saca para no dejarlo huérfano. Mejor esfuerzo.
+                    const previo = editId ? pathEnBucket(mediaUrlActual) : null;
+                    if (previo && previo !== path) {
+                        try {
+                            await supabase.storage.from('ejercicios-media').remove([previo]);
+                        } catch (_) {
+                            // best effort
+                        }
+                    }
 
                     const {
                         data: { publicUrl },
@@ -301,7 +323,9 @@ const EjerciciosPage = () => {
                 cantidadBase > 0
                     ? `${cantidadBase} ejercicios ya vienen precargados${
                           cantidadPropios > 0
-                              ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} de este gimnasio`
+                              ? `, y ${cantidadPropios} ${cantidadPropios === 1 ? 'es propio' : 'son propios'} ${
+                                    compartida ? 'de tu cuenta, compartidos entre todos tus gimnasios' : 'de este gimnasio'
+                                }`
                               : ''
                       }. Se pueden sumar más propios para completarla.`
                     : 'Registrar los ejercicios del gimnasio una sola vez y reutilizarlos en todas las rutinas.'
@@ -481,7 +505,7 @@ const EjerciciosPage = () => {
                                             </span>
                                             <div>
                                                 <p className="font-display text-base font-bold">{ej.nombre}</p>
-                                                {!ej.gimnasio_id && (
+                                                {esBase(ej) && (
                                                     <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                                         <Lock className="h-3 w-3" /> Predefinido
                                                     </span>
@@ -528,8 +552,8 @@ const EjerciciosPage = () => {
                                             </a>
                                         )
                                     )}
-                                    {ej.gimnasio_id ? (
-                                        <div className="mt-4 flex gap-2">
+                                    {!esBase(ej) ? (
+                                        <div className="mt-4 flex flex-wrap gap-2">
                                             <Btn
                                                 variant="ghost"
                                                 className="px-3 py-2 text-xs"
@@ -551,13 +575,42 @@ const EjerciciosPage = () => {
                                             >
                                                 Editar
                                             </Btn>
-                                            <Btn
-                                                variant="danger"
-                                                className="px-3 py-2 text-xs"
-                                                onClick={() => borrar(ej)}
-                                            >
-                                                Eliminar
-                                            </Btn>
+                                            {compartida && confirmandoBorrarId === ej.id ? (
+                                                <div className="w-full space-y-2">
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Los ejercicios se comparten entre todos tus gimnasios: este también
+                                                        se borra de los demás. Las rutinas que ya lo tienen asignado a
+                                                        alumnos lo conservan. No se puede deshacer.
+                                                    </p>
+                                                    <div className="flex gap-2">
+                                                        <Btn
+                                                            variant="danger"
+                                                            className="px-3 py-2 text-xs"
+                                                            onClick={() => {
+                                                                setConfirmandoBorrarId(null);
+                                                                borrar(ej);
+                                                            }}
+                                                        >
+                                                            Eliminar para todos
+                                                        </Btn>
+                                                        <Btn
+                                                            variant="ghost"
+                                                            className="px-3 py-2 text-xs"
+                                                            onClick={() => setConfirmandoBorrarId(null)}
+                                                        >
+                                                            Cancelar
+                                                        </Btn>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <Btn
+                                                    variant="danger"
+                                                    className="px-3 py-2 text-xs"
+                                                    onClick={() => (compartida ? setConfirmandoBorrarId(ej.id) : borrar(ej))}
+                                                >
+                                                    Eliminar
+                                                </Btn>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="mt-4 space-y-2">
