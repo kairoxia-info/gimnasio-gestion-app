@@ -65,7 +65,9 @@ const ArchivoPagos = () => {
                         Comprime en un resumen mensual (y borra el detalle fila por fila) los pagos
                         anteriores a la fecha elegida. Los comprobantes de esos pagos dejan de poder
                         reimprimirse -- el gráfico de &quot;Ingresos por mes&quot; del panel sigue
-                        mostrando el total igual, solo que ya sin el detalle de cada pago.
+                        mostrando el total igual, solo que ya sin el detalle de cada pago. El
+                        último pago de cada alumno nunca se archiva, aunque sea anterior a esa
+                        fecha: es el que dice si tiene la cuota al día.
                     </p>
                 </div>
             </div>

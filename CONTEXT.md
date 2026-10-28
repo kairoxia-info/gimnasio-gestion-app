@@ -6428,3 +6428,80 @@ fotos del cuerpo = dato de salud) quedaban en el storage para siempre.
 
 **Archivos**: apps/web/src/lib/{storageAlumno (nuevo),offline}.js, apps/web/src/contexts/AuthContext.jsx,
 apps/web/src/pages/{AlumnosPage,MiPlanPage}.jsx.
+
+## 28/10/2026 (noche) — Cuota y pagos, tramo 1: datos completos e integridad de pagos
+
+Siguiente punto de la auditoría. **Criterio de Nalux para todo lo que sigue: "la app tiene que andar bien para todos los
+login, no solo para la cuenta de prueba"** -- o sea: cualquier gimnasio (otro país o zona horaria, muchos alumnos,
+años de pagos), profesores admin y staff, y datos que ya existen. Consecuencias concretas: nada de zona horaria fija a
+Argentina (va por gimnasio), las reglas nuevas de la base se comprueban contra TODOS los datos antes de agregarlas, y
+se prueba con gimnasios/alumnos descartables además de la cuenta de prueba.
+
+Estado: cliente y migración **0073 APLICADA** el 28/10/2026 con OK explícito de Nalux (el clasificador de permisos
+bloquea `apply_migration` y también un ensayo con rollback sobre la base real hasta que ella lo confirma en el chat).
+
+### Cliente (probado, sin commit)
+- **`listAll` trae TODAS las filas** (`lib/data.js`). Supabase corta cada respuesta en 1000 filas sin error; con ~150
+  alumnos se llegan a 1000 pagos en meses y "último pago de cada alumno", totales, campanita y la baja automática se
+  calculaban sobre datos incompletos. Ahora pide páginas de 1000 con el total exacto de la primera y orden con `id`
+  de desempate (única excepción: `biblioteca_ocultos`, sin `id`). **Verificado**: páginas de 5 en 5 sobre los 13
+  pagos reconstruyen exactamente la misma lista (sin repetidos ni saltos); 5 tablas leen completas y sin repetidos.
+- **`listAll(..., { sinCache: true })`**: sin caída a la lista guardada en el celular si falla la red. La usa la baja
+  automática por cuota vencida (`AppLayout`), que corta el portal de alumnos: ante un error prefiere no hacer nada.
+- **Pago duplicado** (`PagosPage.jsx`): `client_id` se genera UNA vez al abrir el cobro (`clientIdPagoRef`) y se
+  reutiliza en el primer intento, el reintento y la cola sin conexión (`agregarACola({..., id: client_id})`). Si la base
+  responde 23505 por `client_id` (el intento anterior sí se guardó, solo se perdió la respuesta) se toma como éxito y se
+  recarga, sin crear otro. **Verificado** con un alumno descartable: el segundo intento del mismo cobro da
+  `23505 pagos_client_id_key` y queda una sola fila.
+- Texto de "Archivo de pagos": aclara que el último pago de cada alumno nunca se archiva (vale una vez aplicada 0073).
+
+### Migración 0073 (APLICADA): `supabase/migrations/0073_integridad_de_pagos.sql`
+Comprobada contra los datos actuales: 0 montos negativos, 0 periodos invertidos, 0 números repetidos.
+1. **CHECK en `pagos`**: monto y monto_adeudado >= 0, descuento 0-100, interés 0-1000, periodo_hasta >= periodo_desde.
+   (Descuento e interés son PORCENTAJES, ver `totalACobrar` en PagosPage.) Recalcular el total en el servidor a partir de
+   la lista de precios queda para después.
+2. **Comprobante que nunca se reutiliza**: era `MAX(numero)+1` (si se borraba el último pago o se archivaban todos, el
+   número volvía a usarse y hasta reiniciaba en 1). Ahora `gimnasios.ultimo_comprobante` (backfill = máximo actual) que
+   solo sube, más índice único `(gimnasio_id, numero)`. Sigue sin número el pago "sin cobrar" (monto 0, regla de 0032).
+3. **Permisos por columna**: `pagos` y `gimnasios` tenían permisos de TABLA COMPLETA para `authenticated` (cualquier
+   columna nueva quedaba editable por la API). Se pasa a lista explícita, revisada contra lo que el cliente escribe de
+   verdad (`createRec('pagos')`, el upsert de la cola, 6 pantallas de Configuración y el logo en Onboarding): el cliente
+   ya no puede escribir `pagos.numero` ni `gimnasios.ultimo_comprobante`/`id`/`created_at`/`codigo_invitacion` directo
+   (el código de invitación se regenera por RPC). El cliente nunca edita pagos, solo inserta y borra.
+4. **`archivar_pagos_hasta` conserva el último pago de cada alumno** (mismo criterio que `ver_plan_por_codigo`): antes
+   borraba TODOS los anteriores a la fecha de corte y un moroso pasaba a "sin cuota", levantándole la restricción.
+
+**Verificado después de aplicar** (1) como profesor real dentro de una transacción que se deshace sola (rol
+`authenticated` + RLS, sin dejar nada) y (2) por la API real (PostgREST) con la sesión de Nalux y un alumno descartable:
+- Contador inicial = máximo existente (13). Monto negativo, descuento 150 y período invertido: rechazados.
+- Numeración: primer número nuevo = contador + 1; al borrar el último pago el siguiente NO reutiliza el número; el pago
+  "sin cobrar" no lleva número.
+- `pagos.numero` (al insertar y al editar), `gimnasios.ultimo_comprobante` y `gimnasios.codigo_invitacion` directo:
+  "permission denied". El admin sigue guardando nombre, alias, días, etc. (la pantalla de Configuración no se rompió).
+- Mismo `client_id` dos veces: `23505 pagos_client_id_key`; el upsert de la cola sin conexión (`ON CONFLICT DO NOTHING`)
+  inserta 0 filas la segunda vez y no da error.
+- Archivado con corte 2099 sobre los datos reales (se deshizo): archivó 5 = los 5 esperados (todos menos el último de
+  cada alumno) y los 8 alumnos con pagos conservaron su último pago.
+- **Hallazgo menor, pendiente (va en la próxima migración)**: el reenvío de un pago duplicado desde la cola sin conexión
+  GASTA un número de comprobante aunque no inserte nada (el trigger BEFORE INSERT corre antes de detectar el conflicto):
+  quedaría un hueco en la numeración. Arreglo de una línea: el trigger no numera si ya existe un pago con ese `client_id`.
+- Efecto de las pruebas sobre los datos reales: gastaron los números 14 a 17 del contador; se devolvió a 13 (= último
+  comprobante real) después de borrar los pagos de prueba.
+
+### Tramo 2 (pendiente): zona horaria y regla única de cuota
+- **`hoy()` y `CURRENT_DATE` están en UTC.** En Argentina (UTC-3), de 21:00 a medianoche la app cree que ya es mañana:
+  asistencias y pagos quedan con la fecha de mañana y un alumno con la cuota que vence "hoy" queda restringido a las
+  21:00. Hay 6 funciones SQL con `CURRENT_DATE` (alumno_cargar_peso, ingresos_por_mes, join_gimnasio_por_codigo,
+  marcar_entrenamiento_hecho, ver_plan_por_codigo, ver_progreso_alumno) y 2 valores por defecto de columna
+  (entrenamientos_completados.fecha, rutinas_asignadas.fecha_inicio). Plan: `gimnasios.zona_horaria` (por defecto
+  America/Argentina/Buenos_Aires, editable en Configuración) y la fecha del gimnasio en SQL; en el cliente, la fecha
+  LOCAL del dispositivo. Tiene que cambiar cliente y servidor juntos (`segmentoNotificacion` está espejada en SQL).
+- **Fechas armadas con `toISOString().slice(0,10)` sobre una medianoche local** (7 lugares: AppLayout, ArchivoPagos,
+  RutinaPDF, DashboardPage, PagosPage x2, `hoy()`): al ESTE de UTC (España, UTC+1/+2) corren el día HACIA ATRÁS (un
+  cobro empezaría un día antes). Helper de fecha local para todos.
+- **La regla de cuota existe 3 veces** (`estadoCuota`, `segmentoNotificacion`, `ver_plan_por_codigo`) y ya divergieron.
+  Una función SQL única es el objetivo; la baja automática por cuota vencida también debería correr en el servidor
+  (hoy corre en el navegador del profesor, la primera vez al día que abre la app).
+
+**Archivos (tramo 1)**: apps/web/src/lib/data.js, apps/web/src/components/{AppLayout,configuracion/ArchivoPagos}.jsx,
+apps/web/src/pages/PagosPage.jsx, supabase/migrations/0073_integridad_de_pagos.sql (sin aplicar).

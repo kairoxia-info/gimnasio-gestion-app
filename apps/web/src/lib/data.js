@@ -64,19 +64,55 @@ const aplicarFiltros = (query, filters) => {
 // todavía para esa consulta puntual (primera vez que se pide, sin conexión
 // desde el arranque), no hay nada que devolver: se re-lanza el error de red
 // como siempre.
+//
+// Auditoría del 28/10/2026 -- dos arreglos de fondo:
+//
+// 1. PAGINADO. Supabase corta cada respuesta en 1000 filas SIN dar error. Con
+//    unos 150 alumnos se llegan a 1000 pagos en meses, y ahí "último pago de
+//    cada alumno", los totales, la campanita y la baja automática por cuota
+//    vencida pasaban a calcularse sobre datos incompletos: un alumno que sí
+//    pagó podía figurar vencido. Ahora se piden todas las páginas (con el total
+//    exacto de la primera, así no depende de cuánto devuelva el servidor por
+//    pedido). Para que las páginas no se pisen ni se salteen filas el orden
+//    lleva SIEMPRE `id` de desempate (biblioteca_ocultos es la única tabla sin
+//    `id`, y tiene muy pocas filas).
+//
+// 2. `sinCache: true` para lo que decide algo importante (la baja automática):
+//    ahí una lista vieja de la caché local, o una lectura que falló, NO sirve --
+//    se prefiere el error a actuar sobre datos que pueden estar desactualizados.
+const FILAS_POR_PAGINA = 1000;
+const TABLAS_SIN_ID = new Set(['biblioteca_ocultos']);
+
 export const listAll = async (collection, options = {}) => {
-    const { sort, filters } = options;
-    let query = supabase.from(collection).select(columnasDe(collection));
-    query = aplicarFiltros(query, filters);
-    query = aplicarSort(query, sort);
+    const { sort, filters, sinCache } = options;
+    const columnas = columnasDe(collection);
+    const pedirPagina = (desde) => {
+        let query = supabase
+            .from(collection)
+            .select(columnas, desde === 0 ? { count: 'exact' } : undefined);
+        query = aplicarFiltros(query, filters);
+        query = aplicarSort(query, sort);
+        if (!TABLAS_SIN_ID.has(collection)) query = query.order('id', { ascending: true });
+        return query.range(desde, desde + FILAS_POR_PAGINA - 1);
+    };
     try {
-        const { data, error } = await query;
-        if (error) throw error;
-        const resultado = data ?? [];
+        const filas = [];
+        let total = null;
+        for (let desde = 0; ; desde += FILAS_POR_PAGINA) {
+            const { data, error, count } = await pedirPagina(desde);
+            if (error) throw error;
+            if (desde === 0) total = count;
+            if (!data?.length) break;
+            filas.push(...data);
+            // Se sabe el total: se corta apenas se lo alcanzó. Si no se pudo
+            // saber, se sigue hasta una página vacía (una consulta de más).
+            if (total !== null && filas.length >= total) break;
+        }
+        const resultado = filas;
         guardarEnCache(collection, options, resultado);
         return resultado;
     } catch (err) {
-        if (esErrorDeRed(err)) {
+        if (esErrorDeRed(err) && !sinCache) {
             const cacheado = leerDeCache(collection, options);
             if (cacheado) return cacheado;
         }

@@ -422,9 +422,15 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                     return;
                 }
 
+                // sinCache: esto DA DE BAJA alumnos (les corta el portal), así
+                // que jamás puede decidir con una lista vieja guardada en el
+                // celular si falló la red: ante un error se prefiere no hacer
+                // nada y reintentar en la próxima pantalla (28/10/2026,
+                // auditoría). listAll además trae TODAS las filas, no solo las
+                // primeras 1000.
                 const [alumnos, pagos] = await Promise.all([
-                    listAll('alumnos', { filters: { activo: true } }),
-                    listAll('pagos'),
+                    listAll('alumnos', { filters: { activo: true }, sinCache: true }),
+                    listAll('pagos', { sinCache: true }),
                 ]);
                 if (cancelado) return;
 

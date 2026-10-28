@@ -200,6 +200,15 @@ const PagosPage = () => {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(vacioPago);
     const [saving, setSaving] = useState(false);
+    // Identificador del cobro que se está cargando, generado UNA vez al abrir el
+    // formulario y reutilizado en el primer intento, en cualquier reintento y en
+    // la cola sin conexión (28/10/2026, auditoría). Antes cada intento mandaba el
+    // pago sin identificador y la cola le inventaba uno nuevo: si el servidor ya
+    // había guardado el pago pero la respuesta se perdió (señal que se corta justo
+    // ahí), se encolaba y se guardaba OTRA VEZ, con otro número de comprobante.
+    // Con el mismo identificador, la base rechaza el segundo (client_id es único)
+    // y la cola lo ignora (upsert con ignoreDuplicates).
+    const clientIdPagoRef = useRef(null);
     const [sinCobrar, setSinCobrar] = useState(false);
 
     // Comprobante que se está mirando. Nalux pidió poder VERLO en la app y no
@@ -347,6 +356,7 @@ const PagosPage = () => {
             periodoDesde = siguiente.toISOString().slice(0, 10);
         }
 
+        clientIdPagoRef.current = crypto.randomUUID();
         setForm({ ...vacioPago, alumno_id: alumnoId, periodo_desde: periodoDesde });
         setSinCobrar(false);
         setOpen(true);
@@ -443,7 +453,9 @@ const PagosPage = () => {
         // migración 0032 estas filas tampoco se llevan número de comprobante.
         const cobrado = sinCobrar ? 0 : totalACobrar;
         const adeudado = sinCobrar ? totalACobrar : Number(form.monto_adeudado || 0);
+        if (!clientIdPagoRef.current) clientIdPagoRef.current = crypto.randomUUID();
         const payload = {
+            client_id: clientIdPagoRef.current,
             alumno_id: form.alumno_id,
             monto: cobrado,
             monto_adeudado: adeudado,
@@ -463,7 +475,18 @@ const PagosPage = () => {
             // activación sin cobrar vuelve sin número (migración 0032): no hay
             // comprobante que mostrar ni imprimir.
             if (creado?.numero) setComprobante(creado);
+            clientIdPagoRef.current = null;
         } catch (err) {
+            // 23505 = ya existe un pago con este mismo identificador: el intento
+            // anterior SÍ se guardó (solo se perdió la respuesta) y el profesor
+            // volvió a apretar "Guardar". No es un error: se muestra el pago ya
+            // guardado y NO se crea otro.
+            if (err?.code === '23505' && String(err?.message || err?.details || '').includes('client_id')) {
+                clientIdPagoRef.current = null;
+                setOpen(false);
+                await cargar();
+                return;
+            }
             // Sin conexión (pedido de Nalux, 04/09/2026): se guarda en el
             // celular y se manda de verdad apenas vuelva la señal -- SIN
             // número de comprobante todavía (ese lo asigna el servidor recién
@@ -471,7 +494,9 @@ const PagosPage = () => {
             // ni mostrar como comprobante, solo el aviso de "pendiente" en la
             // lista de abajo (queda armado solo con onCambioCola).
             if (esErrorDeRed(err)) {
-                agregarACola({ tipo: 'pago', payload });
+                // Mismo identificador que el primer intento (ver clientIdPagoRef).
+                agregarACola({ tipo: 'pago', payload, id: payload.client_id });
+                clientIdPagoRef.current = null;
                 setOpen(false);
             } else {
                 setError('No se pudo registrar el pago.');
