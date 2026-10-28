@@ -6,7 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import { Btn, Card, Empty, ErrorBox, Input, Loading, Modal } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { agregarACola, esErrorDeRed, onCambioCola } from '@/lib/offline';
-import { fmtFecha } from '@/lib/format';
+import { fmtFecha, hoyComoFecha } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 
 // El lunes de la semana en la que cae `fecha`. getDay() devuelve 0 para
@@ -81,9 +81,9 @@ const AsistenciaPage = () => {
     // Arranca en el día porque es lo que se usa todos los días: pasar lista.
     // Semana y mes son para mirar hacia atrás, no para la operación diaria.
     const [vista, setVista] = useState('dia'); // 'dia' | 'semana' | 'mes'
-    const [dia, setDia] = useState(() => iso(new Date()));
-    const [lunes, setLunes] = useState(() => lunesDe(new Date()));
-    const [mes, setMes] = useState(() => mesDe(new Date()));
+    const [dia, setDia] = useState(() => iso(hoyComoFecha()));
+    const [lunes, setLunes] = useState(() => lunesDe(hoyComoFecha()));
+    const [mes, setMes] = useState(() => mesDe(hoyComoFecha()));
     const [cerrando, setCerrando] = useState(false);
     const [guardando, setGuardando] = useState(false);
 
@@ -114,9 +114,9 @@ const AsistenciaPage = () => {
             return iso(d);
         });
 
-    const esSemanaActual = lunes.getTime() === lunesDe(new Date()).getTime();
-    const esMesActual = mes === mesDe(new Date());
-    const esHoy = dia === iso(new Date());
+    const esSemanaActual = lunes.getTime() === lunesDe(hoyComoFecha()).getTime();
+    const esMesActual = mes === mesDe(hoyComoFecha());
+    const esHoy = dia === iso(hoyComoFecha());
 
     // Celdas vacías antes del día 1 para que caiga en su columna. Igual que en
     // lunesDe(), (getDay() + 6) % 7 convierte el domingo=0 de JS a una semana
@@ -394,9 +394,9 @@ const AsistenciaPage = () => {
                             variant="ghost"
                             className="px-3 py-2 text-xs"
                             onClick={() => {
-                                if (esDia) setDia(iso(new Date()));
-                                else if (esMes) setMes(mesDe(new Date()));
-                                else setLunes(lunesDe(new Date()));
+                                if (esDia) setDia(iso(hoyComoFecha()));
+                                else if (esMes) setMes(mesDe(hoyComoFecha()));
+                                else setLunes(lunesDe(hoyComoFecha()));
                             }}
                         >
                             Hoy

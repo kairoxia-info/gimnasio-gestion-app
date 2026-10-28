@@ -7,7 +7,76 @@ export const money = (n) =>
         Number(n || 0),
     );
 
-export const hoy = () => new Date().toISOString().slice(0, 10);
+// ---------------------------------------------------------------------------
+// Fechas (auditoría del 28/10/2026). Dos errores de zona horaria corregidos:
+//
+// 1. `hoy()` era `new Date().toISOString().slice(0, 10)`: la fecha en UTC. En
+//    Argentina (UTC-3), de 21:00 a medianoche la app creía que ya era mañana:
+//    asistencias y pagos quedaban con la fecha de mañana y una cuota que vence
+//    hoy figuraba vencida. Ahora es la fecha de HOY EN LA ZONA DEL GIMNASIO
+//    (gimnasios.zona_horaria, la misma que usan las funciones del servidor, así
+//    cliente y servidor siempre coinciden aunque el dispositivo del profesor
+//    esté en otra zona). Sin zona conocida (portal del alumno, antes de cargar
+//    el perfil) cae a la fecha local del dispositivo, nunca a UTC.
+//
+// 2. Armar fechas con `new Date('AAAA-MM-DDT00:00:00')` + `setDate()` +
+//    `toISOString()` corre el día HACIA ATRÁS al este de UTC (España, UTC+1/+2):
+//    la medianoche local ya es el día anterior en UTC. Un cobro empezaba un día
+//    antes. `sumarDiasISO` y `restarMesesISO` hacen la cuenta sobre la fecha
+//    pura (sin hora ni zona), así no dependen de dónde esté el dispositivo.
+// ---------------------------------------------------------------------------
+let zonaHorariaDelGimnasio = null;
+
+export const setZonaHorariaDelGimnasio = (zona) => {
+    zonaHorariaDelGimnasio = zona || null;
+};
+
+const dosDigitos = (n) => String(n).padStart(2, '0');
+
+const fechaEnZona = (instante, zona) => {
+    try {
+        // 'en-CA' formatea como AAAA-MM-DD.
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(instante);
+    } catch (_) {
+        return null; // zona desconocida para este navegador
+    }
+};
+
+const fechaLocal = (instante) =>
+    `${instante.getFullYear()}-${dosDigitos(instante.getMonth() + 1)}-${dosDigitos(instante.getDate())}`;
+
+// `instante` solo se pasa en pruebas.
+export const hoy = (instante = new Date()) =>
+    (zonaHorariaDelGimnasio && fechaEnZona(instante, zonaHorariaDelGimnasio)) || fechaLocal(instante);
+
+export const sumarDiasISO = (iso, dias) => {
+    const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+    return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+};
+
+// Días que faltan desde HOY (en la zona del gimnasio) hasta una fecha pura
+// 'AAAA-MM-DD'; negativo si ya pasó. Cuenta sobre fechas, no sobre horas, así un
+// cambio de horario de verano no corre el resultado.
+export const diasHastaISO = (fecha, instante = new Date()) => {
+    const [a, m, d] = String(fecha).slice(0, 10).split('-').map(Number);
+    const [ha, hm, hd] = hoy(instante).split('-').map(Number);
+    return Math.round((Date.UTC(a, m - 1, d) - Date.UTC(ha, hm - 1, hd)) / 86400000);
+};
+
+// "Hoy" como objeto Date a medianoche LOCAL, pero con el año, mes y día de la
+// zona del gimnasio: para las pantallas que arman calendarios con Date (grilla
+// de asistencia) y muestran/seleccionan días con getDate()/getMonth().
+export const hoyComoFecha = (instante = new Date()) => new Date(`${hoy(instante)}T00:00:00`);
+
+export const restarMesesISO = (iso, meses) => {
+    const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+    return new Date(Date.UTC(a, m - 1 - meses, d)).toISOString().slice(0, 10);
+};
 
 export const fmtFecha = (v) => {
     if (!v) return '-';
@@ -190,7 +259,7 @@ export const antiguedad = (fechaAlta) => {
     if (Number.isNaN(d.getTime())) return 'Sin fecha de alta';
     const meses = Math.max(
         0,
-        (new Date().getFullYear() - d.getFullYear()) * 12 + (new Date().getMonth() - d.getMonth()),
+        (hoyComoFecha().getFullYear() - d.getFullYear()) * 12 + (hoyComoFecha().getMonth() - d.getMonth()),
     );
     if (meses < 1) return 'Menos de 1 mes entrenando';
     if (meses < 12) return `${meses} ${meses === 1 ? 'mes' : 'meses'} entrenando`;
@@ -388,12 +457,7 @@ export const ultimoPagoDeAlumno = (alumnoId, pagos) => {
 // dudas aunque en la práctica no debería) -- se toma la más reciente por
 // created_at.
 export const planesPorVencer = (alumnosActivos, rutinasAsignadas, planesAlimentacion, diasAviso = 7) => {
-    const hoyMedianoche = new Date();
-    hoyMedianoche.setHours(0, 0, 0, 0);
-    const diasHasta = (fecha) => {
-        const f = new Date(`${fecha}T00:00:00`);
-        return Math.round((f - hoyMedianoche) / 86400000);
-    };
+    const diasHasta = (fecha) => diasHastaISO(fecha);
 
     const rutinaPorAlumno = new Map();
     (rutinasAsignadas || []).forEach((r) => {

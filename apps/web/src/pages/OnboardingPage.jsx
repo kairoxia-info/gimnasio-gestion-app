@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Building2, ImagePlus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { zonaDelDispositivo } from '@/lib/zonasHorarias';
 import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input } from '@/components/ui-kit';
 import AuthBackdrop from '@/components/AuthBackdrop';
@@ -15,6 +16,10 @@ const MIME_TO_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'we
 const OnboardingPage = () => {
     const { createGimnasio, refreshProfile } = useAuth();
     const navigate = useNavigate();
+    // "?nuevo=1": una persona que YA tiene gimnasio agrega otro (migración 0076). Sin esa marca,
+    // esta pantalla es el alta del primer gimnasio, y ProtectedRoute manda al panel a quien ya tiene uno.
+    const [params] = useSearchParams();
+    const esNuevo = params.get('nuevo') === '1';
     const [nombre, setNombre] = useState('');
     const [logoFile, setLogoFile] = useState(null);
     const [logoPreview, setLogoPreview] = useState('');
@@ -55,6 +60,17 @@ const OnboardingPage = () => {
             const { data: gimnasioId, error: createError } = await createGimnasio(nombre.trim());
             if (createError) throw createError;
 
+            // Zona horaria del gimnasio nuevo (migración 0074): la del dispositivo
+            // con que se está creando, en vez de dejarla siempre en Argentina (el
+            // valor por defecto de la base). Mejor esfuerzo: si falla (columna que
+            // todavía no existe, zona que la base no reconozca) el gimnasio queda
+            // igual con la de por defecto y se corrige en Configuración. Supabase
+            // devuelve el error en vez de lanzarlo, así que no corta el alta.
+            const zonaDispositivo = zonaDelDispositivo();
+            if (zonaDispositivo) {
+                await supabase.from('gimnasios').update({ zona_horaria: zonaDispositivo }).eq('id', gimnasioId);
+            }
+
             if (logoFile) {
                 try {
                     const ext = MIME_TO_EXT[logoFile.type];
@@ -81,6 +97,11 @@ const OnboardingPage = () => {
             }
 
             await refreshProfile();
+            if (esNuevo) {
+                // Recarga completa: ninguna pantalla puede quedar con datos del gimnasio anterior.
+                window.location.assign('/panel');
+                return;
+            }
             navigate('/panel', { replace: true });
         } catch {
             setError('No se pudo crear el gimnasio. Intentar de nuevo en un momento.');
@@ -92,7 +113,7 @@ const OnboardingPage = () => {
     return (
         <AuthBackdrop>
             <Helmet>
-                <title>Crear el gimnasio | RutNail</title>
+                <title>{esNuevo ? 'Agregar otro gimnasio' : 'Crear el gimnasio'} | RutNail</title>
                 <meta name="description" content="Configurar el gimnasio para empezar a usar RutNail." />
             </Helmet>
 
@@ -105,11 +126,15 @@ const OnboardingPage = () => {
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-28" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
-                        Un último paso
+                        {esNuevo ? 'Nuevo gimnasio' : 'Un último paso'}
                     </p>
-                    <h1 className="font-display mt-2 text-xl font-bold text-foreground">Crear el gimnasio</h1>
+                    <h1 className="font-display mt-2 text-xl font-bold text-foreground">
+                        {esNuevo ? 'Agregar otro gimnasio' : 'Crear el gimnasio'}
+                    </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Con esto se arma el espacio para gestionar alumnos, planes y pagos.
+                        {esNuevo
+                            ? 'Se suma a tu cuenta. Cada gimnasio tiene sus propios alumnos, pagos y planes.'
+                            : 'Con esto se arma el espacio para gestionar alumnos, planes y pagos.'}
                     </p>
                 </div>
 
@@ -167,8 +192,22 @@ const OnboardingPage = () => {
                         disabled={loading}
                         className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
                     >
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear gimnasio y continuar'}
+                        {loading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : esNuevo ? (
+                            'Crear gimnasio'
+                        ) : (
+                            'Crear gimnasio y continuar'
+                        )}
                     </Btn>
+                    {esNuevo && (
+                        <Link
+                            to="/panel"
+                            className="block text-center text-sm font-medium text-muted-foreground transition hover:text-foreground"
+                        >
+                            Cancelar
+                        </Link>
+                    )}
                 </form>
             </motion.div>
         </AuthBackdrop>

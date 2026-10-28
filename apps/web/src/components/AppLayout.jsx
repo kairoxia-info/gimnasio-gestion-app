@@ -27,9 +27,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
 import TarjetaTour, { PASOS_TOUR } from '@/components/TourBienvenida';
 import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
+import SelectorGimnasio from '@/components/SelectorGimnasio';
 import { AyudaInfo } from '@/components/ui-kit';
 import { listAll, updateRec } from '@/lib/data';
-import { estadoCuota, fmtFecha, money, ultimoPagoDeAlumno } from '@/lib/format';
+import { estadoCuota, fmtFecha, hoy, money, ultimoPagoDeAlumno } from '@/lib/format';
 import { descartarFallido, onCambioCola, onCambioColaFallida, verCola, verColaFallida } from '@/lib/offline';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 
@@ -399,7 +400,7 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
         if (!gimnasioId) return undefined;
 
         const clave = `chequeoVencimiento:${gimnasioId}`;
-        const hoyStr = new Date().toISOString().slice(0, 10);
+        const hoyStr = hoy();
         let cancelado = false;
         try {
             if (localStorage.getItem(clave) === hoyStr) return undefined;
@@ -648,6 +649,8 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                     </>
                 }
             >
+                {/* Solo aparece con 2 o más gimnasios (migración 0076). */}
+                <SelectorGimnasio />
                 <NavLinksAnimados
                     nav={NAV}
                     onNavegar={() => setOpen(false)}

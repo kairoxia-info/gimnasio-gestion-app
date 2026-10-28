@@ -5,6 +5,7 @@ import {
     agruparPorBloque,
     resumenSeries,
     resumenTipoGrupo,
+    sumarDiasISO,
     tieneSeriesDetalle,
 } from '@/lib/format';
 
@@ -28,11 +29,9 @@ export const fmtFechaCorta = (v) => {
     return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
 };
 
-const sumarDias = (v, dias) => {
-    const d = new Date(String(v).slice(0, 10) + 'T00:00:00');
-    d.setDate(d.getDate() + dias);
-    return d.toISOString().slice(0, 10);
-};
+// Cuenta sobre la fecha pura (ver sumarDiasISO en lib/format.js): armarla con
+// toISOString() corría el día hacia atrás al este de UTC.
+const sumarDias = (v, dias) => sumarDiasISO(v, dias);
 
 // Reportado por Nalux (03/09/2026): el logo del gimnasio no salía en el PDF
 // de la biblioteca (RutinasPage.jsx). Causa: la hoja imprimible (con el

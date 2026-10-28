@@ -6505,3 +6505,309 @@ Comprobada contra los datos actuales: 0 montos negativos, 0 periodos invertidos,
 
 **Archivos (tramo 1)**: apps/web/src/lib/data.js, apps/web/src/components/{AppLayout,configuracion/ArchivoPagos}.jsx,
 apps/web/src/pages/PagosPage.jsx, supabase/migrations/0073_integridad_de_pagos.sql (sin aplicar).
+
+## 28/10/2026 (noche) — Cuota y pagos, tramo 2: zona horaria por gimnasio (migraciones 0074 y 0075, APLICADAS)
+
+Cliente y migraciones **0074 y 0075 APLICADAS** el 28/10/2026 con OK explícito de Nalux (el clasificador bloquea
+`apply_migration`, y también cualquier ensayo con rollback sobre la base real, hasta que ella lo confirma en el chat).
+Criterio de Nalux: "la app tiene que andar bien para todos los login".
+
+### El problema (confirmado)
+Servidor y cliente medían "hoy" en UTC. En Argentina (UTC-3), de 21:00 a medianoche la app creía que ya era mañana:
+asistencias y pagos quedaban con la fecha de mañana, y una cuota que vence HOY quedaba restringida a las 21:00
+(justo en el horario pico de un gimnasio). Con gimnasios de otros países el desfase cambia (México UTC-6, España
+UTC+1/+2). Además, las fechas armadas con `new Date('AAAA-MM-DDT00:00:00')` + `setDate` + `toISOString()` corren el
+día HACIA ATRÁS al este de UTC: un cobro en España empezaba un día antes.
+
+### Cliente (probado, sin commit)
+- **`hoy()` = la fecha de HOY EN LA ZONA DEL GIMNASIO** (`lib/format.js`, `setZonaHorariaDelGimnasio`), no la del
+  dispositivo: cliente y servidor coinciden aunque el profesor viaje o su dispositivo esté mal configurado. Sin zona
+  conocida (portal del alumno, antes de cargar el perfil, zona que el navegador no reconoce) cae a la fecha LOCAL del
+  dispositivo, nunca a UTC. Ayudantes nuevos sobre fechas puras (sin hora ni zona): `sumarDiasISO`, `restarMesesISO`,
+  `diasHastaISO`, `hoyComoFecha`.
+- Reemplazados todos los `toISOString().slice(0,10)` y los "hoy" del dispositivo: `AppLayout` (chequeo diario de la
+  baja), `ArchivoPagos`, `RutinaPDF`, `DashboardPage` (serie de 7 días, asistencias de la semana, cumpleaños,
+  vencimientos), `PagosPage` (período desde/hasta, mes de la caja), `AsistenciaPage` (día/semana/mes actual),
+  `AsistenciaAlumno`, `planesPorVencer` y `antiguedad` (`format.js`).
+- **`AuthContext.fetchProfile`** pide la zona con una consulta APARTE y tolerante (no en el embed del perfil) y la fija
+  ANTES de publicar el perfil, así ninguna pantalla arma "hoy" con la zona equivocada en su primer render. Si la
+  columna no existe todavía, no se rompe nada. **Verificado con la base sin migrar**: el panel carga normal y
+  `hoy()` da la fecha local (solo queda ruido de consola por esa consulta, que falla en silencio).
+- **Configuración → "Zona horaria del gimnasio"** (`DatosGimnasio.jsx`, `lib/zonasHorarias.js`): selector con los países
+  de habla hispana más EE. UU. (si el gimnasio tiene una zona fuera de la lista, igual se muestra), con aviso si el
+  dispositivo está en otra. Solo aparece y solo se manda si la base ya tiene la columna.
+- **Alta de gimnasios** (`OnboardingPage`): el gimnasio nuevo toma la zona del dispositivo que lo crea (mejor esfuerzo).
+- **Probado `hoy()`/`diasHastaISO`/aritmética de fechas** con horas simuladas, en 5 zonas de dispositivo distintas
+  (UTC, Buenos Aires, Madrid, Tokio, Kiritimati) y 15 casos, incluidos 22:30 en Argentina (antes daba mañana), 00:30 en
+  Madrid, 19:00 en México, Kiritimati UTC+14, año bisiesto, fin de año y zona inválida: **15/15 en las 5 zonas**.
+
+### Migración 0074 (APLICADA): `supabase/migrations/0074_zona_horaria_del_gimnasio.sql`
+1. `gimnasios.zona_horaria` (por defecto America/Argentina/Buenos_Aires: todos los gimnasios actuales son argentinos,
+   nada cambia para ellos) con CHECK `zona_horaria_valida()` contra `pg_timezone_names` (solo nombres IANA reales:
+   Postgres también acepta `UTC-3`, que en notación POSIX es UTC+3 y el navegador rechaza). Permiso de columna para que
+   el admin la edite (los permisos de `gimnasios` son por columna desde la 0073).
+2. `fecha_del_gimnasio(gimnasio_id)`: la fecha de hoy en su zona.
+3. **6 funciones pasan de `CURRENT_DATE` a esa fecha** (13 sustituciones): `alumno_cargar_peso`, `ingresos_por_mes`,
+   `join_gimnasio_por_codigo`, `marcar_entrenamiento_hecho`, `ver_plan_por_codigo` (4), `ver_progreso_alumno`. Se
+   reescriben DESDE su definición actual (`pg_get_functiondef` + reemplazo del token) en vez de copiar 6 funciones a
+   mano: el resto de cada una queda idéntico. Se revisó SIN ejecutar cómo queda cada línea cambiada y que ninguna otra
+   función deriva "hoy" con `now()::date`/`CURRENT_TIMESTAMP`.
+4. `entrenamientos_completados.fecha` y `rutinas_asignadas.fecha_inicio` tenían `DEFAULT CURRENT_DATE`: se quitan y un
+   trigger usa la zona del gimnasio solo cuando el INSERT no trae la fecha.
+5. Arreglo del hallazgo de la 0073: el trigger de comprobantes ya no gasta un número cuando la cola sin conexión reenvía
+   un pago que ya existe (mismo `client_id`).
+
+### ERROR MÍO en la 0074, corregido con la 0075 (estuvo roto unos minutos)
+
+La 0074 reemplazó los `DEFAULT CURRENT_DATE` de `entrenamientos_completados.fecha` y `rutinas_asignadas.fecha_inicio` por UN
+trigger compartido (`fijar_fecha_por_defecto`) que decidía por `TG_TABLE_NAME`. PL/pgSQL resuelve los campos de `NEW` al
+planificar la expresión aunque la primera condición del `AND` sea falsa: insertar en `rutinas_asignadas` fallaba con
+`record "new" has no field "fecha"` (y al revés en `entrenamientos_completados`). Efecto: NO se podía asignar una rutina ni
+marcar un entrenamiento desde el portal, hasta aplicar la **0075** (`supabase/migrations/0075_fix_triggers_fecha_por_defecto.sql`):
+una función por tabla (`fijar_fecha_entrenamiento`, `fijar_fecha_inicio_rutina_asignada`) y se borra la compartida. No se
+editó la 0074 ya aplicada (convención 0056 → 0057). Se detectó al probar con gimnasios descartables; una revisión que solo
+mira la estructura (sin ejercitar los INSERT) no lo habría encontrado. Con la base aún sin usuarios reales no hubo impacto.
+**Lección**: un trigger con `NEW.campo` solo vale para la tabla que lo tiene; una función por tabla.
+
+### Verificado después de aplicar 0074 + 0075
+Con dos gimnasios descartables con los MISMOS datos (Argentina y `Pacific/Kiritimati` UTC+14, donde hoy ya era 29/10 mientras
+UTC era 28/10) y con la sesión de Nalux:
+- Ninguna función pública usa `CURRENT_DATE`; 7 usan `fecha_del_gimnasio` (las 6 + el helper de triggers).
+- Asignar rutina sin `fecha_inicio`: la pone el servidor con la fecha del gimnasio (Argentina 28/10, Kiritimati 29/10); con
+  fecha elegida, respeta la elegida. Hecho también como profesor real por la API.
+- `marcar_entrenamiento_hecho` y `alumno_cargar_peso`: fecha del gimnasio (28/10 vs 29/10). `ver_plan_por_codigo`: la MISMA
+  cuota que vence el 28/10 es `proximo` en Argentina y `vencido` en Kiritimati; el portal marca el entrenamiento de hoy en
+  los dos. `join_gimnasio_por_codigo`: `fecha_alta` según la zona del gimnasio. `ver_progreso_alumno` e `ingresos_por_mes`
+  (como profesor) funcionan.
+- Validación: `UTC-3`, zona inventada, vacía y nula rechazadas; `Europe/Madrid` aceptada.
+- **Comprobantes**: el reenvío duplicado de la cola ya NO gasta número (contador 2 → 2, 0 filas insertadas).
+- **Configuración**: el selector aparece con la zona actual; guardar desde la pantalla escribe `zona_horaria` sin tocar el
+  resto de los datos; una zona fuera de la lista se muestra igual (primera opción seleccionada). Con la zona en
+  Kiritimati la grilla de asistencia marcó "Jueves 29 de octubre · Hoy" (UTC era 28): el panel usa la fecha del gimnasio.
+  Todo se restauró al terminar (zona Argentina, contador 13, sin alumnos/rutinas/gimnasios de prueba).
+- Detalle corregido en la prueba: Chrome informa la zona del dispositivo con un alias antiguo (`America/Buenos_Aires`);
+  `lib/zonasHorarias.js` compara por forma canónica (`mismaZona`) y normaliza al nombre de la lista, así no sale el aviso
+  "este dispositivo está en otra zona" ni se duplica la opción, y un gimnasio nuevo guarda el nombre de la lista.
+- Nota de prueba: `import('/src/lib/format.js')` desde la consola abre una SEGUNDA copia del módulo sin la zona cargada; lo
+  que vale es lo que dibuja la pantalla.
+
+### Pendientes relacionados (no incluidos acá)
+- **La moneda está fija en ARS** (`money()` en `lib/format.js`, `es-AR`): un gimnasio de otro país vería los precios en
+  pesos argentinos. Hace falta `gimnasios.moneda` (y formato por país), tema aparte.
+- **Regla única de cuota en el servidor** y baja automática en el servidor (hoy corre en el navegador del profesor):
+  la regla está repetida 3 veces (`estadoCuota`, `segmentoNotificacion`, `ver_plan_por_codigo`) y ya divergieron.
+- `MiPlanPage` (portal del alumno) calcula "días hasta" con la fecha del dispositivo del alumno; el estado de cuota
+  viene del servidor con la zona del gimnasio.
+
+**Archivos**: apps/web/src/lib/{format,zonasHorarias (nuevo)}.js, apps/web/src/contexts/AuthContext.jsx,
+apps/web/src/components/{AppLayout,RutinaPDF}.jsx, apps/web/src/components/configuracion/{ArchivoPagos,DatosGimnasio}.jsx,
+apps/web/src/components/alumno/AsistenciaAlumno.jsx, apps/web/src/pages/{Dashboard,Pagos,Asistencia,Configuracion,Onboarding}Page.jsx,
+supabase/migrations/0074_zona_horaria_del_gimnasio.sql y 0075_fix_triggers_fecha_por_defecto.sql (aplicadas).
+
+## 28/10/2026 (noche) — IDEA DE NALUX, aún sin construir: varios gimnasios por profesor + acceso de empleados
+
+Pedido: que un profesor, con un solo login, pueda tener VARIOS gimnasios (cada uno con sus alumnos), y que sus empleados
+entren solo al gimnasio donde trabajan, con una clave que da el profesor, para que cada empleado registre alumnos. Pidió
+investigar cómo lo resuelven otras apps. Esto es análisis y propuesta; **no se escribió código ni migraciones**.
+
+### ¿Se puede? Sí, y hoy es barato
+- Hoy el modelo es "un perfil = un gimnasio" (`profiles.gimnasio_id`). Pero TODAS las políticas RLS y las políticas de
+  Storage preguntan por una sola función, `get_mi_gimnasio_id()` (27 migraciones la nombran; solo 3 referencias a
+  `profiles.gimnasio_id`). Cambiar qué devuelve esa función cubre la base casi entera.
+- En el cliente, 41 referencias a `profile.gimnasio_id` en 14 archivos: si `profile.gimnasio_id` pasa a significar "gimnasio
+  ACTIVO", casi todo sigue igual. La caché offline y la cola ya van separadas por `gimnasio_id`.
+- Sin clientes reales todavía, es el mejor momento: migrar después, con datos de clientes, es mucho más caro.
+
+### Cómo lo hacen otras apps (fuentes: ayuda y páginas oficiales; lo que no se pudo confirmar está marcado)
+- **Mindbody**: grupos de permisos por rol; un ajuste explícito de si un usuario puede "cambiar de sede mientras está
+  logueado" (apagado = trabaja en una sede a la vez); el personal queda restringido a su sede asignada (reportes incluidos);
+  restricción por IP al local; panel corporativo con roles de estudio vs. de región.
+- **Wodify**: 5 roles fijos (Cliente, Staff, Coach, Manager, Admin), NO personalizables; con varias sedes, admins/managers/
+  coaches ven todas (no hay forma documentada de limitarlos a una); distinguen "nuevo ambiente" (datos separados) de "nueva
+  sede" (datos compartidos). No se pudo abrir esa guía (403): dato tomado del resumen de búsqueda.
+- **Glofox**: casa central configura membresías/precios para todas las sedes, equipos locales operan lo suyo, acceso por rol
+  y jerárquico para franquicias. La página no explica cómo se cambia de sede ni cómo se limita el personal.
+- **PushPress**: "modo staff" (celular de cada empleado) y "modo kiosco" (tablet en recepción). No detalla PIN ni sedes.
+- **Virtuagym**: "superclub" con sub-clubes; el acceso a sub-clubes se gestiona con soporte. Sin detalle de permisos.
+- Productos de Latinoamérica (ABC EVO, MacroGym, etc.): sin detalle público de permisos por sede.
+- Patrón común: el dueño ve todo y cambia de sede; cada empleado tiene SU identidad (no una clave compartida) con un rol
+  y una sede asignada; los permisos reales se aplican en el servidor.
+
+### Propuesta de diseño
+1. **Membresías**: tabla `membresias(user_id, gimnasio_id, rol admin|staff, activo, ...)`. Quién puede entrar a qué
+   gimnasio y con qué rol. El profesor es `admin` en cada gimnasio que crea.
+2. **Gimnasio activo por sesión**: claim `gimnasio_id` en el JWT con el **Custom Access Token Hook** de Supabase (disponible
+   en el plan Free). Cambiar de gimnasio = RPC `cambiar_gimnasio(id)` que valida la membresía + refrescar la sesión.
+   `get_mi_gimnasio_id()` lee el claim Y verifica la membresía viva (así revocar a alguien corta el acceso al instante, no
+   a la hora). Alternativa rápida sin hook: `profiles.gimnasio_activo_id` (se comparte entre todos los dispositivos del
+   usuario: cambiar en el celular cambia la compu). Con el claim es por navegador; entre pestañas del mismo navegador se
+   comparte la sesión, así que hay que avisar/recargar cuando el gimnasio activo cambia en otra pestaña (el servidor rechaza
+   lo escrito con el gimnasio equivocado, nunca lo manda a otro gimnasio).
+3. **Empleados con identidad propia, no clave compartida**: el profesor crea al empleado dentro de un gimnasio (nombre,
+   rol, usuario + clave generada, botón de WhatsApp, igual que hoy con el acceso del alumno). Detrás hay un usuario de
+   Supabase Auth creado por una Edge Function (service role) con un correo sintético; el empleado entra con código de
+   gimnasio + usuario + clave (el código hace que el usuario sea único por gimnasio). Una clave COMPARTIDA por gimnasio se
+   descartó: no se sabe quién registró o borró qué, no se puede sacar a una persona sin cambiarla para todos, y es un
+   blanco de fuerza bruta.
+4. **Modo recepción con PIN (opcional, fase posterior)**: una tablet fija en el gimnasio con una identidad de "terminal"
+   limitada a ESE gimnasio, y cada empleado marca su PIN para quedar identificado (auditoría), como el modo kiosco de
+   PushPress. Da la comodidad de "una clave" sin que la sesión del dueño (con todos sus gimnasios) viva en un dispositivo
+   del local.
+5. **Permisos reales admin vs staff**: hoy las políticas NO los distinguen (un staff puede borrar alumnos y pagos,
+   archivar pagos, etc.). Hay que definir una matriz y aplicarla en la base (política por rol, no ocultando botones).
+6. **Panel del dueño** (ingresos y alumnos de todos sus gimnasios): las políticas son por gimnasio activo, así que hacen falta
+   RPC agregadas que validen las membresías. Fase posterior.
+
+### Cambios necesarios (alcance)
+- Base: `membresias`; redefinir `get_mi_gimnasio_id()` y agregar `get_mi_rol()`; hook de claims; `create_gimnasio` (crea
+  membresía, permite más de uno, con tope por plan); `eliminar_mi_cuenta` (qué pasa con gimnasios con más miembros);
+  `handle_new_user`; el trigger que congela rol y gimnasio en `profiles`; las políticas que hoy miran `profiles.role =
+  'admin'` (gimnasios, logo en Storage) pasan a mirar la membresía del gimnasio activo.
+- Edge Functions (en el plan Free): crear/restablecer empleado, y login de empleado con tope de intentos (mismo patrón de la
+  0072).
+- Cliente: `AuthContext` (lista de gimnasios y activo), selector de gimnasio en la cabecera/menú, pantalla "Mis gimnasios" y
+  "Equipo" (empleados), login de empleado.
+
+### Decisiones que dependen de Nalux (antes de construir)
+1. **Cobro de la suscripción: ¿por gimnasio o por dueño?** Condiciona el módulo de suscripción: conviene definirlo ANTES.
+2. ¿Un alumno que va a dos gimnasios del mismo dueño es dos fichas (hoy sí) o una compartida?
+3. ¿Biblioteca de ejercicios y rutinas compartida entre los gimnasios del dueño, o cada uno la suya?
+4. Roles: ¿solo Admin y Staff, o también "Recepción" (sin ver pagos ni salud) y "Profesor" (solo rutinas)?
+5. ¿El empleado puede ver pagos y observaciones de salud? (dato sensible, Ley 25.326: minimizar por rol).
+
+### Orden sugerido
+Fase A (membresías + gimnasio activo + selector + varios gimnasios por dueño) → Fase B (empleados con cuenta propia y
+permisos por rol; incluye los hallazgos B1 y B4 de la auditoría) → módulo de suscripción (ya sabiendo si cobra por
+gimnasio) → Fase C (modo recepción con PIN y panel del dueño).
+
+### Multi-gimnasio: DECISIONES de Nalux (28/10/2026) y diseño ajustado tras verificar
+
+**Decisiones**
+1. **Cobro por gimnasio** (la suscripción se asocia al gimnasio, no al dueño).
+2. **Roles: Admin y Staff** (nada de Recepción/Profesor por ahora).
+3. **Cada alumno tiene su ficha en cada gimnasio** (no hay alumno compartido entre gimnasios).
+4. **Rutinas y ejercicios COMPARTIDOS entre los gimnasios del mismo dueño, pero sin que se vea a quién está asignada cada rutina**
+   en otros gimnasios (para que no se mezclen datos de alumnos de otros gimnasios).
+
+**Verificado (solo lectura) antes de diseñar**
+- El token de sesión YA trae `session_id`. Por lo tanto el "gimnasio activo" puede guardarse POR SESIÓN en una tabla
+  (`sesion_gimnasio(session_id → gimnasio_id)`) que lee `get_mi_gimnasio_id()` con `auth.jwt()->>'session_id'`. Esto evita el
+  Custom Access Token Hook, que HAY que activar a mano en el Dashboard de Supabase (no se puede por migración). Cada navegador/
+  dispositivo tiene su gimnasio activo; cambiar en uno no mueve al otro (con un valor por usuario, el refresco de token de otro
+  dispositivo lo cambiaría solo). Sin fila en esa tabla (token anterior) se usa el único gimnasio del usuario: nadie queda
+  desconectado al desplegar.
+- `get_mi_gimnasio_id()` hoy es `SELECT gimnasio_id FROM profiles WHERE id = auth.uid()`: trivial de redefinir.
+- Todo lo que hoy mira el rol en `profiles`: 5 funciones (`create_gimnasio`, `eliminar_mi_cuenta`, `regenerar_codigo_invitacion`,
+  `registrar_error_cliente`, `get_mi_gimnasio_id`; `marcar_tour_visto` es por usuario y no cambia) y 4 políticas
+  (`gimnasios_update_admin` y las 3 del logo en Storage). El trigger `profiles_congelar_rol_y_gimnasio` seguiría congelando
+  `role`/`gimnasio_id` desde el cliente. `profiles.gimnasio_id/role` quedan como "último gimnasio / rol por defecto" y la fuente
+  de verdad pasa a `membresias`.
+- **Compartir la biblioteca exige un "dueño" por encima de los gimnasios.** Hoy `rutinas` y `ejercicios` cuelgan de
+  `gimnasios` con `ON DELETE CASCADE`: si el gimnasio que creó una rutina se borrara, se llevaría puesta una rutina que usan los
+  otros gimnasios. Por eso: tabla `organizaciones` (invisible para el usuario), `gimnasios.organizacion_id`, y la biblioteca
+  (rutinas, ejercicios propios) pasa a colgar de `organizacion_id`. Los 500 ejercicios globales (`gimnasio_id IS NULL`, biblioteca
+  base) no cambian. Hoy: 5 rutinas, 503 ejercicios (500 globales), todo de un solo gimnasio.
+- **Lo de "no ver las personas asignadas" ya queda resuelto por diseño si las asignaciones siguen por gimnasio**:
+  `rutinas_asignadas` conserva `gimnasio_id` (su RLS solo devuelve las del gimnasio activo) y guarda COPIA del contenido (0026), y su
+  `rutina_id` es `ON DELETE SET NULL`: borrar una rutina compartida no borra ni deja al descubierto las asignaciones de otro
+  gimnasio. Hay que revisar que ninguna pantalla muestre contadores/listas de asignados que crucen gimnasios.
+- `alimentos` (45 filas, 4 globales) y `planes_alimentacion_biblioteca` (5): Nalux NO los nombró; por defecto siguen por gimnasio.
+
+**Fases y alcance**
+- **A1**: `organizaciones`, `membresias`, `sesion_gimnasio`; `get_mi_gimnasio_id()` + `get_mi_rol()`; `create_gimnasio` (el dueño
+  puede crear más, hereda su organización); cambiar de gimnasio (RPC + recarga); eliminar UN gimnasio (con limpieza de Storage de
+  ese gimnasio) distinto de eliminar la cuenta; selector de gimnasio en la cabecera/menú. Probar con la cuenta de Nalux (dueña de
+  dos gimnasios) y con JWT simulados en SQL.
+- **A2**: biblioteca compartida (rutinas + ejercicios) por organización: columna, backfill, políticas, ficha/asignación sin cruzar
+  gimnasios, y qué pasa con los archivos de `ejercicios-media` (hoy en la carpeta del gimnasio que los subió; lectura pública).
+- **B**: empleados con cuenta propia (Edge Function) y permisos reales Admin vs Staff (matriz a definir; cierra los hallazgos B1
+  y B4 de la auditoría).
+- Después: suscripción por gimnasio; modo recepción con PIN y panel consolidado del dueño.
+
+**Preguntas abiertas con valor por defecto propuesto** (se asume el valor si Nalux no dice lo contrario): biblioteca de alimentos y
+planes de alimentación por gimnasio; al crear un 2.º gimnasio hereda la biblioteca de rutinas y ejercicios del dueño; eliminar un
+gimnasio borra solo sus alumnos/pagos/asignaciones (la biblioteca compartida sigue mientras quede otro gimnasio de la organización).
+
+### REQUISITO de Nalux para la suscripción (28/10/2026) — aún sin construir
+- **Paga solo el profesor (dueño)**, una vez al mes; adentro puede dar acceso a staff y demás, y **nadie más ve nada del cobro**
+  (ni staff ni alumnos: la pantalla de plan/pagos de la app queda solo para el dueño).
+- **"Ojo con los links": nadie puede usar la app gratis sin que el profesor pague.** Hay que bloquearlo en el SERVIDOR, no en la
+  pantalla. Cada puerta de entrada debe comprobar que el gimnasio tiene servicio activo (o período de prueba):
+  1. Alta de gimnasios: hoy `create_gimnasio` la puede llamar cualquier cuenta (hallazgo B1); tiene que exigir suscripción/prueba.
+  2. Cuentas de profesor: el registro público está cerrado; cuando se abra, que no dé acceso a nada sin pagar.
+  3. Cuentas de staff (Fase B): se crean solo desde un gimnasio con servicio activo, y su login falla si el gimnasio no lo tiene.
+  4. Portal del alumno (`ver_plan_por_codigo` y demás RPC de `/mi-plan/<código>`), login del alumno y autorregistro por link/QR
+     (`/unirse/<código>`, `join_gimnasio_por_codigo`): si el gimnasio no tiene servicio activo, devuelven "servicio suspendido".
+  5. API directa con la clave pública: políticas RESTRICTIVE de escritura según el estado del servicio (diseño del auditor de
+     backend), de modo que sin pagar quede solo lectura/exportar, y nunca "gratis para siempre".
+  6. Nada se decide con un dato que el cliente pueda editar: el estado del servicio solo lo escribe el servidor (webhook firmado de
+     la pasarela), y las columnas del estado no entran en los permisos de `authenticated`.
+- **A confirmar con Nalux (contradicción aparente)**: antes dijo "cobro por gimnasio"; ahora "una suscripción mensual del profesor".
+  ¿Una suscripción POR CADA gimnasio (el dueño paga una por gimnasio) o UNA SOLA del dueño que cubre todos sus gimnasios? Con la
+  organización (dueño) por encima de los gimnasios el diseño sirve para las dos; cambia dónde vive la tabla `suscripciones`.
+
+## 28/10/2026 (noche) — Etapa A1 (varios gimnasios por profesor): migración 0076 APLICADA y probada; cliente listo
+
+Nalux dio el OK para arrancar A1 ("1- si") y después ordenó aplicar la 0076 y subir todo. **La 0076 está APLICADA** en el proyecto
+`fftdmpqbemcnxdnfnvhd`. El cliente nuevo también funciona con la base sin migrar (verificado antes de aplicarla).
+Las migraciones 0074 y 0075 (zona horaria) se suben en el mismo commit que esta etapa.
+
+### Migración `supabase/migrations/0076_multi_gimnasio_membresias.sql`
+- Tablas: `organizaciones` (el "dueño", invisible; `creada_por`), `membresias` (usuario, gimnasio, rol admin|staff, activo; cada
+  uno ve solo las suyas, nadie escribe directo) y `sesion_gimnasio` (gimnasio abierto por `session_id` del token). `gimnasios` gana
+  `organizacion_id`. Backfill: una organización por gimnasio existente y una membresía por perfil con gimnasio, con su mismo rol.
+- **`get_mi_gimnasio_id()` redefinida**: (1) el elegido en ESTA sesión, (2) el último usado (`profiles.gimnasio_id`), (3) el único
+  que tenga; siempre exigiendo membresía activa en el momento (revocar corta el acceso al instante). Una sesión anterior a la
+  migración sigue entrando sola. Nuevas `get_mi_rol()`, `mi_contexto()` (gimnasio abierto, rol y lista, con `unico_admin`) y
+  `cambiar_gimnasio(id)`.
+- Migrado todo lo que miraba el rol en `profiles`: política `gimnasios_update_admin` y las 3 del logo en Storage (se reescribe SOLO el
+  fragmento EXISTS(...profiles...), con un `RAISE` si el texto no coincide), `regenerar_codigo_invitacion`, `registrar_error_cliente`.
+- `create_gimnasio`: ahora se pueden tener varios (tope 10 por cuenta; cierra la parte "crear sin límite" de B1), la organización
+  es la que ESA persona creó, valida el nombre, crea la membresía y deja abierto el gimnasio nuevo en la sesión.
+- `eliminar_gimnasio_activo()` (borra el abierto; el cliente limpia antes su Storage, que las políticas solo permiten para el abierto) y
+  `eliminar_mi_cuenta()` nueva: borra los gimnasios donde es la ÚNICA admin y exige borrarlos de a uno si son más de uno.
+
+### Cliente (compatible con la base sin migrar; sin commit)
+- `AuthContext`: `fetchProfile` usa `mi_contexto()` y, si la función no existe, el camino de antes. `profile.gimnasio_id` sigue
+  significando "el gimnasio abierto" (por eso casi toda la app no cambia) y `profile.role` es el rol en ESE gimnasio;
+  `profile.misGimnasios` es la lista. Nuevas acciones `cambiarGimnasio` (recarga la página entera; se niega si hay cola de pagos o
+  asistencia sin enviar) y `eliminarGimnasioActivo` (con contraseña). La limpieza de Storage se factorizó en
+  `limpiarArchivosDelGimnasio`. `eliminarCuenta` ahora comprueba ANTES de borrar archivos que lo único que se borra es el gimnasio
+  abierto (si no, queda con archivos borrados y el gimnasio vivo).
+- `components/SelectorGimnasio.jsx` (menú lateral, solo con 2+ gimnasios), `components/configuracion/MisGimnasios.jsx` (tarjeta en
+  Configuración, solo para el admin: lista, abrir, "Agregar otro gimnasio", "Eliminar este gimnasio" si hay más de uno),
+  `OnboardingPage` con `?nuevo=1` para agregar otro (ProtectedRoute lo permite solo con esa marca).
+- Verificado con la base SIN migrar: el panel carga igual, la tarjeta "Mis gimnasios" y el selector no aparecen, Configuración y el
+  selector de zona horaria siguen bien (solo queda el 404 de `mi_contexto` en consola, tolerado).
+
+### Cambio después de aplicar: la sesión fija su gimnasio al cargar
+Sin esto, una sesión sin fila en `sesion_gimnasio` "seguía" al último gimnasio usado (`profiles.gimnasio_id`), y si en otro navegador
+se cambiaba de gimnasio, esta pestaña habría empezado a ver el otro. Ahora `AuthContext.fetchProfile` llama una vez por carga a
+`cambiar_gimnasio(<el abierto>)` y la sesión queda atada a ese gimnasio (se rearma al cerrar sesión).
+
+### Resultados de las pruebas (28/10/2026)
+1. Estructura y backfill: 1 organización, 0 gimnasios sin organización, Mi GYM FIT con membresía admin, 0 políticas que sigan
+   mirando `profiles`, `anon` no puede ejecutar las funciones nuevas. La sesión de Nalux siguió entrando sin volver a loguear
+   (11 alumnos, 13 pagos).
+2. Con JWT simulados (bloque DO con rollback): sin membresía no se ve nada; con dos membresías cada sesión ve solo su gimnasio y dos
+   sesiones ven gimnasios distintos a la vez; no se puede cambiar a un gimnasio ajeno; revocar la membresía corta el acceso en el
+   acto; `get_mi_rol()` por gimnasio; `staff` NO puede editar el gimnasio, regenerar el código ni eliminar el gimnasio; crear
+   reutiliza la organización de quien crea y respeta el tope de 10; `eliminar_mi_cuenta` se rechaza si es única admin de más de uno.
+3. Pantalla real con la sesión de Mi GYM FIT, con un gimnasio "ZZZ QA Segundo Gym": "Agregar otro gimnasio" crea el gimnasio (misma
+   organización, 2 precios iniciales, zona horaria del dispositivo, logo subido a `gimnasio-logos/{id}/logo.png` con la política
+   basada en `get_mi_rol`) y lo deja abierto; el selector del menú aparece con los 2 y marca el abierto; cambiar recarga y cada
+   gimnasio muestra solo sus datos (el nuevo con 0 alumnos, Mi GYM FIT con los suyos); tras borrar el de prueba la sesión vuelve sola
+   a Mi GYM FIT.
+4. Borrado de gimnasio: `eliminar_gimnasio_activo()` probada con rollback (el gimnasio y su membresía desaparecen, Mi GYM FIT queda
+   intacto con sus 11 alumnos) y luego ejecutada de verdad sobre el gimnasio de prueba. **No se probó por la pantalla** el botón
+   "Eliminar este gimnasio" porque pide la contraseña de la cuenta y no se escribe por ella: queda por probar a mano.
+5. Limpieza: gimnasio de prueba borrado, su logo borrado por la API de Storage (SQL no deja borrar `storage.objects`), 0 logos
+   huérfanos, 0 sesiones colgadas, quedan 1 gimnasio, 1 organización y 1 membresía.
+- Aprendizaje: `mi_contexto()` devuelve `gimnasio_id` (no `gimnasio.id`); un `list(undefined)` de Storage lista la raíz del bucket,
+  así que para borrar archivos de un gimnasio siempre pasar el id verificado por SQL.
+- Sin probar todavía: pagos, asistencia, portal del alumno y fotos con 2 gimnasios abiertos (la base los aísla por RLS con la misma
+  función; falta recorrerlos por pantalla).
+
+**Archivos**: supabase/migrations/0076_multi_gimnasio_membresias.sql (aplicada), apps/web/src/contexts/AuthContext.jsx,
+apps/web/src/components/{SelectorGimnasio (nuevo),ProtectedRoute,AppLayout}.jsx, apps/web/src/components/configuracion/MisGimnasios.jsx (nuevo),
+apps/web/src/pages/{Onboarding,Configuracion}Page.jsx.

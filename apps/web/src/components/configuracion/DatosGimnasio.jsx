@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { Btn, Card, ErrorBox, Field, Input, Loading } from '@/components/ui-kit';
+import { Btn, Card, ErrorBox, Field, Input, Loading, Select } from '@/components/ui-kit';
 import { updateRec } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
+import { mismaZona, opcionesDeZona, zonaDelDispositivo } from '@/lib/zonasHorarias';
 
 // Mismo criterio que OnboardingPage.jsx (subida de logo): 2 MB de tope y
 // solo estos tres formatos, para no duplicar lógica de validación distinta
@@ -93,6 +94,9 @@ const DatosGimnasio = ({
                 alias_mercadopago: dgForm.alias_mercadopago.trim() || null,
                 whatsapp_pagos: dgForm.whatsapp_pagos.trim() || null,
                 email_pagos: dgForm.email_pagos.trim() || null,
+                // Solo si la base ya tiene la columna (migración 0074): si no, mandarla
+                // haría fallar TODO el guardado de esta tarjeta.
+                ...('zona_horaria' in gimnasioFull ? { zona_horaria: dgForm.zona_horaria } : {}),
             });
 
             if (logoFile) {
@@ -227,6 +231,34 @@ const DatosGimnasio = ({
                             falta. Tiene que quedar al menos uno encendido.
                         </span>
                     </Field>
+
+                    {/* Zona horaria (migración 0074, auditoría del 28/10/2026): define qué día
+                        es "hoy" para este gimnasio -- cuotas que vencen, asistencia, pagos,
+                        avisos y el portal del alumno. Antes todo se medía en UTC y de 21:00 a
+                        medianoche (hora argentina) la app creía que ya era mañana. */}
+                    {'zona_horaria' in gimnasioFull && (
+                        <Field label="Zona horaria del gimnasio">
+                            <Select
+                                value={
+                                    opcionesDeZona(dgForm.zona_horaria).find(([valor]) => mismaZona(valor, dgForm.zona_horaria))?.[0] ??
+                                    dgForm.zona_horaria
+                                }
+                                onChange={(e) => setDgForm({ ...dgForm, zona_horaria: e.target.value })}
+                            >
+                                {opcionesDeZona(dgForm.zona_horaria).map(([valor, nombre]) => (
+                                    <option key={valor} value={valor}>
+                                        {nombre}
+                                    </option>
+                                ))}
+                            </Select>
+                            <span className="text-xs text-muted-foreground">
+                                Define qué día es &quot;hoy&quot; para las cuotas, la asistencia y los avisos.
+                                {zonaDelDispositivo() && !mismaZona(zonaDelDispositivo(), dgForm.zona_horaria)
+                                    ? ` Este dispositivo está configurado en ${zonaDelDispositivo()}.`
+                                    : ''}
+                            </span>
+                        </Field>
+                    )}
 
                     {/* "Cómo pagar" (migraciones 0067 y 0070, pedido de Nalux
                         21/09/2026, visto en Control Gym): lo que el alumno ve en

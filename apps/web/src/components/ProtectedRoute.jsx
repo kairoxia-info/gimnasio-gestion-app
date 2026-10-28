@@ -28,7 +28,9 @@ const ProtectedRoute = ({ children }) => {
 
     // "/login" no pasa por este guard (ver App.jsx), así que el único caso real
     // acá es un usuario ya onboardeado que insiste en quedarse en /onboarding.
-    if (tieneGimnasio && location.pathname === '/onboarding') {
+    // Excepción (migración 0076): "?nuevo=1" es agregar OTRO gimnasio a una cuenta que ya tiene.
+    const agregandoOtro = new URLSearchParams(location.search).get('nuevo') === '1';
+    if (tieneGimnasio && location.pathname === '/onboarding' && !agregandoOtro) {
         return <Navigate to="/panel" replace />;
     }
 

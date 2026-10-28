@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Input } from '@/components/ui-kit';
 import { createRec, removeRec, updateRec } from '@/lib/data';
+import { hoy } from '@/lib/format';
 
 /* ---------------- Asistencia del alumno ---------------- */
 
 const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
-    const [mes, setMes] = useState(new Date().toISOString().slice(0, 7));
+    const [mes, setMes] = useState(hoy().slice(0, 7));
     const mapa = useMemo(() => {
         const m = {};
         asistencias.forEach((a) => {

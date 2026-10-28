@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Btn, Card, ConfirmInlineActions, ErrorBox, Field, Input } from '@/components/ui-kit';
 import supabase from '@/lib/supabaseClient';
+import { hoy, restarMesesISO } from '@/lib/format';
 
 // Archivado manual de pagos (migración 0024, 04/09/2026). NUNCA
 // automático a propósito: cada fila de pagos es también el comprobante
@@ -10,11 +11,7 @@ import supabase from '@/lib/supabaseClient';
 // "Quitar" en RutinasPage.jsx -- nada de window.confirm) antes de que se
 // dispare archivar_pagos_hasta().
 const ArchivoPagos = () => {
-    const [archivoFechaCorte, setArchivoFechaCorte] = useState(() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - 12);
-        return d.toISOString().slice(0, 10);
-    });
+    const [archivoFechaCorte, setArchivoFechaCorte] = useState(() => restarMesesISO(hoy(), 12));
     const [archivoConfirmando, setArchivoConfirmando] = useState(false);
     const [archivoLoading, setArchivoLoading] = useState(false);
     const [archivoError, setArchivoError] = useState('');

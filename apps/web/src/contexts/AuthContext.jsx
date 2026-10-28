@@ -1,19 +1,52 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '@/lib/supabaseClient';
 import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
-import { limpiarCacheDeLectura, limpiarTodoOffline } from '@/lib/offline';
+import { limpiarCacheDeLectura, limpiarTodoOffline, verCola } from '@/lib/offline';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
+import { setZonaHorariaDelGimnasio } from '@/lib/format';
 
 const AuthContext = createContext(null);
+
+// Borra TODOS los archivos de un gimnasio en Storage (no se pueden borrar por SQL: Supabase
+// lo bloquea a propósito, ver la migración 0035). Hay que llamarla ANTES de borrar el gimnasio
+// y siendo admin del gimnasio ABIERTO: las políticas de Storage solo dejan tocar la carpeta
+// del gimnasio abierto en la sesión. Cada bucket con carpeta por gimnasio tiene que estar
+// en esta lista, o sus archivos quedan huérfanos (bug del 16/09/2026 y del 21/09/2026).
+//
+// list() devuelve 100 archivos por defecto (bug de la auditoría del 28/10/2026: con más de 100
+// el resto quedaba huérfano): se repite listar + borrar hasta vaciar la carpeta, con un tope
+// de vueltas por si un borrado fallara siempre. Los errores se ignoran a propósito: lo
+// importante es que los datos salgan de la base.
+const BUCKETS_POR_GIMNASIO = ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos', 'noticias-imagenes'];
+
+const limpiarArchivosDelGimnasio = async (gimnasioId) => {
+    if (!gimnasioId) return;
+    for (const bucket of BUCKETS_POR_GIMNASIO) {
+        try {
+            for (let vuelta = 0; vuelta < 50; vuelta += 1) {
+                const { data: archivos } = await supabase.storage.from(bucket).list(gimnasioId, { limit: 100 });
+                if (!archivos?.length) break;
+                const paths = archivos.map((a) => gimnasioId + '/' + a.name);
+                const { error: errorBorrado } = await supabase.storage.from(bucket).remove(paths);
+                if (errorBorrado) break;
+            }
+        } catch (_) {
+            // Ignorado a propósito -- ver comentario arriba.
+        }
+    }
+};
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Si esta sesión ya fijó su gimnasio en la base (ver fetchProfile).
+    const sesionFijadaRef = useRef(false);
 
     const fetchProfile = useCallback(async (userId) => {
         if (!userId) {
             setProfile(null);
+            setZonaHorariaDelGimnasio(null);
             return null;
         }
         // gimnasios(...) es un embed de PostgREST vía la FK profiles.gimnasio_id ->
@@ -31,8 +64,50 @@ export const AuthProvider = ({ children }) => {
             setProfile(null);
             return null;
         }
-        setProfile(data);
-        return data;
+        // Varios gimnasios por profesor (migración 0076): el gimnasio ABIERTO en esta sesión, el
+        // rol en ESE gimnasio y la lista de gimnasios de la persona vienen de mi_contexto(). Así
+        // profile.gimnasio_id sigue significando "el gimnasio con el que se está trabajando" y casi
+        // todo el resto de la app no cambia. Si la función todavía no existe (base sin migrar) se
+        // sigue con el camino de antes, un solo gimnasio por perfil: no se rompe nada.
+        let perfil = { ...data, misGimnasios: [] };
+        let zona = null;
+        const { data: ctx, error: errorContexto } = await supabase.rpc('mi_contexto');
+        if (!errorContexto && ctx) {
+            perfil = {
+                ...data,
+                gimnasio_id: ctx.gimnasio_id ?? null,
+                role: ctx.rol ?? data.role,
+                gimnasios: ctx.gimnasio ?? null,
+                misGimnasios: ctx.gimnasios ?? [],
+            };
+            zona = ctx.gimnasio?.zona_horaria ?? null;
+            // Fija en la base el gimnasio con el que ESTA sesión abrió la app (una vez por carga). Sin
+            // fijar, una sesión usa "el último gimnasio usado" de la persona, y si en otro navegador
+            // cambia de gimnasio esta se movería sola en la siguiente consulta. Ya fijada, cada sesión
+            // queda en el suyo. Es lo mismo que cambiar_gimnasio al mismo gimnasio: no hace nada más.
+            if (ctx.gimnasio_id && !sesionFijadaRef.current) {
+                sesionFijadaRef.current = true;
+                supabase.rpc('cambiar_gimnasio', { p_gimnasio_id: ctx.gimnasio_id }).then(
+                    () => {},
+                    () => {
+                        sesionFijadaRef.current = false;
+                    },
+                );
+            }
+        } else if (data?.gimnasio_id) {
+            // Zona horaria del gimnasio (migración 0074): consulta aparte y tolerante, ver lib/format.js.
+            const { data: gim } = await supabase
+                .from('gimnasios')
+                .select('zona_horaria')
+                .eq('id', data.gimnasio_id)
+                .maybeSingle();
+            zona = gim?.zona_horaria ?? null;
+        }
+        // La zona se fija ANTES de publicar el perfil, así ninguna pantalla arma "hoy" con la
+        // zona equivocada en su primer render.
+        setZonaHorariaDelGimnasio(zona);
+        setProfile(perfil);
+        return perfil;
     }, []);
 
     useEffect(() => {
@@ -55,12 +130,16 @@ export const AuthProvider = ({ children }) => {
             // solo se borraba con el "Cerrar sesión" manual (28/10/2026,
             // auditoría). A propósito NO se toca la cola de pagos pendientes
             // (ver limpiarCacheDeLectura en lib/offline.js).
-            if (event === 'SIGNED_OUT') limpiarCacheDeLectura();
+            if (event === 'SIGNED_OUT') {
+                limpiarCacheDeLectura();
+                sesionFijadaRef.current = false;
+            }
             setUser(session?.user ?? null);
             if (session?.user) {
                 await fetchProfile(session.user.id);
             } else {
                 setProfile(null);
+                setZonaHorariaDelGimnasio(null);
             }
             setLoading(false);
         });
@@ -131,6 +210,43 @@ export const AuthProvider = ({ children }) => {
                 return result;
             },
             refreshProfile: () => fetchProfile(user?.id),
+            // Cambia el gimnasio abierto en ESTA sesión (migración 0076). Recarga la página entera:
+            // es lo único que garantiza que ninguna pantalla se quede con datos, caché o canales
+            // en tiempo real del gimnasio anterior. No cambia si hay pagos o asistencia sin enviar
+            // (la cola sin conexión guarda a qué gimnasio pertenece cada uno y la base rechazaría
+            // los del gimnasio anterior).
+            cambiarGimnasio: async (gimnasioId) => {
+                if (verCola().length > 0) {
+                    return {
+                        error: {
+                            message:
+                                'Hay cambios sin enviar (asistencia o pagos registrados sin conexión). Esperar a que se envíen antes de cambiar de gimnasio.',
+                        },
+                    };
+                }
+                const { error } = await supabase.rpc('cambiar_gimnasio', { p_gimnasio_id: gimnasioId });
+                if (error) return { error: { message: 'No se pudo cambiar de gimnasio.' } };
+                window.location.assign('/panel');
+                return { error: null };
+            },
+            // Elimina SOLO el gimnasio abierto (con la contraseña de nuevo, igual que eliminarCuenta)
+            // y deja la cuenta y los demás gimnasios. Primero los archivos de Storage, después la base.
+            eliminarGimnasioActivo: async (password) => {
+                if (!user?.email) return { error: { message: 'No hay sesión activa.' } };
+                if (profile?.role !== 'admin' || !profile?.gimnasio_id) {
+                    return { error: { message: 'Solo un administrador puede eliminar el gimnasio.' } };
+                }
+                const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password });
+                if (authError) return { error: { message: 'La contraseña no es correcta.' } };
+
+                await limpiarArchivosDelGimnasio(profile.gimnasio_id);
+                const { error } = await supabase.rpc('eliminar_gimnasio_activo');
+                if (error) return { error: { message: 'No se pudo eliminar el gimnasio. Reintentar en unos minutos.' } };
+
+                limpiarTodoOffline();
+                window.location.assign('/panel');
+                return { error: null };
+            },
             // Tour de bienvenida (migración 0060): marca la propia cuenta como
             // "ya vio la demo", para siempre. Va por RPC porque la columna no
             // está en el GRANT UPDATE de authenticated (0043). Se actualiza el
@@ -160,6 +276,28 @@ export const AuthProvider = ({ children }) => {
             eliminarCuenta: async (password) => {
                 if (!user?.email) return { error: { message: 'No hay sesión activa.' } };
 
+                // ANTES de borrar nada: con varios gimnasios solo se pueden limpiar los archivos del
+                // gimnasio ABIERTO, así que la cuenta solo se puede eliminar si lo único que borra es
+                // ese. La base lo vuelve a comprobar (eliminar_mi_cuenta), pero acá se evita llegar a
+                // borrar archivos y que después la base la rechace.
+                const propios = (profile?.misGimnasios ?? []).filter((g) => g.unico_admin);
+                if (propios.length > 1) {
+                    return {
+                        error: {
+                            message:
+                                'Esta cuenta administra más de un gimnasio. Eliminar primero los otros gimnasios, de a uno, y después la cuenta.',
+                        },
+                    };
+                }
+                if (propios.length === 1 && propios[0].id !== profile?.gimnasio_id) {
+                    return {
+                        error: {
+                            message:
+                                'Abrir primero el gimnasio "' + propios[0].nombre + '" desde el menú y volver a intentar: así se eliminan también sus archivos.',
+                        },
+                    };
+                }
+
                 const { error: authError } = await supabase.auth.signInWithPassword({
                     email: user.email,
                     password,
@@ -184,39 +322,25 @@ export const AuthProvider = ({ children }) => {
                 // storage real cada vez que se borraba un gimnasio con alumnos que
                 // tuvieran foto cargada. Confirmado con archivos huérfanos reales
                 // de pruebas anteriores en la base de producción.
+                // Con varios gimnasios, esta función solo limpia los archivos del gimnasio ABIERTO
+                // (las políticas de Storage no dejan tocar los demás). Por eso la base no deja
+                // eliminar la cuenta si es la única administradora de MÁS de un gimnasio: hay que
+                // borrarlos de a uno antes con "Eliminar este gimnasio" (migración 0076).
                 if (profile?.role === 'admin' && profile?.gimnasio_id) {
-                    const gimnasioId = profile.gimnasio_id;
-                    // 'noticias-imagenes' sumado el 21/09/2026 con la migración
-                    // 0068 -- misma regla que ya costó un bug el 16/09: cada
-                    // bucket nuevo con carpeta por gimnasio tiene que estar acá,
-                    // o sus archivos quedan huérfanos al borrar la cuenta.
-                    //
-                    // Bug de la auditoría del 28/10/2026: list() devuelve 100
-                    // archivos por defecto, así que un gimnasio con más de 100
-                    // fotos dejaba el resto huérfano. Ahora se repite listar +
-                    // borrar hasta que la carpeta queda vacía (borrar achica la
-                    // lista, así que siempre se pide desde el principio), con un
-                    // tope de vueltas para no quedar en un bucle si un borrado
-                    // fallara siempre.
-                    for (const bucket of ['gimnasio-logos', 'ejercicios-media', 'alumnos-fotos', 'progreso-fotos', 'noticias-imagenes']) {
-                        try {
-                            for (let vuelta = 0; vuelta < 50; vuelta += 1) {
-                                const { data: archivos } = await supabase.storage
-                                    .from(bucket)
-                                    .list(gimnasioId, { limit: 100 });
-                                if (!archivos?.length) break;
-                                const paths = archivos.map((a) => `${gimnasioId}/${a.name}`);
-                                const { error: errorBorrado } = await supabase.storage.from(bucket).remove(paths);
-                                if (errorBorrado) break;
-                            }
-                        } catch (_) {
-                            // Ignorado a propósito -- ver comentario arriba.
-                        }
-                    }
+                    await limpiarArchivosDelGimnasio(profile.gimnasio_id);
                 }
-
                 const { error } = await supabase.rpc('eliminar_mi_cuenta');
-                if (error) return { error: { message: 'No se pudo eliminar la cuenta. Reintentar en unos minutos.' } };
+                if (error) {
+                    if (String(error.message || '').includes('más de un gimnasio')) {
+                        return {
+                            error: {
+                                message:
+                                    'Esta cuenta administra más de un gimnasio. Eliminar primero los otros gimnasios, de a uno, y después la cuenta.',
+                            },
+                        };
+                    }
+                    return { error: { message: 'No se pudo eliminar la cuenta. Reintentar en unos minutos.' } };
+                }
 
                 limpiarTodoOffline();
                 return { error: null };

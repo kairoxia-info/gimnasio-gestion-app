@@ -10,6 +10,8 @@ import Comprobante from '@/components/configuracion/Comprobante';
 import AvisoAutomaticoCuota from '@/components/configuracion/AvisoAutomaticoCuota';
 import ArchivoPagos from '@/components/configuracion/ArchivoPagos';
 import EliminarCuenta from '@/components/configuracion/EliminarCuenta';
+import MisGimnasios from '@/components/configuracion/MisGimnasios';
+import { ZONA_POR_DEFECTO } from '@/lib/zonasHorarias';
 
 // Mismo bug y mismo fix que components/configuracion/DatosGimnasio.jsx: este
 // default tiene que coincidir con el color de fábrica real de index.css
@@ -19,7 +21,7 @@ const COLOR_DEFAULT = '#F6B51E';
 const DIAS_ABIERTOS_DEFAULT = [1, 2, 3, 4, 5, 6];
 
 const ConfiguracionPage = () => {
-    const { profile, refreshProfile, eliminarCuenta, signOut } = useAuth();
+    const { profile, refreshProfile, eliminarCuenta, signOut, cambiarGimnasio, eliminarGimnasioActivo } = useAuth();
 
     // Fila completa de "gimnasios" (id, codigo_invitacion, autorregistro_activo,
     // etc.): useAuth().gimnasio solo trae nombre/logo_url/color_principal (ver
@@ -36,6 +38,7 @@ const ConfiguracionPage = () => {
         alias_mercadopago: '',
         whatsapp_pagos: '',
         email_pagos: '',
+        zona_horaria: ZONA_POR_DEFECTO,
     });
 
     // Vencimiento de cuotas (migración 0013). El % de recargo NO va acá: ya
@@ -82,6 +85,7 @@ const ConfiguracionPage = () => {
                     alias_mercadopago: data.alias_mercadopago || '',
                     whatsapp_pagos: data.whatsapp_pagos || '',
                     email_pagos: data.email_pagos || '',
+                    zona_horaria: data.zona_horaria || ZONA_POR_DEFECTO,
                 });
                 setVencForm({
                     dias_gracia_cuota: String(data.dias_gracia_cuota ?? 0),
@@ -161,6 +165,13 @@ const ConfiguracionPage = () => {
             />
 
             <ArchivoPagos />
+
+            {/* Varios gimnasios por profesor (migración 0076): lista, abrir otro, agregar uno y eliminar el abierto. */}
+            <MisGimnasios
+                profile={profile}
+                cambiarGimnasio={cambiarGimnasio}
+                eliminarGimnasioActivo={eliminarGimnasioActivo}
+            />
 
             <EliminarCuenta
                 esAdminConGimnasio={esAdminConGimnasio}

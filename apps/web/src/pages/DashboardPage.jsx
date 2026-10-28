@@ -17,6 +17,9 @@ import {
     hoy,
     money,
     planesPorVencer as planesPorVencerHelper,
+    sumarDiasISO,
+    diasHastaISO,
+    hoyComoFecha,
 } from '@/lib/format';
 
 // Carga diferida: saca recharts (~100 KB) del bundle principal. Los
@@ -130,9 +133,8 @@ const DashboardPage = () => {
             else deudores += 1;
         });
 
-        const desde = new Date();
-        desde.setDate(desde.getDate() - 7);
-        const semana = asistencias.filter((x) => new Date(x.fecha + 'T00:00:00') >= desde);
+        const desde = sumarDiasISO(hoy(), -7);
+        const semana = asistencias.filter((x) => String(x.fecha).slice(0, 10) >= desde);
         const presentes = semana.filter((x) => x.presente).length;
         // Fase 2.1 (13/09/2026): el tile de arriba mostraba esta misma suma de
         // 7 días ("Asistencias (7 días)"), un número que mezclaba todos los
@@ -150,7 +152,7 @@ const DashboardPage = () => {
         // año (fecha_nacimiento es opcional, la mayoría de los alumnos no la
         // van a tener cargada — no filtramos por activo, un alumno inactivo
         // sigue siendo alguien a quien saludar si vuelve a aparecer).
-        const ahora = new Date();
+        const ahora = hoyComoFecha();
         const cumpleañeros = alumnos.filter((a) => {
             if (!a.fecha_nacimiento) return false;
             const nacimiento = new Date(`${a.fecha_nacimiento}T00:00:00`);
@@ -171,12 +173,7 @@ const DashboardPage = () => {
         // planesPorVencer() se sacó a lib/format.js (15/09/2026) para poder
         // reusar el mismo criterio en la campanita de notificaciones
         // (NotificacionesCampana.jsx) -- antes vivía solo acá.
-        const hoyMedianoche = new Date();
-        hoyMedianoche.setHours(0, 0, 0, 0);
-        const diasHasta = (fecha) => {
-            const f = new Date(`${fecha}T00:00:00`);
-            return Math.round((f - hoyMedianoche) / 86400000);
-        };
+        const diasHasta = (fecha) => diasHastaISO(fecha);
 
         const planesPorVencer = planesPorVencerHelper(activos, rutinasAsignadas, planesAlimentacion);
 
@@ -245,11 +242,7 @@ const DashboardPage = () => {
     // ahí se cuenta contra `asistencias`.
     const serieAsistencias = useMemo(() => {
         const hoyStr = hoy();
-        const dias = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - (6 - i));
-            return d.toISOString().slice(0, 10);
-        });
+        const dias = Array.from({ length: 7 }, (_, i) => sumarDiasISO(hoyStr, -(6 - i)));
         return dias.map((fecha) => ({
             dia: fmtDiaCorto(fecha),
             presentes: asistencias.filter((x) => x.fecha === fecha && x.presente).length,

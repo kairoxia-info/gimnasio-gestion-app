@@ -7,7 +7,7 @@ import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select
 import { createRec, listAll } from '@/lib/data';
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { agregarACola, esErrorDeRed, onCambioCola, verCola } from '@/lib/offline';
-import { ESTADOS_PAGO, deudaEstimada, estadoCuota, fmtFecha, hoy, money } from '@/lib/format';
+import { ESTADOS_PAGO, deudaEstimada, estadoCuota, fmtFecha, hoy, money, sumarDiasISO } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 
@@ -282,7 +282,7 @@ const PagosPage = () => {
     }, [profile?.gimnasio_id]);
 
     const resumen = useMemo(() => {
-        const mes = new Date().toISOString().slice(0, 7);
+        const mes = hoy().slice(0, 7);
         const cajaMes = pagos
             .filter((p) => String(p.fecha_pago || '').startsWith(mes))
             .reduce((acc, p) => acc + Number(p.monto || 0), 0);
@@ -351,9 +351,7 @@ const PagosPage = () => {
             .sort((a, b) => String(b.periodo_hasta).localeCompare(String(a.periodo_hasta)))[0];
         let periodoDesde = hoy();
         if (ultimoPago) {
-            const siguiente = new Date(`${ultimoPago.periodo_hasta}T00:00:00`);
-            siguiente.setDate(siguiente.getDate() + 1);
-            periodoDesde = siguiente.toISOString().slice(0, 10);
+            periodoDesde = sumarDiasISO(ultimoPago.periodo_hasta, 1);
         }
 
         clientIdPagoRef.current = crypto.randomUUID();
@@ -421,8 +419,9 @@ const PagosPage = () => {
         }
         const periodo = periodos.find((x) => x.nombre === p.periodo);
         const dias = Number(periodo?.dias) || 30;
-        const hasta = new Date(`${periodoDesdeBase || form.periodo_desde || hoy()}T00:00:00`);
-        hasta.setDate(hasta.getDate() + dias);
+        // Fecha pura, sin pasar por toISOString() (corría el día hacia atrás al
+        // este de UTC, ver lib/format.js).
+        const hasta = sumarDiasISO(periodoDesdeBase || form.periodo_desde || hoy(), dias);
 
         setForm((f) => ({
             ...f,
@@ -430,7 +429,7 @@ const PagosPage = () => {
             monto: String(p.precio || ''),
             descuento: String(p.descuento || ''),
             interes: String(p.interes_mora || ''),
-            periodo_hasta: hasta.toISOString().slice(0, 10),
+            periodo_hasta: hasta,
             notas: p.nombre,
         }));
     };
