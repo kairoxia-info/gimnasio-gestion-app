@@ -12,6 +12,7 @@ import { descargarComoPdf } from '@/lib/descargarPdf';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { hoy } from '@/lib/format';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Nombres típicos que sugiere "Agregar comida" -- el mismo criterio que
 // DIAS en rutinas (agregarDia toma el primero que todavía no se usó), pero
@@ -575,7 +576,7 @@ const PlanesAlimentacionPage = () => {
 
     return (
         <AppLayout
-            ayuda="Cada plan se crea una sola vez, por comida del día y con opciones, y se asigna a los alumnos que lo necesiten. El alumno lo ve en su teléfono y puede descargarlo en PDF."
+            ayuda={AYUDAS.planes}
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Planes de alimentación

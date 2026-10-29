@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 const CATEGORIAS = ['Proteínas', 'Carbohidratos', 'Grasas', 'Frutas', 'Verduras', 'Lácteos', 'Suplementos', 'Otros'];
 
@@ -248,7 +249,7 @@ const AlimentosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Los alimentos que usas para crear planes de alimentación, con calorías y macronutrientes por porción. Regístralos una vez y después los eliges de la lista al crear cada plan."
+            ayuda={AYUDAS.alimentos}
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de alimentos

@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Textarea } from '@/components/ui-kit';
 import { createRec, listAll, updateRec } from '@/lib/data';
 import { SEGMENTOS_NOTIFICACION, fmtFecha, segmentoNotificacion } from '@/lib/format';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 const vacio = { titulo: '', mensaje: '', segmento: 'todos' };
 
@@ -203,7 +204,7 @@ const AvisosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Mensajes para tus alumnos según el estado de su cuota: a todos, solo a los que están por vencer o solo a los vencidos. Lo ven en cuanto abren su rutina en el teléfono, y pueden descartarlo con 'Entendido'."
+            ayuda={AYUDAS.avisos}
             title="Avisos"
             subtitle="Enviar un aviso segmentado por estado de cuota. Se calcula solo según el estado de cada alumno, cada vez que entra a ver su plan."
             actions={

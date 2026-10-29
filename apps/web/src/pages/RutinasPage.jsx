@@ -36,6 +36,7 @@ import {
     tipoDeGrupo,
 } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Días que ya usa una rutina, en el orden de DIAS. Si algún item tuviera un
 // día fuera de la lista (no debería, siempre salen del selector), igual se
@@ -894,7 +895,7 @@ const RutinasPage = () => {
 
     return (
         <AppLayout
-            ayuda="Cada rutina se crea una sola vez y se asigna a todos los alumnos que la necesiten. Editar una rutina aquí no cambia la de los alumnos que ya la tienen: para darles la versión nueva, hay que volver a asignársela."
+            ayuda={AYUDAS.rutinas}
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de rutinas de ejercicios

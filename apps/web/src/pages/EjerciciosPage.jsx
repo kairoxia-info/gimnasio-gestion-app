@@ -8,6 +8,7 @@ import { CLASIFICACIONES, GRUPOS } from '@/lib/format';
 import { pathEnBucket, tipoDePreview } from '@/lib/mediaEjercicio';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 const vacio = { nombre: '', grupo_muscular: [], clasificacion: '', media_url: '', descripcion: '' };
 
@@ -307,7 +308,7 @@ const EjerciciosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Todos los ejercicios que puedes usar en las rutinas, con foto o video de cómo se hacen. Puedes agregar los tuyos y ocultar los que no uses, para que no aparezcan al crear rutinas."
+            ayuda={AYUDAS.ejercicios}
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Biblioteca de ejercicios

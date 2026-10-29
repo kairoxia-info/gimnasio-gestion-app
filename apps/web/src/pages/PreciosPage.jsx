@@ -17,6 +17,7 @@ import {
 } from '@/components/ui-kit';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { money } from '@/lib/format';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Los períodos ya no son una lista fija en el código: los carga el profesor
 // desde esta misma pantalla (migración 0014). Esta constante queda solo como
@@ -248,7 +249,7 @@ const PreciosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Qué cobras y por cuánto tiempo (mensual, trimestral, el que uses), además de descuentos y recargo por mora si lo deseas. Con esto la aplicación calcula automáticamente hasta cuándo está cubierto cada alumno."
+            ayuda={AYUDAS.precios}
             title="Planes y precios"
             subtitle="Los planes que se les cobra a los alumnos, y los períodos con los que se arman."
             actions={

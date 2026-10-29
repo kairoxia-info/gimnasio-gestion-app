@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import MisGimnasios from '@/components/configuracion/MisGimnasios';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Apartado propio "Mis gimnasios" (pedido de Nalux del 28/10/2026, antes vivía dentro de
 // Configuración): lista de gimnasios de la cuenta, abrir otro, agregar uno y eliminar el abierto.
@@ -19,7 +20,7 @@ const MisGimnasiosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Los gimnasios que administras con esta cuenta. Cada uno tiene sus propios alumnos, pagos y planes; las rutinas, los ejercicios, los alimentos y los planes de alimentación de la biblioteca se comparten entre todos."
+            ayuda={AYUDAS.misGimnasios}
             title="Mis gimnasios"
             subtitle="Abrir otro gimnasio, agregar uno nuevo o eliminar el que está abierto."
         >

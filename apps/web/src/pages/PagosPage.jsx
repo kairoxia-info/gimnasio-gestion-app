@@ -10,6 +10,7 @@ import { agregarACola, esErrorDeRed, onCambioCola, verCola } from '@/lib/offline
 import { ESTADOS_PAGO, deudaEstimada, estadoCuota, fmtFecha, hoy, money, sumarDiasISO } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Nalux pidió estas tres formas de cobro, ni más ni menos. `pagos.metodo` es
 // texto libre en la base, así que la lista vive acá y no hace falta migración.
@@ -560,7 +561,7 @@ const PagosPage = () => {
 
     return (
         <AppLayout
-            ayuda="Registra cada cobro y la aplicación lleva automáticamente la caja del mes, el estado de cuota de cada alumno (al día, por vencer, vencido) y el historial. Cada pago genera un comprobante numerado que puedes reimprimir cuando lo necesites."
+            ayuda={AYUDAS.pagos}
             title="Pagos y caja"
             subtitle="Cobrar, ver quién debe y reimprimir cualquier comprobante."
             actions={

@@ -28,6 +28,7 @@ import ConfiguracionPage from '@/pages/ConfiguracionPage';
 import MisGimnasiosPage from '@/pages/MisGimnasiosPage';
 import HistorialPage from '@/pages/HistorialPage';
 import EquipoPage from '@/pages/EquipoPage';
+import GuiaPage from '@/pages/GuiaPage';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
@@ -97,6 +98,7 @@ function App() {
                             <Route path="/mis-gimnasios" element={guard(<MisGimnasiosPage />)} />
                             <Route path="/historial" element={guard(<HistorialPage />)} />
                             <Route path="/equipo" element={guard(<EquipoPage />)} />
+                            <Route path="/guia" element={guard(<GuiaPage />)} />
                             <Route path="*" element={<Navigate to="/panel" replace />} />
                         </Routes>
                     </Router>

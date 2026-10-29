@@ -7,6 +7,7 @@ import { Card, Empty, Loading } from '@/components/ui-kit';
 import { listAll } from '@/lib/data';
 import supabase from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { AYUDAS } from '@/lib/guiaDeUso';
 import {
     ESTADOS_PAGO,
     estadoAlumno,
@@ -254,7 +255,7 @@ const DashboardPage = () => {
         <AppLayout
             title="Panel general"
             subtitle="Todo el estado del gimnasio en una sola pantalla: alumnos, asistencia y caja del mes."
-            ayuda="Aquí ves de un vistazo cómo está el gimnasio: alumnos activos, quién asistió esta semana, cuánto se cobró en el mes y quién tiene la cuota vencida o por vencer. Toca cualquier tarjeta para ir a esa sección."
+            ayuda={AYUDAS.panel}
         >
             <Helmet>
                 <title>Panel general | RutNail</title>

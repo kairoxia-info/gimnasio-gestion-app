@@ -22,6 +22,7 @@ import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha, hoy, money } from '
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { borrarArchivosDeAlumno, borrarFotoPerfilAnterior } from '@/lib/storageAlumno';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Pedido de Nalux (08/09/2026): la foto pasa de "pegar una URL" a "subir el
 // archivo" -- en la práctica el profesor tiene la foto guardada en el
@@ -283,7 +284,7 @@ const AlumnosPage = () => {
 
     return (
         <AppLayout
-            ayuda="La lista de todos tus alumnos, con su estado de cuota y desde cuándo entrenan. Toca uno para ver su ficha completa: rutina, plan de alimentación, progreso, asistencia y pagos. Desde la ficha le creas usuario y contraseña para que vea su rutina en el teléfono."
+            ayuda={AYUDAS.alumnos}
             title={
                 <span className="inline-flex flex-wrap items-center gap-3">
                     Alumnos

@@ -4,6 +4,7 @@ import { useTheme } from 'next-themes';
 import {
     AlertTriangle,
     Apple,
+    BookOpen,
     Building2,
     CalendarCheck,
     ChefHat,
@@ -27,7 +28,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import NotificacionesCampana from '@/components/NotificacionesCampana';
-import TarjetaTour, { PASOS_TOUR } from '@/components/TourBienvenida';
+import TarjetaTour from '@/components/TourBienvenida';
+import { PASOS_TOUR_ADMIN, PASOS_TOUR_EQUIPO } from '@/lib/guiaDeUso';
 import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
 import SelectorGimnasio from '@/components/SelectorGimnasio';
 import { AyudaInfo } from '@/components/ui-kit';
@@ -52,21 +54,30 @@ const NAV = [
     { to: '/configuracion', label: 'Configuración', icon: Settings },
 ];
 
+// Alto del espacio que se agrega al final del menú mientras corre el recorrido en un teléfono
+// (la tarjeta, anclada abajo, mide hasta ~260 px).
+const TOUR_ESPACIO_MOVIL = 300;
+
+// Guía de uso (29/10/2026): qué hace cada pantalla y cada botón. Va al final del menú de todos.
+const ITEM_GUIA = { to: '/guia', label: 'Guía de uso', icon: BookOpen };
+
 // El administrador además ve "Mis gimnasios" (pedido de Nalux, 28/10/2026): apartado aparte para
-// abrir, agregar y eliminar gimnasios. Va antes de Configuración. No entra en NAV a propósito:
-// el tour de bienvenida recorre NAV y esta opción no es parte de él.
+// abrir, agregar y eliminar gimnasios. Va antes de Configuración.
 // También "Equipo" (0080, cuentas de staff) e "Historial de cambios" (0079, quién tocó pagos y precios).
+// El orden de este menú es el orden del recorrido de bienvenida (PASOS_TOUR_ADMIN en lib/guiaDeUso.js).
 const NAV_ADMIN = [
     ...NAV.slice(0, -1),
     { to: '/equipo', label: 'Equipo', icon: UserCog },
     { to: '/historial', label: 'Historial de cambios', icon: History },
     { to: '/mis-gimnasios', label: 'Mis gimnasios', icon: Building2 },
     NAV[NAV.length - 1],
+    ITEM_GUIA,
 ];
 
 // El staff trabaja el día a día (alumnos, rutinas, pagos, precios...) pero no ve Configuración:
 // los datos del gimnasio solo los cambia el administrador (la base ya se lo impide, 0076).
-const NAV_STAFF = NAV.filter((n) => n.to !== '/configuracion');
+// Su recorrido es PASOS_TOUR_EQUIPO.
+const NAV_STAFF = [...NAV.filter((n) => n.to !== '/configuracion'), ITEM_GUIA];
 
 // Marca propia de la app: RutNail (14/09/2026, reemplaza al wordmark de
 // texto "Gestión GYM Kairox IA" + ícono de mancuerna que había antes). Nalux
@@ -315,9 +326,13 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     // cajón real: abrirlo solo, señalar el ítem correspondiente y medir
     // dónde cae para ubicar la tarjeta al lado.
     const [pasoTour, setPasoTour] = useState(0);
-    // Solo para el administrador: el recorrido incluye Configuración, que el staff no ve (0080).
-    const guiaActiva = profile?.role === 'admin' && profile?.tour_visto === false && location.pathname === '/panel';
-    const pasoActual = PASOS_TOUR[pasoTour];
+    // Cada rol tiene su recorrido, con los ítems de SU menú (el equipo no ve Configuración, Equipo,
+    // Historial ni Mis gimnasios; 0080). Los dos están en lib/guiaDeUso.js.
+    const esAdmin = profile?.role === 'admin';
+    const menu = esAdmin ? NAV_ADMIN : NAV_STAFF;
+    const PASOS_TOUR = esAdmin ? PASOS_TOUR_ADMIN : PASOS_TOUR_EQUIPO;
+    const guiaActiva = profile?.tour_visto === false && location.pathname === '/panel';
+    const pasoActual = PASOS_TOUR[Math.min(pasoTour, PASOS_TOUR.length - 1)];
 
     useEffect(() => {
         if (guiaActiva) setOpen(true);
@@ -361,7 +376,10 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
             // sin esto, los últimos pasos (Precios, Configuración) señalarían
             // un ítem fuera de la vista. Instantáneo (no 'smooth') para que
             // el getBoundingClientRect() de abajo ya lea la posición final.
-            el.scrollIntoView({ block: 'nearest' });
+            // En el teléfono la tarjeta se ancla abajo de todo y taparía el ítem si este quedara en la
+            // parte baja del menú: ahí el ítem sube arriba del todo (con un espacio extra al final del
+            // menú, ver TOUR_ESPACIO_MOVIL, para que también los últimos puedan subir). 29/10/2026.
+            el.scrollIntoView({ block: window.innerWidth < 640 ? 'start' : 'nearest' });
             const r = el.getBoundingClientRect();
             const anchoTarjeta = 320;
             const margen = 16;
@@ -673,17 +691,20 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                 {/* Solo aparece con 2 o más gimnasios (migración 0076). */}
                 <SelectorGimnasio />
                 <NavLinksAnimados
-                    nav={profile?.role === 'admin' ? NAV_ADMIN : NAV_STAFF}
+                    nav={menu}
                     onNavegar={() => setOpen(false)}
                     pasoTourTo={guiaActiva ? pasoActual.to : null}
                 />
+                {guiaActiva && open && window.innerWidth < 640 && (
+                    <div aria-hidden="true" style={{ height: TOUR_ESPACIO_MOVIL }} />
+                )}
             </CajonMenu>
 
             {guiaActiva && open && posicionTour && (
                 <TarjetaTour
                     paso={pasoTour + 1}
                     total={PASOS_TOUR.length}
-                    titulo={NAV.find((n) => n.to === pasoActual.to)?.label}
+                    titulo={menu.find((n) => n.to === pasoActual.to)?.label}
                     texto={pasoActual.texto}
                     posicion={posicionTour}
                     esPrimero={pasoTour === 0}

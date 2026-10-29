@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 import { validarContrasena } from '@/lib/validacionPassword';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Equipo (migración 0080, pedido de Nalux del 28/10/2026): el administrador le crea a cada
 // empleado su propio usuario y contraseña. El empleado entra solo a este gimnasio y todo lo que
@@ -222,7 +223,7 @@ const EquipoPage = () => {
 
     return (
         <AppLayout
-            ayuda="Las personas que trabajan contigo. Cada una entra con su propio correo y contraseña, solo a este gimnasio, y puede registrar pagos, anularlos y editar precios; todo queda anotado en el Historial con su nombre. No puede cambiar la configuración del gimnasio ni ver el Historial."
+            ayuda={AYUDAS.equipo}
             title="Equipo"
             subtitle="Cuentas del personal que trabaja en este gimnasio."
             actions={

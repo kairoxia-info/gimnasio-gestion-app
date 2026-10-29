@@ -7,6 +7,7 @@ import NoticiaVista, { PALETA_CARTEL } from '@/components/NoticiaVista';
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Noticias (migraciones 0068 + 0069, pedido de Nalux 21/09/2026, visto en
 // Control Gym): lo que el alumno ve arriba de todo al abrir su rutina.
@@ -234,7 +235,7 @@ const NoticiasPage = () => {
 
     return (
         <AppLayout
-            ayuda="Lo que el alumno ve arriba de todo al abrir su rutina: una foto (una promoción, un evento) o un cartel con título y texto sobre un color. Si hay varias activas, pasan solas en un carrusel. Para mensajes que el alumno tiene que confirmar con 'Entendido', usa Avisos."
+            ayuda={AYUDAS.noticias}
             title="Noticias"
             subtitle="Imágenes o carteles para el portal del alumno. Las activas pasan en un carrusel."
             actions={

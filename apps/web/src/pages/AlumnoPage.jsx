@@ -4,7 +4,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Pencil, UserRound } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Card, ErrorBox, Loading } from '@/components/ui-kit';
+import { AyudaInfo, Badge, Card, ErrorBox, Loading } from '@/components/ui-kit';
+import { AYUDAS } from '@/lib/guiaDeUso';
 import { columnasDe, listAll } from '@/lib/data';
 import { ESTADOS_ALUMNO, antiguedad, estadoAlumno, fmtFecha } from '@/lib/format';
 import AccesoAlumno from '@/components/alumno/AccesoAlumno';
@@ -191,7 +192,11 @@ const AlumnoPage = () => {
                                 </div>
                             )}
                             <div className="min-w-0">
-                                <h1 className="font-display text-3xl font-extrabold uppercase">{alumno.nombre}</h1>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="font-display text-3xl font-extrabold uppercase">{alumno.nombre}</h1>
+                                    {/* Guía de la ficha (lib/guiaDeUso.js): qué hace cada botón y cada pestaña. */}
+                                    <AyudaInfo texto={AYUDAS.ficha} />
+                                </div>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     {antiguedad(alumno.fecha_alta)} · Alta {fmtFecha(alumno.fecha_alta)}
                                     {alumno.contacto ? ` · ${alumno.contacto}` : ''}

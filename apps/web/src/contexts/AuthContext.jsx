@@ -60,6 +60,8 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     // Si esta sesión ya fijó su gimnasio en la base (ver fetchProfile).
     const sesionFijadaRef = useRef(false);
+    // La persona pidió ver el recorrido de bienvenida de nuevo (Guía de uso): vale hasta que lo termina.
+    const repetirTourRef = useRef(false);
 
     const fetchProfile = useCallback(async (userId) => {
         if (!userId) {
@@ -129,6 +131,7 @@ export const AuthProvider = ({ children }) => {
         // La zona se fija ANTES de publicar el perfil, así ninguna pantalla arma "hoy" con la
         // zona equivocada en su primer render.
         setZonaHorariaDelGimnasio(zona);
+        if (repetirTourRef.current) perfil = { ...perfil, tour_visto: false };
         setProfile(perfil);
         return perfil;
     }, []);
@@ -278,7 +281,16 @@ export const AuthProvider = ({ children }) => {
             // acá, tour_visto queda en false en la base y la demo vuelve a
             // aparecer en el próximo login -- caso borde aceptado, no de
             // seguridad, y se resuelve solo la próxima vez.
+            // Volver a ver el recorrido de bienvenida (botón de la Guía de uso, 29/10/2026). Solo cambia el
+            // estado local: al terminarlo vuelve a quedar marcado como visto, igual que la primera vez.
+            // La marca vive también en un ref: si la app vuelve a leer el perfil justo después (por ejemplo al
+            // cargar), no pisa el pedido con el tour_visto = true de la base.
+            reiniciarTour: () => {
+                repetirTourRef.current = true;
+                setProfile((prev) => (prev ? { ...prev, tour_visto: false } : prev));
+            },
             marcarTourVisto: async () => {
+                repetirTourRef.current = false;
                 const result = await supabase.rpc('marcar_tour_visto');
                 if (!result.error) {
                     setProfile((prev) => (prev ? { ...prev, tour_visto: true } : prev));

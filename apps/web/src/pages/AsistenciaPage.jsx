@@ -8,6 +8,7 @@ import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { agregarACola, esErrorDeRed, onCambioCola } from '@/lib/offline';
 import { fmtFecha, hoyComoFecha } from '@/lib/format';
 import { useAuth } from '@/contexts/AuthContext';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // El lunes de la semana en la que cae `fecha`. getDay() devuelve 0 para
 // domingo, así que (getDay() + 6) % 7 da los días que hay que restar para
@@ -326,7 +327,7 @@ const AsistenciaPage = () => {
 
     return (
         <AppLayout
-            ayuda="Marca presente o ausente a cada alumno, día por día. Con eso el panel te muestra quién asiste con regularidad y quién lleva tiempo sin venir."
+            ayuda={AYUDAS.asistencia}
             title={esDia ? 'Pasar lista' : esMes ? 'Asistencia del mes' : 'Asistencia semanal'}
             subtitle={
                 esDia

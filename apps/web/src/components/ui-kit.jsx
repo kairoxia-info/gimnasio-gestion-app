@@ -287,7 +287,35 @@ export const Modal = ({ open, onClose, title, children, wide = false }) => {
 // afuera" que ya usa NotificacionesCampana.jsx. Sin texto no renderiza
 // nada: así cada pantalla puede pasar la ayuda o no, sin condicionales.
 const ANCHO_AYUDA = 288; // w-72
+const ANCHO_AYUDA_GUIA = 352; // w-[22rem]: la ayuda con lista de botones (ver lib/guiaDeUso.js)
 const MARGEN_AYUDA = 16;
+
+// El texto de la ayuda puede ser una frase (string) o una guía con la lista de botones de la pantalla:
+// { resumen, botones: [{ nombre, que }], consejos?: [texto] }. La guía se muestra con scroll propio
+// para que en un teléfono nunca quede cortada.
+export const ContenidoAyuda = ({ ayuda }) => {
+    if (!ayuda || typeof ayuda === 'string') return <>{ayuda}</>;
+    return (
+        <div className="space-y-3">
+            <p className="font-semibold">{ayuda.resumen}</p>
+            {ayuda.botones?.length > 0 && (
+                <ul className="space-y-2.5">
+                    {ayuda.botones.map((b) => (
+                        <li key={b.nombre} className="text-[13px] leading-snug">
+                            <span className="font-bold text-primary">{b.nombre}</span>
+                            <span className="text-muted-foreground"> — {b.que}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {ayuda.consejos?.map((c) => (
+                <p key={c} className="rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                    {c}
+                </p>
+            ))}
+        </div>
+    );
+};
 
 export const AyudaInfo = ({ texto, className = '' }) => {
     const [abierto, setAbierto] = useState(false);
@@ -315,7 +343,7 @@ export const AyudaInfo = ({ texto, className = '' }) => {
     const alternar = () => {
         if (!abierto && botonRef.current) {
             const r = botonRef.current.getBoundingClientRect();
-            const ancho = Math.min(ANCHO_AYUDA, window.innerWidth - MARGEN_AYUDA * 2);
+            const ancho = Math.min(typeof texto === 'string' ? ANCHO_AYUDA : ANCHO_AYUDA_GUIA, window.innerWidth - MARGEN_AYUDA * 2);
             const sobra = r.left + ancho - (window.innerWidth - MARGEN_AYUDA);
             setCorrimiento(sobra > 0 ? -sobra : 0);
         }
@@ -342,9 +370,11 @@ export const AyudaInfo = ({ texto, className = '' }) => {
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.15 }}
                         style={{ left: corrimiento }}
-                        className="absolute top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground shadow-lg"
+                        className={`absolute top-full z-30 mt-2 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-4 text-sm leading-relaxed text-foreground shadow-lg ${
+                            typeof texto === 'string' ? 'w-72' : 'max-h-[70vh] w-[22rem] overflow-y-auto'
+                        }`}
                     >
-                        {texto}
+                        <ContenidoAyuda ayuda={texto} />
                     </motion.div>
                 )}
             </AnimatePresence>

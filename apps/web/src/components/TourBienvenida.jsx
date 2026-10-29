@@ -2,64 +2,12 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { Btn } from '@/components/ui-kit';
 
-// Demo de bienvenida, rediseñada el 18/09/2026 a pedido de Nalux ("así como
-// tiene y muestra las tarjetas quiero", con capturas de otra app -- Drivvo --
-// como referencia): en vez de un cuadro centrado y desconectado de la
-// pantalla, cada paso resalta el ítem real del menú del que habla, con una
-// tarjeta chica flotando al lado. AppLayout.jsx es quien renderiza todo esto
-// (abre el cajón, mide la posición del ítem, aplica el resaltado) -- este
-// archivo solo guarda el CONTENIDO de cada paso, en el mismo orden que el
-// array NAV de AppLayout.jsx, para que se pueda recorrer con el mismo índice.
-export const PASOS_TOUR = [
-    {
-        to: '/panel',
-        texto: '¡Bienvenido a RutNail! Este recorrido rápido te muestra qué hay en cada sección. Aquí, en el Panel, ves de un vistazo alumnos activos, asistencia de la semana y caja del mes.',
-    },
-    {
-        to: '/alumnos',
-        texto: 'Registra a tus alumnos y accede a la ficha completa de cada uno: rutina, plan de alimentación, progreso, asistencia y pagos.',
-    },
-    {
-        to: '/ejercicios',
-        texto: 'La biblioteca de ejercicios, con 500 ya incluidos y foto o video de cómo se hacen. Puedes agregar los tuyos.',
-    },
-    {
-        to: '/rutinas',
-        texto: 'Crea cada rutina una sola vez y asígnala a todos los alumnos que la necesiten.',
-    },
-    {
-        to: '/alimentos',
-        texto: 'Tu biblioteca de alimentos, con calorías y macronutrientes por porción.',
-    },
-    {
-        to: '/planes-alimentacion',
-        texto: 'Crea planes de comidas y asígnalos a tus alumnos, igual que las rutinas.',
-    },
-    {
-        to: '/asistencia',
-        texto: 'Marca presente o ausente cada día, para todos tus alumnos activos.',
-    },
-    {
-        to: '/pagos',
-        texto: 'Registra cada cobro. La aplicación lleva automáticamente la caja del mes y el estado de cuota de cada alumno.',
-    },
-    {
-        to: '/avisos',
-        texto: 'Envía mensajes a tus alumnos según el estado de su cuota.',
-    },
-    {
-        to: '/noticias',
-        texto: 'Sube una foto o arma un cartel con título y texto (una promoción, un evento, un cambio de horario) y tus alumnos lo ven arriba de todo al abrir su rutina.',
-    },
-    {
-        to: '/precios',
-        texto: 'Define qué cobras y por cuánto tiempo, con descuentos y recargo por mora si lo deseas.',
-    },
-    {
-        to: '/configuracion',
-        texto: 'Nombre, logo, color y reglas de tu gimnasio. Un buen lugar para empezar. Ante cualquier duda, busca el ícono "i" de cada pantalla.',
-    },
-];
+// Demo de bienvenida, rediseñada el 18/09/2026 a pedido de Nalux (con capturas de otra app como
+// referencia): cada paso resalta el ítem real del menú del que habla, con una tarjeta chica flotando al
+// lado. AppLayout.jsx es quien renderiza todo esto (abre el cajón, mide la posición del ítem, aplica el
+// resaltado). El CONTENIDO de los pasos (uno por ítem del menú, en su mismo orden, uno para el
+// administrador y otro para el equipo) vive en lib/guiaDeUso.js, junto con la ayuda de cada pantalla y
+// la Guía de uso, para que digan siempre lo mismo.
 
 // Tarjeta flotante de un paso. `posicion` la calcula AppLayout.jsx midiendo
 // el ítem real del menú (getBoundingClientRect): { top, left } en pantallas

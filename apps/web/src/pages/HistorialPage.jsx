@@ -6,6 +6,7 @@ import { Badge, Card, Empty, ErrorBox, Loading, Select } from '@/components/ui-k
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { fmtFecha, money } from '@/lib/format';
+import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Historial de cambios (migración 0079, pedido de Nalux del 28/10/2026): quién cargó, editó o
 // anuló un pago y quién tocó los precios. Solo lo ve el administrador. La base lo garantiza
@@ -136,7 +137,7 @@ const HistorialPage = () => {
 
     return (
         <AppLayout
-            ayuda="Quién registró, editó o anuló pagos y quién cambió los precios del gimnasio, con la fecha, el motivo y cómo estaba antes. Solo lo ve el administrador y nadie puede modificarlo ni borrarlo."
+            ayuda={AYUDAS.historial}
             title="Historial de cambios"
             subtitle="Quién tocó los pagos y los precios, y cuándo."
         >
