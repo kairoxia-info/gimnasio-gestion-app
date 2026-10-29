@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -35,8 +35,12 @@ const traducirError = (err, modo) => {
 // desde su panel (pantalla Equipo). Solo iniciar sesión: sus cuentas las crea el administrador, no
 // hay registro propio. Es el mismo inicio de sesión de siempre; cambia el rótulo y no ofrece registrarse.
 const LoginPage = ({ modoEquipo = false }) => {
-    const { signIn, signUp, isAuthed, loading: authLoading } = useAuth();
+    const { signIn, signUp, signOut, isAuthed, user, profile, loading: authLoading } = useAuth();
     const navigate = useNavigate();
+    // true desde que se envía el formulario: solo entonces, con la sesión ya abierta, se pasa al panel
+    // solo. Si la sesión estaba abierta de antes (por ejemplo el panel del profesor en otra pestaña),
+    // la pantalla lo muestra y deja elegir en vez de mandar a la persona a un panel que no pidió.
+    const ingresoReciente = useRef(false);
     const [mode, setMode] = useState('login');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -47,7 +51,7 @@ const LoginPage = ({ modoEquipo = false }) => {
     const [loading, setLoading] = useState(false);
     const [recoveryOpen, setRecoveryOpen] = useState(false);
 
-    if (!authLoading && isAuthed) return <Navigate to="/panel" replace />;
+    if (!authLoading && isAuthed && ingresoReciente.current) return <Navigate to="/panel" replace />;
 
     const isLogin = mode === 'login';
 
@@ -55,6 +59,7 @@ const LoginPage = ({ modoEquipo = false }) => {
         e.preventDefault();
         setError('');
         setInfo('');
+        ingresoReciente.current = true;
         // Pedido de Nalux (09/09/2026): al menos una mayúscula. Solo se exige
         // al REGISTRARSE, no al iniciar sesión -- una cuenta ya creada antes
         // de esta regla no tiene por qué dejar de poder entrar.
@@ -90,6 +95,7 @@ const LoginPage = ({ modoEquipo = false }) => {
                 }
             }
         } catch (err) {
+            ingresoReciente.current = false;
             setError(traducirError(err, mode));
         } finally {
             setLoading(false);
@@ -101,6 +107,39 @@ const LoginPage = ({ modoEquipo = false }) => {
         setError('');
         setInfo('');
     };
+
+    // Ya hay una sesión abierta en este navegador y la persona no acaba de ingresar: un navegador
+    // guarda UNA sola sesión por sitio, así que no se puede ingresar con otra cuenta sin cerrarla.
+    if (!authLoading && isAuthed) {
+        const esAdmin = profile?.role === 'admin';
+        return (
+            <AuthBackdrop>
+                <Helmet>
+                    <title>Sesión abierta | RutNail</title>
+                </Helmet>
+                <div className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-6 text-center shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:p-10">
+                    <Logo className="mx-auto h-24 sm:h-28" />
+                    <h1 className="font-display mt-4 text-xl font-bold text-foreground">Ya hay una sesión abierta</h1>
+                    <p className="mt-2 break-words text-sm text-muted-foreground">
+                        Este navegador tiene abierta la cuenta <strong className="text-foreground">{user?.email}</strong>
+                        {profile?.gimnasio_id ? ` (${esAdmin ? 'administrador' : 'equipo'})` : ''}. Un navegador solo puede
+                        tener una sesión a la vez: "Usar otra cuenta" cierra esta sesión para que puedas ingresar con otra.
+                    </p>
+                    <div className="mt-6 flex flex-col gap-2">
+                        <Btn
+                            onClick={() => navigate('/panel', { replace: true })}
+                            className="w-full !border-0 !bg-[linear-gradient(135deg,#e3c98f,#c9a86a)] py-3 !text-[#1c1509] hover:!brightness-105"
+                        >
+                            Continuar con esta sesión
+                        </Btn>
+                        <Btn variant="ghost" onClick={() => signOut()} className="w-full py-3">
+                            Usar otra cuenta
+                        </Btn>
+                    </div>
+                </div>
+            </AuthBackdrop>
+        );
+    }
 
     return (
         <AuthBackdrop>
@@ -116,10 +155,10 @@ const LoginPage = ({ modoEquipo = false }) => {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-10 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+                className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:p-10"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
-                    <Logo className="h-36" />
+                    <Logo className="h-28 sm:h-36" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         {modoEquipo ? 'Ingreso del equipo' : 'Panel del entrenador'}
                     </p>
@@ -192,7 +231,7 @@ const LoginPage = ({ modoEquipo = false }) => {
                                 name="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="entrenador@tugimnasio.com"
+                                placeholder={modoEquipo ? 'tu@correo.com' : 'entrenador@tugimnasio.com'}
                                 required
                                 autoComplete="email"
                                 className="pl-9"

@@ -43,6 +43,8 @@ const ETIQUETAS = {
     dias_semana: 'Días por semana',
     interes_mora: 'Interés por mora',
     activo: 'Activo',
+    plan_precio_nombre: 'Plan',
+    fecha_alta: 'Alta',
     dias: 'Días',
     porcentaje: 'Porcentaje',
 };
@@ -50,7 +52,7 @@ const ETIQUETAS = {
 const verValor = (campo, valor) => {
     if (valor === null || valor === undefined || valor === '') return '—';
     if (campo === 'monto' || campo === 'monto_adeudado' || campo === 'precio') return money(valor);
-    if (campo.startsWith('periodo_') || campo === 'fecha_pago') return fmtFecha(valor);
+    if (campo.startsWith('periodo_') || campo === 'fecha_pago' || campo === 'fecha_alta') return fmtFecha(valor);
     if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
     return String(valor);
 };
@@ -72,6 +74,9 @@ const datosDe = (fila) =>
 const HistorialPage = () => {
     const { profile, loading: cargandoPerfil } = useAuth();
     const [filas, setFilas] = useState([]);
+    // Personas del equipo de este gimnasio (equipo_listar, 0080): el filtro las ofrece a todas, aunque
+    // todavía no hayan hecho ningún cambio anotado.
+    const [equipo, setEquipo] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [filtroAutor, setFiltroAutor] = useState('todos');
@@ -100,14 +105,21 @@ const HistorialPage = () => {
             });
     }, [esAdmin]);
 
+    useEffect(() => {
+        if (!esAdmin) return;
+        supabase.rpc('equipo_listar').then(({ data }) => setEquipo(data ?? []));
+    }, [esAdmin]);
+
+    // Todo el equipo del gimnasio + quien aparezca en el historial (por ejemplo alguien que ya no está).
     const autores = useMemo(() => {
         const mapa = new Map();
+        equipo.forEach((p) => mapa.set(p.user_id, p.nombre || p.email || 'Sin nombre'));
         filas.forEach((f) => {
             const clave = f.user_id ?? 'sistema';
             if (!mapa.has(clave)) mapa.set(clave, f.autor_nombre || 'Sistema');
         });
         return [...mapa.entries()];
-    }, [filas]);
+    }, [equipo, filas]);
 
     const visibles = filas.filter((f) => {
         if (filtroAutor !== 'todos' && (f.user_id ?? 'sistema') !== filtroAutor) return false;

@@ -121,10 +121,10 @@ const OnboardingPage = () => {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: 'easeOut' }}
-                className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-10 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+                className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:p-10"
             >
                 <div className="mb-8 flex flex-col items-center text-center">
-                    <Logo className="h-28" />
+                    <Logo className="h-24 sm:h-28" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
                         {esNuevo ? 'Nuevo gimnasio' : 'Un último paso'}
                     </p>

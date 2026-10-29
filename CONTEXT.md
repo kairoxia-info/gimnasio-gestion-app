@@ -7045,3 +7045,29 @@ Nalux reportó que el empleado, al cerrar sesión, caía en el login del profeso
 - **Hallazgo menor**: una sesión de un empleado ya borrado puede seguir abierta (token válido hasta que venza) y muestra "Crear el gimnasio"; no puede crearlo (la cuenta ya no existe) y se corta sola al vencer el token. Sin acción.
 - Limpieza: cuenta de prueba \`zzz-qa-salida\` quitada y sus 2 anotaciones del Historial borradas; quedan los usuarios reales (Nalux, Noelia, Sofía).
 - **Estado: arreglo subido a producción el 29/10/2026 (con el OK de Nalux).**
+
+## 29/10/2026 — Historial del equipo, sesiones cruzadas y celular (reporte de Nalux probando en la URL real)
+
+Nalux probó en `rutnail.vercel.app` con las cuentas de equipo y reportó tres cosas (con capturas):
+1. **Un alumno borrado desde la cuenta de Sofía Luna no aparecía en el Historial**, solo "Nadia Tecera (Administrador)"; y el filtro de personas no ofrecía a las del equipo.
+   - Causa: la bitácora (0079) solo anotaba pagos y precios; alumnos no. El filtro de personas se armaba solo con quienes ya tenían anotaciones.
+   - Arreglo: migración **0083** (`0083_bitacora_de_alumnos.sql`): `bitacora_registrar` ahora anota ALUMNOS (alta, baja y edición de nombre/estado/plan). **Privacidad**: de un alumno solo se guarda nombre, activo, plan y fecha de alta (nada de contacto, DNI, salud, notas ni claves),
+     para que el borrado real de datos de un alumno no deje copia en un registro inborrable. Las ediciones que no cambian eso (contadores del portal, etc.) no se anotan. Además `create_gimnasio` ya no anota los períodos y precios por defecto (8 "altas" de ruido por gimnasio nuevo) y la marca
+     `app.bitacora_omitir` vale para cualquier tabla. **0083 APLICADA el 29/10/2026 (OK de Nalux) y probada en la base.** `HistorialPage`: el filtro de personas ofrece a todo el equipo del gimnasio (`equipo_listar`) más quien aparezca en el historial; etiquetas de los campos nuevos.
+   - Nota: la baja automática por cuota vencida (política "dar de baja") la hace el cliente de quien abra la app, así que quedaría anotada a nombre de esa persona ("Editó alumno X: activo Sí → No").
+2. **Sesiones cruzadas**: un navegador guarda UNA sola sesión por sitio (localStorage del mismo origen). Con el panel del profesor abierto, entrar a `/ingreso-equipo` redirigía solo al panel del profesor. Arreglo: `LoginPage` ya no redirige si la sesión estaba abierta de antes: muestra
+   "Ya hay una sesión abierta" con la cuenta, y dos botones ("Continuar con esta sesión" y "Usar otra cuenta", que cierra esa sesión). Solo redirige solo cuando la persona acaba de ingresar. `ResetPasswordPage` vuelve al ingreso que corresponde (`rutaDeIngreso`). Limitación real: no se pueden tener
+   profesor y empleado abiertos a la vez en el MISMO navegador (para eso, otro navegador o ventana de incógnito).
+3. **Celular**: Nalux pidió que todo se vea bien en el teléfono (el equipo lo va a usar como los alumnos). Auditoría automática con la sesión de Nalux, en 375 px y 320 px (peor caso), sobre las 16 pantallas del panel (panel, alumnos, ficha del alumno con sus pestañas, ejercicios, rutinas, alimentos, planes, asistencia, pagos, avisos, noticias, precios,
+   equipo, historial, mis gimnasios, configuración): sin desborde horizontal de página, sin elementos fuera del borde, sin textos menores a 11 px. Formularios (alumno, ejercicio, alimento, rutina, plan de alimentación, pago, precio, equipo): caben a lo ancho a 320 px y se pueden desplazar hasta "Guardar".
+   Encontrado y corregido: en las pantallas de ingreso (login, ingreso del equipo, restablecer contraseña, crear gimnasio) el cuadro tenía demasiado margen a 320 px (`p-10`) y el correo de ejemplo quedaba cortado → `p-6 sm:p-10` y logo más chico en pantallas chicas; el botón de la pantalla de sesión abierta se acortó ("Usar otra cuenta");
+   el correo de ejemplo del ingreso del equipo es "tu@correo.com". No se auditaron tablet (768) ni escritorio ancho, ni las pantallas del alumno (portal) en esta pasada.
+- **Estado: 0083 aplicada; todo subido a producción el 29/10/2026 (OK de Nalux).**
+
+### Pruebas de la 0083 (29/10/2026)
+- Base (rollback), empleado simulado en Mi GYM FIT: crear alumno → "alta"; cambiar nombre → "edicion"; cambiar plan → "edicion"; cambiar contacto → NO se anota; contador del portal (`plan_consultas_contador`) → NO se anota; borrar un alumno con un pago → "baja" del alumno + "anulacion" del pago ("Se eliminó al alumno"), todo a nombre del empleado con rol "staff".
+  Datos sensibles (contacto, salud, claves) copiados a la bitácora: 0 filas.
+- `create_gimnasio`: el gimnasio nuevo queda con 6 períodos y 2 precios y **0 anotaciones**; después de crearlo la bitácora vuelve a anotar (la marca `app.bitacora_omitir` se limpia).
+- **No se pudo probar en pantalla** (la sesión de Nalux en el navegador de pruebas ya no estaba abierta y no se ingresa por ella) el recorrido "empleado borra alumno → aparece en el Historial del administrador" ni el filtro de personas con el equipo: queda para probarlo en la URL real.
+- **Ruido de fitness place sin limpiar**: las 8 filas de períodos/precios por defecto del Historial de "fitness place" (28/10 20:16) siguen ahí: el permiso de la sesión bloqueó borrarlas (son filas de la bitácora, que se trata como registro de auditoría).
+  Pendiente de decisión de Nalux (hay que borrarlas por SQL con su OK explícito, filtrando por tabla de períodos/precios y la misma transacción del alta del gimnasio) o dejarlas. Los gimnasios nuevos ya no las generan.
