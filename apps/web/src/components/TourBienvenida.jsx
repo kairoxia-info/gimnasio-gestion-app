@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Btn } from '@/components/ui-kit';
 
@@ -69,3 +69,56 @@ const TarjetaTour = ({
 );
 
 export default TarjetaTour;
+
+// Alto del espacio que se agrega al final del menú mientras corre el recorrido en un teléfono (la
+// tarjeta, anclada abajo, mide hasta ~260 px): así hasta el último ítem puede subir sin quedar tapado.
+export const TOUR_ESPACIO_MOVIL_PX = 300;
+
+// Dónde ubicar la tarjeta del paso actual, midiendo el ítem REAL del menú (id nav-tour-item-<id>).
+// Se mide recién cuando el cajón terminó de entrar deslizando y el ítem dejó de moverse: en una carga
+// lenta la animación tarda más que 300 ms y el ítem se medía todavía fuera de la pantalla (la tarjeta
+// quedaba cortada a la izquierda). En un teléfono (menos de 640 px) la tarjeta se ancla abajo
+// ('mobile') y el ítem sube arriba del menú para que no quede tapado. Lo usa el portal del alumno;
+// AppLayout.jsx tiene su propia copia de la lógica (la del panel).
+export const usePosicionTour = ({ activo, abierto, idItem }) => {
+    const [posicion, setPosicion] = useState(null);
+    useEffect(() => {
+        if (!activo || !abierto) {
+            setPosicion(null);
+            return undefined;
+        }
+        let anterior = null;
+        let intentos = 0;
+        let reloj = null;
+        const medir = () => {
+            intentos += 1;
+            const el = document.getElementById(`nav-tour-item-${idItem}`);
+            if (!el) return;
+            el.scrollIntoView({ block: window.innerWidth < 640 ? 'start' : 'nearest' });
+            const r = el.getBoundingClientRect();
+            const quieto = anterior && Math.abs(anterior.left - r.left) < 1 && Math.abs(anterior.top - r.top) < 1;
+            anterior = { left: r.left, top: r.top };
+            // Todavía entrando (o recién montado): esperar a la próxima medición.
+            if (r.left < 0 || (!quieto && intentos < 20)) return;
+            // Ya está quieto: se deja de medir cada 150 ms (solo vuelve a medir si cambia el tamaño).
+            clearInterval(reloj);
+            const anchoTarjeta = 320;
+            const margen = 16;
+            if (window.innerWidth - r.right < anchoTarjeta + margen * 2) {
+                setPosicion('mobile');
+                return;
+            }
+            setPosicion({
+                top: Math.max(margen, Math.min(r.top, window.innerHeight - 260)),
+                left: r.right + margen,
+            });
+        };
+        reloj = setInterval(medir, 150);
+        window.addEventListener('resize', medir);
+        return () => {
+            clearInterval(reloj);
+            window.removeEventListener('resize', medir);
+        };
+    }, [activo, abierto, idItem]);
+    return posicion;
+};

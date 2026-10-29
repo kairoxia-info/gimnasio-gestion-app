@@ -425,3 +425,83 @@ export const PASOS_TOUR_EQUIPO = [
         texto: 'Aquí está la guía de uso: qué hace cada pantalla y cada botón. En cada pantalla, el ícono "i" junto al título te explica lo mismo al momento. Desde la guía puedes volver a ver este recorrido.',
     },
 ];
+
+// ---------------------------------------------------------------------------------------------------
+// Portal del ALUMNO (pedido de Nalux, 29/10/2026: "lo mismo para el alumno cuando ingrese por primera
+// vez"). Mismo formato; textos cortos y directos porque se leen en el teléfono.
+// ---------------------------------------------------------------------------------------------------
+export const AYUDAS_ALUMNO = {
+    rutina: {
+        resumen: 'Tu rutina de entrenamiento, día por día.',
+        botones: [
+            { nombre: 'Día 1, Día 2...', que: 'Cada día tiene sus ejercicios, con series, repeticiones, peso y descanso.' },
+            {
+                nombre: 'Marcar como hecho',
+                que: 'Tócalo al terminar el entrenamiento de ese día: queda registrado y suma a tu racha de la semana (la ves en Progreso). Cuando ya lo marcaste dice "Completado hoy".',
+            },
+            { nombre: 'Botón de reproducir', que: 'Abre la foto o el video de cómo se hace ese ejercicio.' },
+            { nombre: 'Botón del reloj', que: 'Inicia el temporizador del descanso entre series.' },
+            { nombre: 'Descargar en PDF', que: 'Baja tu rutina para tenerla en el teléfono o imprimirla.' },
+            {
+                nombre: 'Noticias y avisos de arriba',
+                que: 'Son mensajes de tu gimnasio. Los avisos se cierran con "Entendido" y no vuelven a aparecer.',
+            },
+        ],
+    },
+    alimentacion: {
+        resumen: 'Tu plan de comidas, con la cantidad de cada alimento.',
+        botones: [
+            { nombre: 'Comidas (Desayuno, Almuerzo...)', que: 'Cada comida lista lo que te toca comer en ese momento del día.' },
+            { nombre: 'Opcional', que: 'Los alimentos marcados como opcionales puedes comerlos o no.' },
+            { nombre: 'Alternativas', que: 'Cuando una comida ofrece varias opciones, eliges una de ellas.' },
+            { nombre: 'Descargar en PDF', que: 'Baja tu plan para tenerlo en el teléfono o imprimirlo.' },
+        ],
+    },
+    progreso: {
+        resumen: 'Cómo vienes entrenando y cómo evoluciona tu peso.',
+        botones: [
+            { nombre: 'Tu peso de hoy · Guardar', que: 'Escribe tu peso y toca "Guardar". Cada registro suma a tu gráfico.' },
+            {
+                nombre: 'Entrenamientos esta semana',
+                que: 'Cuántas veces marcaste "Marcar como hecho" en los últimos 7 días.',
+            },
+            { nombre: 'Evolución del peso', que: 'El gráfico aparece desde el segundo registro de peso.' },
+        ],
+    },
+    pagar: {
+        resumen: 'Los datos para pagar tu cuota.',
+        botones: [
+            { nombre: 'Copiar alias', que: 'Copia el alias de Mercado Pago para que lo pegues en tu aplicación y transfieras.' },
+            { nombre: 'WhatsApp · Correo', que: 'Para enviar el comprobante después de transferir.' },
+            {
+                nombre: 'Aviso de cuota',
+                que: 'Si tu cuota está por vencer o ya venció, arriba de todo aparece un aviso con un acceso directo a esta sección.',
+            },
+        ],
+        consejos: ['Si aquí no figura nada, consulta en la recepción de tu gimnasio.'],
+    },
+    general: {
+        resumen: 'Cómo moverte por la aplicación.',
+        botones: [
+            { nombre: 'Botón del menú (arriba a la izquierda)', que: 'Cambia entre Rutina, Alimentación, Progreso y Cómo pagar. Ahí también está "Cerrar sesión".' },
+            { nombre: 'Botón del sol o la luna (arriba a la derecha)', que: 'Cambia entre modo claro y modo oscuro.' },
+            { nombre: 'Ícono "i" junto a cada título', que: 'Te explica para qué sirve esa pantalla y qué hace cada botón.' },
+        ],
+    },
+};
+
+// Recorrido de bienvenida del alumno (la primera vez que entra en ese teléfono). `to` es la clave del
+// ítem de su menú.
+export const PASOS_TOUR_ALUMNO = [
+    {
+        to: 'rutina',
+        texto: '¡Bienvenido! Aquí está tu rutina, día por día. Al terminar cada día toca "Marcar como hecho", y con el botón de reproducir ves cómo se hace cada ejercicio.',
+    },
+    { to: 'alimentacion', texto: 'Tu plan de comidas, con la cantidad de cada alimento. Puedes bajarlo en PDF.' },
+    { to: 'progreso', texto: 'Anota tu peso y mira cuántas veces entrenaste esta semana y cómo evoluciona tu peso.' },
+    { to: 'pagar', texto: 'Los datos para pagar tu cuota. Si falta poco para que venza, arriba de todo te lo avisamos.' },
+    {
+        to: 'guia',
+        texto: 'Aquí tienes la guía de la aplicación, y puedes volver a ver este recorrido cuando quieras. En cada pantalla, el ícono "i" junto al título te explica qué hace cada botón.',
+    },
+];

@@ -7105,3 +7105,17 @@ Ocultar, Cobrar, "No está pagando ahora", Anular...), sin mencionar que ahora s
 **Probado** con la sesión de Nalux: "i" de 15 pantallas + ficha a 320 px (dentro de pantalla, con scroll), Guía (16 secciones, buscador "anular" → Ficha y Pagos, sin resultados, todas abiertas a 320 px sin desborde), recorrido de administrador completo de 16 pasos a 1280 y a 375 px
 (ningún ítem tapado ni fuera de vista, la tarjeta no se corta), repetir el recorrido. **No probado en pantalla**: el recorrido del equipo (se comprobó por código que todos sus pasos existen en el menú del equipo); falta verlo con una cuenta de empleado real.
 **Estado: subido a producción el 29/10/2026 (OK de Nalux).**
+
+
+## 29/10/2026 (más tarde) — Guía de uso del alumno: recorrido de bienvenida, "i" en cada pantalla y "Cómo usar la app"
+
+Pedido de Nalux: "lo mismo para el alumno cuando ingrese por primera vez y el equipo cuando un staff ingrese por primera vez, que todos tengan su guía y uso de la app".
+**Hecho** (cliente, sin migración):
+- `lib/guiaDeUso.js`: `AYUDAS_ALUMNO` (general, rutina, alimentacion, progreso, pagar; cada uno con resumen y lista "botón — qué hace") y `PASOS_TOUR_ALUMNO` (5 pasos: Rutina, Alimentación, Progreso, Cómo pagar, Cómo usar la app).
+- Portal del alumno (`MiPlanPage.jsx`): menú con un quinto ítem "Cómo usar la app" (vista `guia`: texto de inicio, botón "Ver el recorrido de nuevo" y una sección desplegable por pantalla). Ícono "i" (`AyudaInfo`, con `mp-no-imprimir` para que no salga en el PDF) junto al título de Rutina, Alimentación, Progreso y Cómo pagar.
+- Recorrido: aparece la primera vez que el alumno entra, DESPUÉS del modal "Antes de empezar" (términos), y nunca en "Ver como alumno" (el que mira es el profesor). Se recuerda por alumno en este dispositivo: `localStorage['rutnail:tour-alumno:<codigo>']` (el alumno no tiene sesión de Supabase donde guardarlo; si el navegador no permite localStorage se considera visto). Cerrarlo con la X, tocar el fondo, elegir un ítem o llegar al final lo marca como visto.
+- `TourBienvenida.jsx`: nuevo `usePosicionTour` y `TOUR_ESPACIO_MOVIL_PX`. **Bug real encontrado probando**: medir el ítem a los 300 ms fallaba en una carga lenta (el cajón seguía entrando y la tarjeta salía cortada a la izquierda); ahora mide cada 150 ms hasta que el ítem queda quieto. AppLayout (panel) conserva su propia copia de la lógica, que no se tocó.
+**Probado** con el alumno 1 del gimnasio de prueba (solo lectura; no se aceptó nada ni se escribió en la base): 5 pasos a 375 y 320 px (ítem resaltado arriba, tarjeta abajo sin taparlo, sin desborde horizontal), a escritorio (tarjeta al lado del cajón), no reaparece al recargar, "Ver el recorrido de nuevo" lo vuelve a mostrar, la "i" de Rutina cabe en 375 px, la vista guía abre sus 5 secciones. Lint y build OK.
+**Pendiente**: ver el recorrido del EQUIPO con una cuenta de empleado real (necesita crear una cuenta de prueba desde Equipo).
+**Detectado, no corregido**: el aviso automático de cuota que ve el alumno dice "Pasá por {gimnasio}…" (voseo). Sale de la migración `0015_aviso_automatico_cuota.sql` (plantilla por defecto, también guardada en la configuración de cada gimnasio). Corregir requiere una migración y revisar lo ya guardado: pedirle el OK a Nalux.
+**Estado: sin subir (esperando el OK de Nalux).**

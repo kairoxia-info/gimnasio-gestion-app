@@ -4,9 +4,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
     AlertTriangle,
     Apple,
+    BookOpen,
     ArrowLeft,
     ArrowRight,
     CheckCircle2,
+    ChevronDown,
     Download,
     Dumbbell,
     Flame,
@@ -19,6 +21,7 @@ import {
     MessageCircle,
     Pause,
     Play,
+    PlayCircle,
     RotateCcw,
     Scale,
     Wallet,
@@ -28,6 +31,9 @@ import supabase from '@/lib/supabaseClient';
 import { limpiarPlanesDelAlumnoGuardados } from '@/lib/offline';
 import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
 import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
+import TarjetaTour, { TOUR_ESPACIO_MOVIL_PX, usePosicionTour } from '@/components/TourBienvenida';
+import { AyudaInfo, ContenidoAyuda } from '@/components/ui-kit';
+import { AYUDAS_ALUMNO, PASOS_TOUR_ALUMNO } from '@/lib/guiaDeUso';
 import {
     agruparCombos,
     agruparItemsRutina,
@@ -610,6 +616,28 @@ const EstadoRestringido = ({ gimnasioNombre }) => (
     </div>
 );
 
+// Ítems del menú del alumno. Son vistas (estado), no rutas: por eso `clave`. El recorrido de bienvenida
+// (PASOS_TOUR_ALUMNO, lib/guiaDeUso.js) señala estos mismos ítems.
+const NAV_ALUMNO = [
+    { clave: 'rutina', label: 'Rutina', icon: Dumbbell },
+    { clave: 'alimentacion', label: 'Alimentación', icon: Apple },
+    { clave: 'progreso', label: 'Progreso', icon: Flame },
+    { clave: 'pagar', label: 'Cómo pagar', icon: Wallet },
+    { clave: 'guia', label: 'Cómo usar la app', icon: BookOpen },
+];
+
+// El recorrido se muestra una sola vez por alumno en cada teléfono: la marca queda en el navegador
+// (el alumno no tiene sesión de Supabase donde guardarla). Si el navegador no deja usar localStorage
+// se considera visto: preferimos no mostrarlo a mostrarlo en cada visita.
+const claveTourAlumno = (codigo) => `rutnail:tour-alumno:${codigo}`;
+const tourAlumnoVisto = (codigo) => {
+    try {
+        return localStorage.getItem(claveTourAlumno(codigo)) === '1';
+    } catch (_) {
+        return true;
+    }
+};
+
 const MiPlanPage = () => {
     const { codigo } = useParams();
     const navigate = useNavigate();
@@ -911,6 +939,37 @@ const MiPlanPage = () => {
     const setVista = (v) => {
         setVistaInterna(v);
         window.scrollTo({ top: 0 });
+    };
+
+    // Recorrido de bienvenida: arranca cuando ya aceptó los términos (el modal va primero) y nunca
+    // en "Ver como alumno" (ahí quien mira es el profesor).
+    const [tourVisto, setTourVisto] = useState(() => tourAlumnoVisto(codigo));
+    const [pasoTour, setPasoTour] = useState(0);
+    const tourActivo = !!plan && !debeAceptarTerminos && !idProfesorQueVuelve && !tourVisto;
+    const pasoActual = PASOS_TOUR_ALUMNO[Math.min(pasoTour, PASOS_TOUR_ALUMNO.length - 1)];
+    const posicionTour = usePosicionTour({ activo: tourActivo, abierto: menuAbierto, idItem: pasoActual.to });
+    useEffect(() => {
+        if (tourActivo) setMenuAbierto(true);
+    }, [tourActivo]);
+    const finalizarTour = () => {
+        if (!tourActivo) return;
+        setPasoTour(0);
+        setTourVisto(true);
+        try {
+            localStorage.setItem(claveTourAlumno(codigo), '1');
+        } catch (_) {
+            // Sin localStorage: queda visto solo en esta visita.
+        }
+    };
+    const verRecorrido = () => {
+        try {
+            localStorage.removeItem(claveTourAlumno(codigo));
+        } catch (_) {
+            // Nada que borrar.
+        }
+        setPasoTour(0);
+        setTourVisto(false);
+        setVista('rutina');
     };
     const [progreso, setProgreso] = useState(null); // { historial_peso, entrenamientos_ultima_semana } | null
     const [cargandoProgreso, setCargandoProgreso] = useState(false);
@@ -1305,7 +1364,10 @@ const MiPlanPage = () => {
                         donde está en el del profesor. */}
                     <CajonMenu
                         abierto={menuAbierto}
-                        onCerrar={() => setMenuAbierto(false)}
+                        onCerrar={() => {
+                            finalizarTour();
+                            setMenuAbierto(false);
+                        }}
                         encabezado={
                             <div className="flex min-w-0 items-center gap-3">
                                 <LogoGimnasio nombre={plan.gimnasio_nombre} logoUrl={plan.gimnasio_logo_url} />
@@ -1328,19 +1390,46 @@ const MiPlanPage = () => {
                         }
                     >
                         <NavLinksAnimados
-                            nav={[
-                                { clave: 'rutina', label: 'Rutina', icon: Dumbbell },
-                                { clave: 'alimentacion', label: 'Alimentación', icon: Apple },
-                                { clave: 'progreso', label: 'Progreso', icon: Flame },
-                                { clave: 'pagar', label: 'Cómo pagar', icon: Wallet },
-                            ].map((item) => ({
+                            nav={NAV_ALUMNO.map((item) => ({
                                 ...item,
                                 activo: vista === item.clave,
                                 onSelect: () => setVista(item.clave),
                             }))}
-                            onNavegar={() => setMenuAbierto(false)}
+                            onNavegar={() => {
+                                finalizarTour();
+                                setMenuAbierto(false);
+                            }}
+                            pasoTourTo={tourActivo ? pasoActual.to : null}
                         />
+                        {tourActivo && menuAbierto && window.innerWidth < 640 && (
+                            <div aria-hidden="true" style={{ height: TOUR_ESPACIO_MOVIL_PX }} />
+                        )}
                     </CajonMenu>
+
+                    {tourActivo && menuAbierto && posicionTour && (
+                        <TarjetaTour
+                            paso={pasoTour + 1}
+                            total={PASOS_TOUR_ALUMNO.length}
+                            titulo={NAV_ALUMNO.find((n) => n.clave === pasoActual.to)?.label}
+                            texto={pasoActual.texto}
+                            posicion={posicionTour}
+                            esPrimero={pasoTour === 0}
+                            esUltimo={pasoTour === PASOS_TOUR_ALUMNO.length - 1}
+                            onAtras={() => setPasoTour((p) => Math.max(0, p - 1))}
+                            onSiguiente={() => {
+                                if (pasoTour === PASOS_TOUR_ALUMNO.length - 1) {
+                                    finalizarTour();
+                                    setMenuAbierto(false);
+                                } else {
+                                    setPasoTour((p) => p + 1);
+                                }
+                            }}
+                            onCerrar={() => {
+                                finalizarTour();
+                                setMenuAbierto(false);
+                            }}
+                        />
+                    )}
 
                     {idProfesorQueVuelve && (
                         <div className="mp-no-imprimir bg-primary/10 px-4 py-2 text-center">
@@ -1464,15 +1553,68 @@ const MiPlanPage = () => {
                             (mismo patrón que AlumnoPage.jsx del profesor): el PDF no
                             se ve afectado, siempre es de una sola sección. */}
 
+                        {vista === 'guia' && (
+                            <section aria-labelledby="mp-guia-titulo" className="mp-no-imprimir space-y-5">
+                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
+                                    <h2
+                                        id="mp-guia-titulo"
+                                        className="font-display text-2xl font-extrabold uppercase text-primary"
+                                >
+                                        Cómo usar la app
+                                    </h2>
+                                </div>
+
+                                <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                    <p className="text-sm text-muted-foreground">
+                                        Aquí te explicamos para qué sirve cada pantalla y qué hace cada botón. También
+                                        encuentras el ícono <strong>i</strong> junto al título de cada pantalla.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={verRecorrido}
+                                        className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary px-4 py-2.5 text-sm font-bold text-primary transition active:scale-[0.98]"
+                                    >
+                                        <PlayCircle className="h-4 w-4" /> Ver el recorrido de nuevo
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {[
+                                        ['general', 'Cómo moverte por la app'],
+                                        ['rutina', 'Rutina'],
+                                        ['alimentacion', 'Alimentación'],
+                                        ['progreso', 'Progreso'],
+                                        ['pagar', 'Cómo pagar'],
+                                    ].map(([clave, titulo]) => (
+                                        <details
+                                            key={clave}
+                                            className="group rounded-2xl border border-border bg-card"
+                                        >
+                                            <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 [&::-webkit-details-marker]:hidden">
+                                                <span className="font-display text-base font-bold">{titulo}</span>
+                                                <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+                                            </summary>
+                                            <div className="border-t border-border px-5 py-4 text-sm">
+                                                <ContenidoAyuda ayuda={AYUDAS_ALUMNO[clave]} />
+                                            </div>
+                                        </details>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
                         {vista === 'pagar' && (
                             <section aria-labelledby="mp-pagar-titulo" className="mp-no-imprimir space-y-5">
                                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
-                                    <h2
-                                        id="mp-pagar-titulo"
-                                        className="font-display text-2xl font-extrabold uppercase text-primary"
-                                    >
-                                        Cómo pagar
-                                    </h2>
+                                    <div className="flex items-center gap-2">
+                                        <h2
+                                            id="mp-pagar-titulo"
+                                            className="font-display text-2xl font-extrabold uppercase text-primary"
+                                        >
+                                            Cómo pagar
+                                        </h2>
+                                        <AyudaInfo texto={AYUDAS_ALUMNO.pagar} className="mp-no-imprimir" />
+                                    </div>
                                 </div>
 
                                 {!plan.alias_mercadopago && !plan.whatsapp_pagos && !plan.email_pagos ? (
@@ -1556,12 +1698,15 @@ const MiPlanPage = () => {
                         {vista === 'rutina' && (
                         <section aria-labelledby="mp-rutina-titulo" className="mp-seccion-rutina space-y-5">
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
-                                <h2
-                                    id="mp-rutina-titulo"
-                                    className="font-display text-2xl font-extrabold uppercase text-primary"
-                                >
-                                    Tu rutina
-                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <h2
+                                        id="mp-rutina-titulo"
+                                        className="font-display text-2xl font-extrabold uppercase text-primary"
+                                    >
+                                        Tu rutina
+                                    </h2>
+                                    <AyudaInfo texto={AYUDAS_ALUMNO.rutina} className="mp-no-imprimir" />
+                                </div>
                                 {tieneRutina && (
                                     <button
                                         type="button"
@@ -1778,12 +1923,15 @@ const MiPlanPage = () => {
                         {vista === 'progreso' && (
                         <section aria-labelledby="mp-progreso-titulo" className="space-y-5">
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-primary bg-primary/10 px-4 py-3">
-                                <h2
-                                    id="mp-progreso-titulo"
-                                    className="font-display text-2xl font-extrabold uppercase text-primary"
-                                >
-                                    Tu progreso
-                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <h2
+                                        id="mp-progreso-titulo"
+                                        className="font-display text-2xl font-extrabold uppercase text-primary"
+                                    >
+                                        Tu progreso
+                                    </h2>
+                                    <AyudaInfo texto={AYUDAS_ALUMNO.progreso} className="mp-no-imprimir" />
+                                </div>
                             </div>
 
                             <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -1911,12 +2059,15 @@ const MiPlanPage = () => {
                             className="mp-seccion-alimentacion space-y-5"
                         >
                             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-l-4 border-ok bg-ok/10 px-4 py-3">
-                                <h2
-                                    id="mp-alimentacion-titulo"
-                                    className="font-display text-2xl font-extrabold uppercase text-ok"
-                                >
-                                    Tu plan de alimentación
-                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <h2
+                                        id="mp-alimentacion-titulo"
+                                        className="font-display text-2xl font-extrabold uppercase text-ok"
+                                    >
+                                        Tu plan de alimentación
+                                    </h2>
+                                    <AyudaInfo texto={AYUDAS_ALUMNO.alimentacion} className="mp-no-imprimir" />
+                                </div>
                                 {tienePlan && (
                                     <button
                                         type="button"
