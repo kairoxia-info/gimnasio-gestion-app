@@ -100,8 +100,14 @@ const AsistenciaAlumno = ({ alumnoId, asistencias, onChange }) => {
             </div>
 
             <p className="mt-5 text-sm text-muted-foreground">
-                En el mes: <span className="font-bold text-ok">{presentes} presentes</span> ·{' '}
-                <span className="font-bold text-destructive">{ausentes} ausentes</span>
+                En el mes:{' '}
+                <span className="font-bold text-ok">
+                    {presentes} {presentes === 1 ? 'presente' : 'presentes'}
+                </span>{' '}
+                ·{' '}
+                <span className="font-bold text-destructive">
+                    {ausentes} {ausentes === 1 ? 'ausente' : 'ausentes'}
+                </span>
                 {porcentaje !== null && (
                     <>
                         {' · '}

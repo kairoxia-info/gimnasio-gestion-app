@@ -434,6 +434,20 @@ const PagosPage = () => {
         }));
     };
 
+    // Elegir al alumno DENTRO del formulario "Registrar pago" (el botón "Cobrar" de cada fila ya lo hacía
+    // con abrirCobro): precarga su plan, el monto y el período, y "cubre desde" continúa donde terminó su
+    // último pago. Encontrado al probar todas las pantallas (29/10/2026): desde este selector solo se
+    // guardaba el alumno y había que volver a elegir el plan a mano.
+    const elegirAlumnoEnFormulario = (alumnoId) => {
+        const alumno = alumnos.find((a) => a.id === alumnoId);
+        const ultimoPago = pagos
+            .filter((p) => p.alumno_id === alumnoId && p.periodo_hasta)
+            .sort((a, b) => String(b.periodo_hasta).localeCompare(String(a.periodo_hasta)))[0];
+        const periodoDesde = ultimoPago ? sumarDiasISO(ultimoPago.periodo_hasta, 1) : hoy();
+        setForm((f) => ({ ...f, alumno_id: alumnoId, periodo_desde: periodoDesde }));
+        if (alumno?.plan_precio_nombre) aplicarPlan(alumno.plan_precio_nombre, periodoDesde);
+    };
+
     const totalACobrar = useMemo(() => {
         const base = Number(form.monto || 0);
         const desc = (base * Number(form.descuento || 0)) / 100;
@@ -772,7 +786,7 @@ const PagosPage = () => {
                     <Field label="Alumno">
                         <Select
                             value={form.alumno_id}
-                            onChange={(e) => setForm({ ...form, alumno_id: e.target.value })}
+                            onChange={(e) => elegirAlumnoEnFormulario(e.target.value)}
                             required
                         >
                             <option value="">Elegir un alumno...</option>

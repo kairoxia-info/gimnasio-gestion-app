@@ -454,8 +454,14 @@ const AsistenciaPage = () => {
 
                     <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 py-4">
                         <p className="text-sm">
-                            <span className="font-bold text-ok">{presentesDelDia} presentes</span> ·{' '}
-                            <span className="font-bold text-destructive">{ausentesDelDia} ausentes</span> ·{' '}
+                            <span className="font-bold text-ok">
+                                {presentesDelDia} {presentesDelDia === 1 ? 'presente' : 'presentes'}
+                            </span>{' '}
+                            ·{' '}
+                            <span className="font-bold text-destructive">
+                                {ausentesDelDia} {ausentesDelDia === 1 ? 'ausente' : 'ausentes'}
+                            </span>{' '}
+                            ·{' '}
                             <span className="font-semibold text-muted-foreground">
                                 {sinMarcar.length} sin marcar
                             </span>

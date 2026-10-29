@@ -48,6 +48,7 @@ const NoticiasPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [ocupadaId, setOcupadaId] = useState(null);
+    const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
 
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(formVacio);
@@ -188,8 +189,12 @@ const NoticiasPage = () => {
     // historial que valga la pena conservar, y cada imagen ocupa storage. El
     // archivo se saca del bucket antes que la fila, best effort -- igual que
     // EjerciciosPage.jsx.
+    //
+    // La confirmación la dibuja la app (confirmandoBorrarId), no window.confirm(): ese cartel nativo
+    // lo suprimen algunos navegadores y ahí "Borrar" quedaba mudo (mismo problema que ya se corrigió en
+    // Rutinas, Alumnos y Pagos; 29/10/2026, encontrado al probar todas las pantallas).
     const borrar = async (n) => {
-        if (!window.confirm('¿Borrar esta noticia? Se saca del portal de los alumnos y no se puede deshacer.')) return;
+        setConfirmandoBorrarId(null);
         setOcupadaId(n.id);
         try {
             const path = pathDeNoticia(n.imagen_url);
@@ -276,6 +281,31 @@ const NoticiasPage = () => {
                                     )}
                                 </div>
 
+                                {confirmandoBorrarId === n.id && (
+                                    <div className="space-y-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
+                                        <p className="text-xs text-foreground">
+                                            ¿Borrar esta noticia? Se saca del portal de los alumnos y no se puede deshacer.
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <Btn
+                                                variant="danger"
+                                                className="px-3 py-2 text-xs"
+                                                disabled={ocupada}
+                                                onClick={() => borrar(n)}
+                                            >
+                                                Sí, borrar
+                                            </Btn>
+                                            <Btn
+                                                variant="ghost"
+                                                className="px-3 py-2 text-xs"
+                                                onClick={() => setConfirmandoBorrarId(null)}
+                                            >
+                                                Cancelar
+                                            </Btn>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex flex-wrap gap-1.5">
                                         <Badge className="border-border text-muted-foreground">
@@ -297,8 +327,8 @@ const NoticiasPage = () => {
                                         <Btn
                                             variant="danger"
                                             className="px-3 py-2 text-xs"
-                                            disabled={ocupada}
-                                            onClick={() => borrar(n)}
+                                            disabled={ocupada || confirmandoBorrarId === n.id}
+                                            onClick={() => setConfirmandoBorrarId(n.id)}
                                         >
                                             <Trash2 className="h-3.5 w-3.5" /> Borrar
                                         </Btn>
