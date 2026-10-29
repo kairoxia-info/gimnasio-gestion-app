@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
 
 const FullscreenSpinner = () => (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background">
@@ -48,7 +49,8 @@ const ProtectedRoute = ({ children }) => {
 
     if (loading) return <FullscreenSpinner />;
 
-    if (!isAuthed) return <Navigate to="/login" replace />;
+    // Sin sesión: cada uno vuelve a su ingreso (el del equipo o el del profesor).
+    if (!isAuthed) return <Navigate to={rutaDeIngreso()} replace />;
 
     const tieneGimnasio = !!profile?.gimnasio_id;
 

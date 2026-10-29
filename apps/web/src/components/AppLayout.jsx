@@ -35,6 +35,7 @@ import { listAll, updateRec } from '@/lib/data';
 import { estadoCuota, fmtFecha, hoy, money, ultimoPagoDeAlumno } from '@/lib/format';
 import { descartarFallido, onCambioCola, onCambioColaFallida, verCola, verColaFallida } from '@/lib/offline';
 import { copiarAlPortapapeles } from '@/lib/copiar';
+import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -403,7 +404,8 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
         }
         setConfirmandoSalir(false);
         await signOut();
-        navigate('/login', { replace: true });
+        // El personal vuelve a SU ingreso, no al del profesor (lib/rutaDeIngreso.js).
+        navigate(rutaDeIngreso(), { replace: true });
     };
 
     // Política "dar de baja" (Configuración, migraciones 0020/0021): cuando

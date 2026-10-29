@@ -4,6 +4,7 @@ import { setCurrentGimnasioId } from '@/lib/currentGimnasio';
 import { limpiarCacheDeLectura, limpiarTodoOffline, verCola } from '@/lib/offline';
 import { aplicarColorGimnasio } from '@/lib/colorTema';
 import { setZonaHorariaDelGimnasio } from '@/lib/format';
+import { recordarTipoDeIngreso } from '@/lib/rutaDeIngreso';
 
 const AuthContext = createContext(null);
 
@@ -101,6 +102,8 @@ export const AuthProvider = ({ children }) => {
                 misGimnasios: ctx.gimnasios ?? [],
             };
             zona = ctx.gimnasio?.zona_horaria ?? null;
+            // Recuerda si es cuenta de equipo para volver a su ingreso al cerrar sesión.
+            recordarTipoDeIngreso({ misGimnasios: perfil.misGimnasios, accesoPausado: perfil.accesoPausado });
             // Fija en la base el gimnasio con el que ESTA sesión abrió la app (una vez por carga). Sin
             // fijar, una sesión usa "el último gimnasio usado" de la persona, y si en otro navegador
             // cambia de gimnasio esta se movería sola en la siguiente consulta. Ya fijada, cada sesión

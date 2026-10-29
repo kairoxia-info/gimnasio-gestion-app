@@ -7035,3 +7035,13 @@ Cuenta de prueba `zzz-qa-staff@example.com` creada desde la pantalla Equipo con 
 - Nalux ya había creado por su cuenta, con la versión corregida, dos cuentas REALES de staff: noelia@gmail.com (Mi GYM FIT) y sofia@gmial.com (fitness place). No se tocaron (la prueba solo operó sobre su propia cuenta de prueba, localizada por el correo).
 - Limpieza: las 4 anotaciones de prueba del Historial borradas; quedan 3 usuarios (Nalux, Noelia, Sofía), 4 membresías.
 - Nota: Nalux también cambió de gimnasio abierto a "fitness place" en su navegador (el selector funciona con sus 2 gimnasios).
+
+### 29/10/2026 — El empleado vuelve a SU ingreso al cerrar sesión
+Nalux reportó que el empleado, al cerrar sesión, caía en el login del profesor (`/login`) y no en el del equipo.
+- **Causa**: \`AppLayout.salir()\` y \`ProtectedRoute\` mandaban siempre a \`/login\`.
+- **Arreglo**: \`lib/rutaDeIngreso.js\`. Al cargar el perfil, \`AuthContext\` recuerda en \`localStorage\` (\`rutnail:ingreso\`) si es cuenta de equipo (sin gimnasio donde sea administradora y con acceso de staff, activo o pausado) y, sin sesión (cerrar sesión o sesión vencida), vuelve a
+  \`/ingreso-equipo\` si es de equipo o a \`/login\` si no. Es solo una preferencia de pantalla (no un permiso). Sin almacenamiento en el navegador cae a \`/login\`.
+- **Probado** (cuenta de prueba creada desde Equipo, servidor de producción local puerto 3000): entra por \`/ingreso-equipo\`, queda \`recuerda=equipo\`, "Cerrar sesión" → \`/ingreso-equipo\`; sin sesión, entrar a \`/panel\` → \`/ingreso-equipo\`; con la marca "profesor" → \`/login\`.
+- **Hallazgo menor**: una sesión de un empleado ya borrado puede seguir abierta (token válido hasta que venza) y muestra "Crear el gimnasio"; no puede crearlo (la cuenta ya no existe) y se corta sola al vencer el token. Sin acción.
+- Limpieza: cuenta de prueba \`zzz-qa-salida\` quitada y sus 2 anotaciones del Historial borradas; quedan los usuarios reales (Nalux, Noelia, Sofía).
+- **Estado: arreglo subido a producción el 29/10/2026 (con el OK de Nalux).**
