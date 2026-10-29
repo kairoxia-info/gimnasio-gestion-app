@@ -31,7 +31,10 @@ const traducirError = (err, modo) => {
     return modo === 'login' ? 'No se pudo iniciar sesión.' : 'No se pudo crear la cuenta.';
 };
 
-const LoginPage = () => {
+// modoEquipo (ruta /ingreso-equipo, 28/10/2026): ingreso para el personal que el profesor dio de alta
+// desde su panel (pantalla Equipo). Solo iniciar sesión: sus cuentas las crea el administrador, no
+// hay registro propio. Es el mismo inicio de sesión de siempre; cambia el rótulo y no ofrece registrarse.
+const LoginPage = ({ modoEquipo = false }) => {
     const { signIn, signUp, isAuthed, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const [mode, setMode] = useState('login');
@@ -102,7 +105,7 @@ const LoginPage = () => {
     return (
         <AuthBackdrop>
             <Helmet>
-                <title>Ingresar | RutNail</title>
+                <title>{modoEquipo ? 'Ingreso del equipo' : 'Ingresar'} | RutNail</title>
                 <meta
                     name="description"
                     content="Acceso del entrenador a RutNail: gestión de alumnos, planes, asistencia y pagos."
@@ -118,8 +121,13 @@ const LoginPage = () => {
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-36" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
-                        Panel del entrenador
+                        {modoEquipo ? 'Ingreso del equipo' : 'Panel del entrenador'}
                     </p>
+                    {modoEquipo && (
+                        <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+                            Ingresa con el correo y la contraseña que te dio el administrador del gimnasio.
+                        </p>
+                    )}
                 </div>
 
                 {/* Pedido de Nalux (15/09/2026): que el navegador ofrezca guardar la
@@ -280,12 +288,14 @@ const LoginPage = () => {
                     </Btn>
                 </form>
 
-                <p className="mt-6 text-center text-sm text-muted-foreground">
-                    {isLogin ? '¿No tiene una cuenta?' : '¿Ya tiene una cuenta?'}{' '}
-                    <button type="button" onClick={toggleMode} className="font-semibold text-[#d8b876] hover:underline">
-                        {isLogin ? 'Registrarse' : 'Iniciar sesión'}
-                    </button>
-                </p>
+                {!modoEquipo && (
+                    <p className="mt-6 text-center text-sm text-muted-foreground">
+                        {isLogin ? '¿No tiene una cuenta?' : '¿Ya tiene una cuenta?'}{' '}
+                        <button type="button" onClick={toggleMode} className="font-semibold text-[#d8b876] hover:underline">
+                            {isLogin ? 'Registrarse' : 'Iniciar sesión'}
+                        </button>
+                    </p>
+                )}
             </motion.div>
 
             <div className="dark">

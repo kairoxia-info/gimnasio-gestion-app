@@ -46,6 +46,8 @@ function App() {
                                 ruta en la que ya está, dejando el formulario inalcanzable. El
                                 propio LoginPage ya redirige a /panel si detecta sesión activa. */}
                             <Route path="/login" element={<LoginPage />} />
+                            {/* Ingreso del personal que el profesor dio de alta desde Equipo (0080). */}
+                            <Route path="/ingreso-equipo" element={<LoginPage modoEquipo />} />
                             {/* Sin ProtectedRoute a propósito: esta ruta se llega con la sesión
                                 temporal de recuperación que arma Supabase desde el link del mail,
                                 que todavía no tiene por qué tener gimnasio_id. Pasarla por el guard

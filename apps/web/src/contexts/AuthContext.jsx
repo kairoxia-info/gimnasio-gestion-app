@@ -94,6 +94,8 @@ export const AuthProvider = ({ children }) => {
                 ...data,
                 gimnasio_id: ctx.gimnasio_id ?? null,
                 organizacion_id: ctx.organizacion_id ?? null,
+                // Staff pausado por el administrador (migración 0082): sin gimnasio activo.
+                accesoPausado: !!ctx.acceso_pausado,
                 role: ctx.rol ?? data.role,
                 gimnasios: ctx.gimnasio ?? null,
                 misGimnasios: ctx.gimnasios ?? [],

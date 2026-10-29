@@ -6997,3 +6997,41 @@ Orden seguido: 0078 → 0079 → 0080 → función → commit/push (la app nueva
   (hace falta crear un usuario real de prueba en Supabase Auth: pendiente del OK de Nalux; se haría desde la pantalla Equipo con un correo "zzz-qa-…" y se borra al final).
 - Pantalla real con su sesión: `/equipo` lista "Nadia Tecera (tú) — Administrador"; `/historial` carga vacío (la bitácora empieza hoy; los 13 pagos viejos no tienen registrador); sus datos siguen iguales
   (45 alimentos, 5 planes de biblioteca, 6 planes asignados, 13 pagos, 5 rutinas, 503 ejercicios). Todo lo de prueba se deshizo: 1 gimnasio, 1 organización, 1 membresía, 1 usuario, bitácora 0.
+
+## 28/10/2026 (noche) — Corrección de "Agregar persona" (0081 + función `equipo` v2) y login del equipo
+
+Nalux probó "Agregar persona" en Equipo (noelia@gmail.com) y salió "No se pudo sumar a la persona al equipo". Pidió además que el staff tenga "un login de staff" que el profesor le entregue desde su panel
+al crear la cuenta.
+- **Causa**: en este proyecto la cuenta `service_role` NO tiene permisos sobre las tablas `membresias` ni `profiles` (`has_table_privilege` = false; tampoco SELECT en `profiles`). La función v1 leía `profiles`
+  (devolvía vacío, sin error visible), creaba el usuario en Auth, fallaba al insertar la membresía y borraba el usuario. Comprobado: no quedó ninguna cuenta a medias (1 usuario, 0 "noelia").
+  **Lección**: las pruebas de la 0080 con sesiones simuladas no pasan por la Edge Function; la parte de la función solo se había probado con una acción inválida. Un intento real de crear habría mostrado esto antes.
+- **Observación**: la segunda membresía que aparece ("fitness place", creada 28/10 20:16 hora local) la creó Nalux desde "Agregar otro gimnasio"; no es dato de prueba y no se tocó.
+- **Solución (sin darle permisos nuevos a service_role)**: migración `0081_equipo_funciones_para_la_edge_function.sql` con `equipo_buscar(email)`, `equipo_sumar(user_id)` (tope 20, sin duplicar), `equipo_info(user_id)` y
+  `equipo_quitar(user_id)` (devuelve cuántos gimnasios le quedan y borra el perfil si ninguno), todas SECURITY DEFINER y solo para administradores del gimnasio abierto. La función `equipo` v2 las llama con
+  la sesión de quien llama; la clave de servicio queda solo para la API de usuarios de Auth (crear, cambiar contraseña, borrar). Búsqueda por correo exacta (no LIKE).
+- **Login del equipo**: ruta `/ingreso-equipo` (`LoginPage modoEquipo`: rótulo "Ingreso del equipo", sin registro) y, al crear la cuenta, un cuadro "Datos de acceso" con enlace, correo y contraseña y botón
+  "Copiar datos de acceso"; botón "Generar una contraseña segura". La contraseña solo vive en memoria en esa pantalla (no se guarda ni se vuelve a mostrar). Si la persona ya tenía cuenta no se muestra contraseña.
+- **Estado: 0081 APLICADA y función `equipo` v2 DESPLEGADA (28/10/2026, con el OK de Nalux: "ok"). Cliente listo; sin commitear.** (Estado anterior: 0081 escrita sin aplicar.) Pendiente: aplicar 0081, desplegar v2 y probar de verdad "Agregar persona" con una cuenta
+  de prueba que se borra al final (crear → entrar por /ingreso-equipo → ver que no ve Configuración/Equipo/Historial → su acción en el Historial → pausar/reactivar → cambiar contraseña → quitar con borrado de la cuenta).
+
+### Prueba real de punta a punta de las cuentas de staff (28/10/2026, con el OK de Nalux)
+Cuenta de prueba `zzz-qa-staff@example.com` creada desde la pantalla Equipo con la sesión de Nalux; el empleado entró desde otro origen (servidor de producción local, puerto 3000) para no tocar su sesión.
+- **Crear**: "Agregar persona" (con "Generar una contraseña segura") creó la cuenta y mostró el cuadro de datos de acceso (enlace `/ingreso-equipo`, correo, contraseña). **Arreglado el error de Nalux.**
+- **Ingreso del equipo** (`/ingreso-equipo`): carga con rótulo "Ingreso del equipo" y sin registro; el empleado entra al panel de Mi GYM FIT con sus datos. El menú del staff muestra solo Panel…Precios (sin Configuración, Equipo,
+  Historial ni Mis gimnasios), sin selector de gimnasios y sin recorrido de bienvenida; entrando por URL a /configuracion, /equipo o /historial vuelve al panel.
+- **Historial**: el empleado creó y eliminó un plan de precios; el administrador ve ambas acciones "ZZZ QA Staff · Staff" y su propia alta del empleado ("Sumó al equipo a…"), con filtros por persona.
+- **Pausar / reactivar**: pausado, el empleado pierde el acceso al instante; reactivado, lo recupera. **Hallazgo**: pausado, la app lo mandaba a "Crear el gimnasio" (la base le impide crearlo, pero el mensaje era equivocado) → migración **0082**
+  (`mi_contexto` suma `acceso_pausado`) y pantalla "Tu acceso está pausado" en `ProtectedRoute`. **0082 APLICADA el 29/10/2026 y probada** (ver abajo).
+- **Cambiar contraseña**: desde Equipo; la clave vieja deja de entrar ("Correo o contraseña incorrectos") y la nueva entra.
+- **Quitar**: sacó al empleado del gimnasio y borró su cuenta (queda 1 usuario, 1 perfil y las 2 membresías de Nalux).
+- **Limpieza**: borradas las 7 anotaciones de prueba del Historial (filas que yo creé; ya no hay "ZZZ QA"), 0 planes "ZZZ", 0 cuentas de prueba.
+- **Observación (no corregida)**: crear un gimnasio inserta sus períodos y precios por defecto y quedan en el Historial de ESE gimnasio como 8 altas del administrador (ruido, por ejemplo en "fitness place"). Opcional: no anotar lo que hace `create_gimnasio`.
+- **Pendiente de probar**: la pantalla de acceso pausado (después de aplicar la 0082, con otra cuenta de prueba).
+
+### 0082 aplicada y probada (29/10/2026, con el OK de Nalux: "ok, aplica todo y haz pruebas, después sube todo a producción")
+- Base (rollback): administradora y staff activo → `acceso_pausado` false; staff pausado → true y `gimnasio_id` null; el staff pausado NO puede crear un gimnasio ("Una cuenta de staff no puede crear gimnasios"); persona nueva sin gimnasio → false (ve el alta de gimnasio).
+- Pantalla real (cuenta `zzz-qa-pausa@example.com` creada desde Equipo en "fitness place", el gimnasio que Nalux tenía abierto; entró en otro origen, servidor de producción local puerto 3000): entra al panel; pausada y recargando ve **"Tu acceso está pausado"** (con "Volver a comprobar" y "Cerrar sesión"),
+  ya no la pantalla de crear gimnasio; reactivada y con "Volver a comprobar" entra sin reingresar; quitada: cuenta borrada.
+- Nalux ya había creado por su cuenta, con la versión corregida, dos cuentas REALES de staff: noelia@gmail.com (Mi GYM FIT) y sofia@gmial.com (fitness place). No se tocaron (la prueba solo operó sobre su propia cuenta de prueba, localizada por el correo).
+- Limpieza: las 4 anotaciones de prueba del Historial borradas; quedan 3 usuarios (Nalux, Noelia, Sofía), 4 membresías.
+- Nota: Nalux también cambió de gimnasio abierto a "fitness place" en su navegador (el selector funciona con sus 2 gimnasios).

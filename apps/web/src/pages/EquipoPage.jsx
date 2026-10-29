@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Navigate } from 'react-router-dom';
-import { KeyRound, Pause, Play, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Copy, KeyRound, Pause, Play, Plus, Trash2, UserPlus } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Input, Loading, Modal, PasswordInput } from '@/components/ui-kit';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
+import { copiarAlPortapapeles } from '@/lib/copiar';
 import { validarContrasena } from '@/lib/validacionPassword';
 
 // Equipo (migración 0080, pedido de Nalux del 28/10/2026): el administrador le crea a cada
@@ -33,6 +34,37 @@ const llamarEquipo = async (body) => {
 
 const vacio = { nombre: '', apellido: '', email: '', password: '' };
 
+// Contraseña al azar que cumple la política del proyecto (mayúscula, minúscula y número), sin
+// caracteres que se confunden al leerlos (0/O, 1/l/I) para poder dictarla o escribirla.
+const generarPassword = () => {
+    const mayusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const minusculas = 'abcdefghijkmnpqrstuvwxyz';
+    const numeros = '23456789';
+    const todos = mayusculas + minusculas + numeros;
+    const azar = (n) => {
+        const a = new Uint32Array(1);
+        crypto.getRandomValues(a);
+        return a[0] % n;
+    };
+    const pick = (set) => set[azar(set.length)];
+    const letras = [pick(mayusculas), pick(minusculas), pick(numeros)];
+    while (letras.length < 12) letras.push(pick(todos));
+    for (let i = letras.length - 1; i > 0; i -= 1) {
+        const j = azar(i + 1);
+        [letras[i], letras[j]] = [letras[j], letras[i]];
+    }
+    return letras.join('');
+};
+
+// Texto que el administrador le pasa a la persona (por mensaje, en papel...).
+const textoDeAcceso = ({ gimnasio, enlace, email, password }) =>
+    [
+        `Ingreso al equipo${gimnasio ? ` de ${gimnasio}` : ''}`,
+        `Enlace: ${enlace}`,
+        `Correo: ${email}`,
+        password ? `Contraseña: ${password}` : 'Contraseña: la de siempre (esta persona ya tenía cuenta)',
+    ].join('\n');
+
 const EquipoPage = () => {
     const { profile, loading: cargandoPerfil } = useAuth();
     const esAdmin = profile?.role === 'admin';
@@ -54,6 +86,11 @@ const EquipoPage = () => {
 
     const [quitando, setQuitando] = useState(null);
     const [trabajando, setTrabajando] = useState(null);
+
+    // Datos de acceso recién creados, para entregárselos a la persona. Solo viven en esta pantalla
+    // (memoria): la contraseña no se guarda en ningún lado y no se vuelve a mostrar al cerrarlo.
+    const [acceso, setAcceso] = useState(null);
+    const [copiado, setCopiado] = useState(false);
 
     const cargar = useCallback(() => {
         setLoading(true);
@@ -98,12 +135,30 @@ const EquipoPage = () => {
             return;
         }
         setAltaAbierta(false);
-        setAviso(
-            data?.creado
-                ? 'Cuenta creada. Comparte con la persona su correo y su contraseña para que pueda ingresar.'
-                : 'Esa persona ya tenía cuenta: ahora también tiene acceso a este gimnasio, con su contraseña de siempre.',
-        );
+        setAviso('');
+        setCopiado(false);
+        setAcceso({
+            nombre: `${form.nombre} ${form.apellido}`.trim(),
+            email: form.email.trim().toLowerCase(),
+            password: data?.creado ? form.password : '',
+            creado: !!data?.creado,
+        });
         cargar();
+    };
+
+    const enlaceDeIngreso = `${window.location.origin}/ingreso-equipo`;
+
+    const copiarAcceso = async () => {
+        if (!acceso) return;
+        const ok = await copiarAlPortapapeles(
+            textoDeAcceso({
+                gimnasio: profile?.gimnasios?.nombre,
+                enlace: enlaceDeIngreso,
+                email: acceso.email,
+                password: acceso.password,
+            }),
+        );
+        setCopiado(!!ok);
     };
 
     const alternarEstado = async (persona) => {
@@ -188,6 +243,43 @@ const EquipoPage = () => {
             )}
             {aviso && (
                 <div className="mb-4 rounded-2xl border border-primary/40 bg-primary/10 p-4 text-sm">{aviso}</div>
+            )}
+
+            {acceso && (
+                <Card className="mb-4 border-primary/40">
+                    <h2 className="font-display text-lg font-bold">
+                        {acceso.creado ? 'Cuenta creada' : 'Acceso dado'}: {acceso.nombre}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        {acceso.creado
+                            ? 'Entrega estos datos a la persona para que ingrese. La contraseña solo se muestra ahora; si se pierde, se puede cambiar con el botón "Contraseña".'
+                            : 'Esa persona ya tenía cuenta: ahora también tiene acceso a este gimnasio y entra con su contraseña de siempre.'}
+                    </p>
+                    <dl className="mt-3 space-y-1.5 rounded-xl border border-border bg-secondary p-3 text-sm">
+                        <div className="flex flex-wrap gap-x-2">
+                            <dt className="font-semibold">Enlace de ingreso:</dt>
+                            <dd className="break-all">{enlaceDeIngreso}</dd>
+                        </div>
+                        <div className="flex flex-wrap gap-x-2">
+                            <dt className="font-semibold">Correo:</dt>
+                            <dd className="break-all">{acceso.email}</dd>
+                        </div>
+                        {acceso.password && (
+                            <div className="flex flex-wrap gap-x-2">
+                                <dt className="font-semibold">Contraseña:</dt>
+                                <dd className="break-all font-mono">{acceso.password}</dd>
+                            </div>
+                        )}
+                    </dl>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        <Btn onClick={copiarAcceso}>
+                            <Copy className="h-4 w-4" /> {copiado ? 'Copiado' : 'Copiar datos de acceso'}
+                        </Btn>
+                        <Btn variant="ghost" onClick={() => setAcceso(null)}>
+                            Cerrar
+                        </Btn>
+                    </div>
+                </Card>
             )}
 
             {loading ? (
@@ -323,6 +415,13 @@ const EquipoPage = () => {
                             autoComplete="new-password"
                             placeholder="Mínimo 8, con mayúscula, minúscula y número"
                         />
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, password: generarPassword() })}
+                            className="mt-1 text-xs font-semibold text-primary hover:underline"
+                        >
+                            Generar una contraseña segura
+                        </button>
                     </Field>
                     <p className="text-xs text-muted-foreground">
                         Si el correo ya tiene una cuenta (por ejemplo trabaja en otro gimnasio), solo se le da acceso a este y
