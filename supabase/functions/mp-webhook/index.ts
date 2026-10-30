@@ -33,10 +33,23 @@ const iguales = (a: string, b: string) => {
   return r === 0;
 };
 
-const consultar = async (ruta: string, token: string) => {
+// Devuelve el estado HTTP y el cuerpo (o null si no es JSON): quien llama decide qué hacer con un 404.
+const pedir = async (ruta: string, token: string) => {
   const r = await fetch(`${MP}${ruta}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!r.ok) throw new Error(`Mercado Pago ${ruta} respondió ${r.status}`);
-  return await r.json();
+  const texto = await r.text();
+  let cuerpo: any = null;
+  try {
+    cuerpo = JSON.parse(texto);
+  } catch (_) {
+    // no es JSON
+  }
+  return { ok: r.ok, status: r.status, cuerpo, texto: texto.slice(0, 300) };
+};
+
+const consultar = async (ruta: string, token: string) => {
+  const r = await pedir(ruta, token);
+  if (!r.ok) throw new Error(`Mercado Pago ${ruta} respondió ${r.status} ${r.texto}`);
+  return r.cuerpo;
 };
 
 const responder = (texto: string, status = 200) => new Response(texto, { status });
@@ -74,25 +87,45 @@ Deno.serve(async (req) => {
 
   try {
     let preapprovalId = '';
+    let referencia = ''; // external_reference, si el aviso es de un pago común
     let pago: { id: string; estado: string; monto: number } | null = null;
 
     if (tipo === 'subscription_preapproval') {
       preapprovalId = id;
     } else if (tipo === 'subscription_authorized_payment') {
-      const ap = await consultar(`/authorized_payments/${encodeURIComponent(id)}`, token);
-      preapprovalId = String(ap.preapproval_id ?? '');
-      pago = {
-        id: String(ap.id ?? id),
-        estado: String(ap.payment?.status ?? ap.status ?? ''),
-        monto: Number(ap.transaction_amount ?? 0),
-      };
+      const r1 = await pedir(`/authorized_payments/${encodeURIComponent(id)}`, token);
+      if (r1.ok) {
+        const ap = r1.cuerpo;
+        preapprovalId = String(ap.preapproval_id ?? '');
+        pago = {
+          id: String(ap.id ?? id),
+          estado: String(ap.payment?.status ?? ap.status ?? ''),
+          monto: Number(ap.transaction_amount ?? 0),
+        };
+      } else if (r1.status === 404) {
+        // En algunos casos (por ejemplo en el modo de prueba) el número es el de un pago común.
+        const r2 = await pedir(`/v1/payments/${encodeURIComponent(id)}`, token);
+        if (!r2.ok) {
+          throw new Error(`ni /authorized_payments (404) ni /v1/payments (${r2.status}) conocen el id ${id}: ${r2.texto}`);
+        }
+        const p = r2.cuerpo;
+        preapprovalId = String(p.metadata?.preapproval_id ?? p.metadata?.preapprovalId ?? '');
+        referencia = String(p.external_reference ?? '');
+        pago = { id: String(p.id ?? id), estado: String(p.status ?? ''), monto: Number(p.transaction_amount ?? 0) };
+        console.log('Pago consultado por /v1/payments', id, pago.estado, 'preapproval:', preapprovalId || '(sin dato)', 'referencia:', referencia ? 'sí' : 'no');
+      } else {
+        throw new Error(`Mercado Pago /authorized_payments/${id} respondió ${r1.status} ${r1.texto}`);
+      }
     } else {
       return responder('Ignorado'); // otros avisos (por ejemplo "payment") no interesan acá
     }
-    if (!preapprovalId) return responder('Sin suscripción');
+    if (!preapprovalId && !referencia) {
+      console.error('Aviso sin suscripción ni referencia', tipo, id);
+      return responder('Sin suscripción');
+    }
 
-    const pre = await consultar(`/preapproval/${encodeURIComponent(preapprovalId)}`, token);
-    const [org, plan, periodo] = String(pre.external_reference ?? '').split('|');
+    const pre = preapprovalId ? await consultar(`/preapproval/${encodeURIComponent(preapprovalId)}`, token) : null;
+    const [org, plan, periodo] = String(pre?.external_reference ?? referencia).split('|');
     if (!UUID.test(org ?? '') || !plan || !periodo) {
       console.error('Aviso de una suscripción que no es de RutNail', preapprovalId);
       return responder('Ignorado');
@@ -103,13 +136,13 @@ Deno.serve(async (req) => {
       p_org: org,
       p_plan: plan,
       p_periodo: periodo,
-      p_preapproval_id: String(pre.id ?? preapprovalId),
-      p_preapproval_estado: String(pre.status ?? ''),
-      p_payer_email: pre.payer_email ? String(pre.payer_email) : null,
+      p_preapproval_id: pre ? String(pre.id ?? preapprovalId) : null,
+      p_preapproval_estado: pre ? String(pre.status ?? '') : '',
+      p_payer_email: pre?.payer_email ? String(pre.payer_email) : null,
       p_pago_id: pago ? pago.id : null,
       p_pago_estado: pago ? pago.estado : null,
       p_pago_monto: pago ? pago.monto : null,
-      p_crudo: { tipo, id, preapproval: { id: pre.id, status: pre.status }, pago },
+      p_crudo: { tipo, id, preapproval: pre ? { id: pre.id, status: pre.status } : null, pago },
     });
     if (error) throw new Error(error.message);
     console.log('Aviso aplicado', tipo, id, data);
