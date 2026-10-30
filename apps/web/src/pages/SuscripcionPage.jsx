@@ -153,6 +153,7 @@ const SuscripcionPage = () => {
         for (let i = 0; i < 10; i += 1) {
             const data = await cargar();
             if (data && data.estado !== 'activa') {
+                setConfirmado(false);
                 setCancelado(true);
                 break;
             }
