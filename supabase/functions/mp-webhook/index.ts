@@ -93,28 +93,42 @@ Deno.serve(async (req) => {
     if (tipo === 'subscription_preapproval') {
       preapprovalId = id;
     } else if (tipo === 'subscription_authorized_payment') {
-      const r1 = await pedir(`/authorized_payments/${encodeURIComponent(id)}`, token);
-      if (r1.ok) {
-        const ap = r1.cuerpo;
-        preapprovalId = String(ap.preapproval_id ?? '');
-        pago = {
-          id: String(ap.id ?? id),
-          estado: String(ap.payment?.status ?? ap.status ?? ''),
-          monto: Number(ap.transaction_amount ?? 0),
-        };
-      } else if (r1.status === 404) {
+      // El aviso suele llegar un instante antes de que el pago pueda consultarse (404 en las dos vías):
+      // se reintenta unas pocas veces. Mercado Pago espera la respuesta unos 20 s, así que el total se
+      // mantiene por debajo de eso; si igual no aparece, el 500 hace que Mercado Pago reintente.
+      const INTENTOS = 4;
+      const ESPERA_MS = 3000;
+      let ultimo = '';
+      for (let i = 0; i < INTENTOS && !pago; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, ESPERA_MS));
+        const r1 = await pedir(`/authorized_payments/${encodeURIComponent(id)}`, token);
+        if (r1.ok) {
+          const ap = r1.cuerpo;
+          preapprovalId = String(ap.preapproval_id ?? '');
+          pago = {
+            id: String(ap.id ?? id),
+            estado: String(ap.payment?.status ?? ap.status ?? ''),
+            monto: Number(ap.transaction_amount ?? 0),
+          };
+          break;
+        }
+        if (r1.status !== 404) {
+          throw new Error(`Mercado Pago /authorized_payments/${id} respondió ${r1.status} ${r1.texto}`);
+        }
         // En algunos casos (por ejemplo en el modo de prueba) el número es el de un pago común.
         const r2 = await pedir(`/v1/payments/${encodeURIComponent(id)}`, token);
-        if (!r2.ok) {
-          throw new Error(`ni /authorized_payments (404) ni /v1/payments (${r2.status}) conocen el id ${id}: ${r2.texto}`);
+        if (r2.ok) {
+          const p = r2.cuerpo;
+          preapprovalId = String(p.metadata?.preapproval_id ?? p.metadata?.preapprovalId ?? '');
+          referencia = String(p.external_reference ?? '');
+          pago = { id: String(p.id ?? id), estado: String(p.status ?? ''), monto: Number(p.transaction_amount ?? 0) };
+          console.log('Pago consultado por /v1/payments', id, pago.estado, 'intento', i + 1, 'preapproval:', preapprovalId || '(sin dato)', 'referencia:', referencia ? 'sí' : 'no');
+          break;
         }
-        const p = r2.cuerpo;
-        preapprovalId = String(p.metadata?.preapproval_id ?? p.metadata?.preapprovalId ?? '');
-        referencia = String(p.external_reference ?? '');
-        pago = { id: String(p.id ?? id), estado: String(p.status ?? ''), monto: Number(p.transaction_amount ?? 0) };
-        console.log('Pago consultado por /v1/payments', id, pago.estado, 'preapproval:', preapprovalId || '(sin dato)', 'referencia:', referencia ? 'sí' : 'no');
-      } else {
-        throw new Error(`Mercado Pago /authorized_payments/${id} respondió ${r1.status} ${r1.texto}`);
+        ultimo = `/v1/payments ${r2.status} ${r2.texto}`;
+      }
+      if (!pago) {
+        throw new Error(`ni /authorized_payments (404) ni ${ultimo} conocen el id ${id} tras ${INTENTOS} intentos`);
       }
     } else {
       return responder('Ignorado'); // otros avisos (por ejemplo "payment") no interesan acá
