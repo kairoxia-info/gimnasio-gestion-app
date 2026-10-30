@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
@@ -47,6 +48,9 @@ const AccesoPausado = ({ signOut, refreshProfile }) => (
 // nada del gimnasio. El administrador puede entrar a "Suscripción" para renovar; el equipo ve un aviso.
 const SuscripcionBloqueada = ({ esAdmin, signOut }) => (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+        <Helmet>
+            <title>Suscripción vencida | RutNail</title>
+        </Helmet>
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center">
             <h1 className="font-display text-xl font-bold">La suscripción venció</h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -86,16 +90,17 @@ const ProtectedRoute = ({ children }) => {
 
     const tieneGimnasio = !!profile?.gimnasio_id;
 
+    // Antes que cualquier redirección: con la suscripción bloqueada nunca se debe ofrecer "Crear el gimnasio".
+    if (profile?.suscripcion?.acceso === 'bloqueado' && location.pathname !== '/suscripcion') {
+        return <SuscripcionBloqueada esAdmin={profile?.role === 'admin'} signOut={signOut} />;
+    }
+
     if (!tieneGimnasio && profile?.accesoPausado) {
         return <AccesoPausado signOut={signOut} refreshProfile={refreshProfile} />;
     }
 
     if (!tieneGimnasio && location.pathname !== '/onboarding') {
         return <Navigate to="/onboarding" replace />;
-    }
-
-    if (profile?.suscripcion?.acceso === 'bloqueado' && location.pathname !== '/suscripcion') {
-        return <SuscripcionBloqueada esAdmin={profile?.role === 'admin'} signOut={signOut} />;
     }
 
     // "/login" no pasa por este guard (ver App.jsx), así que el único caso real
