@@ -292,7 +292,11 @@ const SuscripcionPage = () => {
                             const total = p.montos[periodoClave];
                             const porMes = Math.round(total / periodo.meses);
                             const esElActual = p.clave === info.plan && info.estado === 'activa' && info.periodo === periodoClave;
-                            const seleccionado = elegido === p.clave;
+                            // Un plan que no alcanza para lo que ya usas no se puede elegir (la base también lo rechaza).
+            const faltaAlumnos = p.max_alumnos !== null && info.uso.alumnos > p.max_alumnos;
+            const faltaGimnasios = info.uso.gimnasios > p.max_gimnasios;
+            const noAlcanza = faltaAlumnos || faltaGimnasios;
+            const seleccionado = elegido === p.clave && !noAlcanza;
                             return (
                                 <Card key={p.clave} className={seleccionado ? 'border-2 border-primary' : ''}>
                                     <h3 className="font-display text-xl font-bold">{p.nombre}</h3>
@@ -325,16 +329,23 @@ const SuscripcionPage = () => {
                                         className="mt-5 w-full"
                                         variant={seleccionado ? 'primary' : 'ghost'}
                                         onClick={() => setElegido(p.clave)}
-                                        disabled={esElActual}
+                                        disabled={esElActual || noAlcanza}
                                     >
-                                        {esElActual ? 'Tu plan actual' : seleccionado ? 'Elegido' : 'Elegir este plan'}
+                                        {esElActual ? 'Tu plan actual' : noAlcanza ? 'No alcanza para tu uso' : seleccionado ? 'Elegido' : 'Elegir este plan'}
                                     </Btn>
+                                    {noAlcanza && (
+                                        <p className="mt-2 text-xs text-muted-foreground">
+                                            {faltaGimnasios
+                                                ? `Tienes ${info.uso.gimnasios} gimnasios y este plan permite ${p.max_gimnasios}.`
+                                                : `Tienes ${info.uso.alumnos} alumnos activos y este plan permite ${p.max_alumnos}.`}
+                                        </p>
+                                    )}
                                 </Card>
                             );
                         })}
                     </div>
 
-                    {elegido && (
+                    {elegido && !info.planes.some((p) => p.clave === elegido && ((p.max_alumnos !== null && info.uso.alumnos > p.max_alumnos) || info.uso.gimnasios > p.max_gimnasios)) && (
                         <Card className="mt-6">
                             <h3 className="font-display text-lg font-bold">Pagar con Mercado Pago</h3>
                             <p className="mt-1 text-sm text-muted-foreground">
