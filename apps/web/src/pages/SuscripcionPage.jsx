@@ -45,7 +45,8 @@ const textoTope = (n, singular, plural) => (n === null || n === undefined ? 'sin
 const SuscripcionPage = () => {
     const { profile, user, refreshProfile } = useAuth();
     const [busqueda, setBusqueda] = useSearchParams();
-    const volvio = busqueda.get('volvio') === '1';
+    // Mercado Pago agrega su propio "?preapproval_id=…" al volver, así que el valor llega como "1?preapproval_id=…".
+    const volvio = (busqueda.get('volvio') ?? '').startsWith('1');
     const esAdmin = profile?.role === 'admin';
 
     const [info, setInfo] = useState(null);
@@ -224,7 +225,12 @@ const SuscripcionPage = () => {
                         <Card>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <h2 className="font-display text-lg font-bold">Tu plan</h2>
-                                <Badge className={tonoEstado}>{textoEstado}</Badge>
+                                <div className="flex items-center gap-2">
+                                    <Btn variant="ghost" className="px-3 py-1 text-xs" onClick={cargar}>
+                                        Actualizar
+                                    </Btn>
+                                    <Badge className={tonoEstado}>{textoEstado}</Badge>
+                                </div>
                             </div>
                             <p className="font-display mt-3 text-3xl font-extrabold">{plan?.nombre}</p>
                             <p className="mt-1 text-sm text-muted-foreground">
