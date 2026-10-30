@@ -10,6 +10,7 @@ import {
     ChefHat,
     ChevronDown,
     ClipboardList,
+    CreditCard,
     Dumbbell,
     History,
     LayoutDashboard,
@@ -70,6 +71,7 @@ const NAV_ADMIN = [
     { to: '/equipo', label: 'Equipo', icon: UserCog },
     { to: '/historial', label: 'Historial de cambios', icon: History },
     { to: '/mis-gimnasios', label: 'Mis gimnasios', icon: Building2 },
+    { to: '/suscripcion', label: 'Suscripción', icon: CreditCard },
     NAV[NAV.length - 1],
     ITEM_GUIA,
 ];
@@ -194,7 +196,7 @@ const GimnasioMark = ({ className = 'h-10' }) => {
 // portapapeles en el mismo clic -- si el cliente de mail abre, mejor; si no
 // abre nada, igual queda la dirección copiada y un aviso confirmándolo, en
 // vez de que parezca un botón roto.
-const EMAIL_SOPORTE = 'equipokairox.ia@gmail.com';
+export const EMAIL_SOPORTE = 'equipokairox.ia@gmail.com';
 
 export const KairoxFooterMark = () => {
     const [copiado, setCopiado] = useState(false);
@@ -304,6 +306,37 @@ const resumenFallido = (item) => {
     return 'Un cambio sin identificar';
 };
 
+// Franja de aviso de la suscripción (migración 0086): días de prueba, vencimiento cerca y solo lectura.
+const AvisoSuscripcion = ({ suscripcion, esAdmin }) => {
+    if (!suscripcion) return null;
+    const { acceso, estado, dias_restantes: dias } = suscripcion;
+    let texto = '';
+    let tono = 'bg-warn/15 text-warn';
+    if (acceso === 'solo_lectura') {
+        tono = 'bg-destructive/10 text-destructive';
+        texto = esAdmin
+            ? 'La suscripción venció: tu cuenta está en solo lectura. Renueva el plan para volver a editar.'
+            : 'La suscripción venció: la cuenta está en solo lectura. Avisa al administrador para que la renueve.';
+    } else if (esAdmin && acceso === 'completo' && dias !== null && dias !== undefined) {
+        if (estado === 'prueba') {
+            texto = `Estás en la prueba gratis: ${dias <= 0 ? 'termina hoy' : `te ${dias === 1 ? 'queda 1 día' : `quedan ${dias} días`}`}.`;
+        } else if (estado !== 'cortesia' && dias <= 5) {
+            texto = dias <= 0 ? 'Tu suscripción vence hoy.' : `Tu suscripción vence en ${dias === 1 ? '1 día' : `${dias} días`}.`;
+        }
+    }
+    if (!texto) return null;
+    return (
+        <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-xs font-semibold ${tono}`}>
+            <span>{texto}</span>
+            {esAdmin && (
+                <Link to="/suscripcion" className="underline underline-offset-2">
+                    {acceso === 'solo_lectura' ? 'Renovar' : 'Ver planes'}
+                </Link>
+            )}
+        </div>
+    );
+};
+
 const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     const [open, setOpen] = useState(false);
     const [confirmandoSalir, setConfirmandoSalir] = useState(false);
@@ -329,8 +362,13 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     // Cada rol tiene su recorrido, con los ítems de SU menú (el equipo no ve Configuración, Equipo,
     // Historial ni Mis gimnasios; 0080). Los dos están en lib/guiaDeUso.js.
     const esAdmin = profile?.role === 'admin';
-    const menu = esAdmin ? NAV_ADMIN : NAV_STAFF;
-    const PASOS_TOUR = esAdmin ? PASOS_TOUR_ADMIN : PASOS_TOUR_EQUIPO;
+    // El plan Básico no incluye alimentación (migración 0086): esas dos pantallas no se muestran.
+    const incluyeAlimentacion = profile?.incluyeAlimentacion !== false;
+    const menu = (esAdmin ? NAV_ADMIN : NAV_STAFF).filter(
+        (n) => incluyeAlimentacion || (n.to !== '/alimentos' && n.to !== '/planes-alimentacion'),
+    );
+    // Sin los pasos de pantallas que el plan no incluye (alimentación en el Básico).
+    const PASOS_TOUR = (esAdmin ? PASOS_TOUR_ADMIN : PASOS_TOUR_EQUIPO).filter((p) => menu.some((n) => n.to === p.to));
     const guiaActiva = profile?.tour_visto === false && location.pathname === '/panel';
     const pasoActual = PASOS_TOUR[Math.min(pasoTour, PASOS_TOUR.length - 1)];
 
@@ -548,6 +586,8 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
                             <div className="flex flex-wrap gap-2 px-4 pb-3 sm:hidden [&>*]:flex-1">{actions}</div>
                         )}
                     </header>
+
+                    <AvisoSuscripcion suscripcion={profile?.suscripcion} esAdmin={esAdmin} />
 
                     {(sinConexion || pendientes > 0) && (
                         <div className="flex items-center justify-center gap-2 bg-warn/15 px-4 py-2 text-center text-xs font-semibold text-warn">

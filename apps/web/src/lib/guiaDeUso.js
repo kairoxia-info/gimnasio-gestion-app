@@ -287,6 +287,21 @@ export const AYUDAS = {
         consejos: ['Solo lo ve el administrador. Nadie puede modificarlo ni borrarlo, ni siquiera el administrador.'],
     },
 
+    suscripcion: {
+        resumen: 'Tu plan de RutNail: hasta cuándo está pago, cuántos alumnos y gimnasios usas y cómo pagar.',
+        botones: [
+            { nombre: 'Tu plan y Tu uso', que: 'El plan que tienes, hasta cuándo está pago y cuántos alumnos activos y gimnasios usas frente al tope del plan.' },
+            { nombre: 'Mensual · Trimestral · Semestral', que: 'Cuánto pagas por mes según el período. Pagando varios meses juntos hay descuento (10 % y 20 %).' },
+            { nombre: 'Elegir este plan', que: 'Selecciona el plan y abre el pago. Si tienes más alumnos o gimnasios de los que permite un plan, no te deja elegirlo.' },
+            { nombre: 'Pagar con Mercado Pago', que: 'Te lleva a Mercado Pago a pagar. Al volver, esta pantalla confirma el pago sola. Después se cobra automáticamente en cada período.' },
+            { nombre: 'Cancelar el cobro automático', que: 'Deja de cobrarte. Sigues con acceso hasta el vencimiento ya pagado.' },
+        ],
+        consejos: [
+            'Si la suscripción vence, la cuenta pasa 7 días a solo lectura (ves todo pero no puedes editar) y después se pausa. Tus datos no se borran.',
+            'El correo que escribes debe ser el de tu cuenta de Mercado Pago.',
+        ],
+    },
+
     misGimnasios: {
         resumen: 'Los gimnasios que administras con esta cuenta. Cada uno tiene sus propios alumnos, pagos, asistencia y precios.',
         botones: [
@@ -343,6 +358,7 @@ export const MODULOS_GUIA = [
     { clave: 'equipo', ruta: '/equipo', titulo: 'Equipo', soloAdmin: true },
     { clave: 'historial', ruta: '/historial', titulo: 'Historial de cambios', soloAdmin: true },
     { clave: 'misGimnasios', ruta: '/mis-gimnasios', titulo: 'Mis gimnasios', soloAdmin: true },
+    { clave: 'suscripcion', ruta: '/suscripcion', titulo: 'Suscripción', soloAdmin: true },
     { clave: 'configuracion', ruta: '/configuracion', titulo: 'Configuración', soloAdmin: true },
 ];
 

@@ -104,6 +104,11 @@ export const AuthProvider = ({ children }) => {
                 misGimnasios: ctx.gimnasios ?? [],
             };
             zona = ctx.gimnasio?.zona_horaria ?? null;
+            // Suscripción (migración 0086): estado de acceso y plan. Si la base todavía no tiene la
+            // migración, estas dos líneas no cambian nada (acceso completo, todo incluido).
+            perfil.incluyeAlimentacion = ctx.incluye_alimentacion !== false;
+            const { data: susc } = await supabase.rpc('mi_suscripcion');
+            perfil.suscripcion = susc ?? { acceso: ctx.suscripcion_acceso ?? 'completo' };
             // Recuerda si es cuenta de equipo para volver a su ingreso al cerrar sesión.
             recordarTipoDeIngreso({ misGimnasios: perfil.misGimnasios, accesoPausado: perfil.accesoPausado });
             // Fija en la base el gimnasio con el que ESTA sesión abrió la app (una vez por carga). Sin

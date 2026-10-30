@@ -1,0 +1,122 @@
+// Edge Function "mp-webhook" (migración 0086, 30/10/2026): recibe los avisos de Mercado Pago sobre la
+// suscripción (alta, pago, cancelación) y se los pasa a la base.
+//
+// SEGURIDAD
+//  * verify_jwt = false: Mercado Pago no manda sesión de Supabase. En su lugar se VALIDA LA FIRMA del aviso
+//    (cabecera x-signature, HMAC-SHA256 con MP_WEBHOOK_SECRET): un aviso sin firma válida se rechaza.
+//  * No se confía en el contenido del aviso: solo se toma el identificador y se vuelve a consultar a Mercado
+//    Pago con nuestro token (MP_ACCESS_TOKEN) para saber el estado real.
+//  * La base aplica cada aviso una sola vez (suscripcion_eventos) y solo esta función puede llamarla
+//    (suscripcion_aplicar_evento está concedida únicamente a service_role).
+//
+// SECRETOS: MP_ACCESS_TOKEN y MP_WEBHOOK_SECRET (la "clave secreta" que muestra Mercado Pago al configurar
+// el webhook). Cambian entre pruebas y producción.
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const MP = 'https://api.mercadopago.com';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const aHex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+const hmacHex = async (clave: string, mensaje: string) => {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(clave), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ]);
+  return aHex(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(mensaje)));
+};
+
+// Comparación en tiempo constante.
+const iguales = (a: string, b: string) => {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+};
+
+const consultar = async (ruta: string, token: string) => {
+  const r = await fetch(`${MP}${ruta}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`Mercado Pago ${ruta} respondió ${r.status}`);
+  return await r.json();
+};
+
+const responder = (texto: string, status = 200) => new Response(texto, { status });
+
+Deno.serve(async (req) => {
+  if (req.method !== 'POST') return responder('Método no permitido', 405);
+
+  const token = Deno.env.get('MP_ACCESS_TOKEN');
+  const secreto = Deno.env.get('MP_WEBHOOK_SECRET');
+  if (!token || !secreto) {
+    console.error('Falta MP_ACCESS_TOKEN o MP_WEBHOOK_SECRET');
+    return responder('No configurado', 503);
+  }
+
+  const url = new URL(req.url);
+  const cuerpo = await req.json().catch(() => ({}));
+  const tipo = String(url.searchParams.get('type') ?? cuerpo?.type ?? url.searchParams.get('topic') ?? '');
+  const idQuery = String(url.searchParams.get('data.id') ?? '');
+  const id = idQuery || String(cuerpo?.data?.id ?? '');
+
+  // --- Firma ---------------------------------------------------------------------------------------
+  const firma = req.headers.get('x-signature') ?? '';
+  const requestId = req.headers.get('x-request-id') ?? '';
+  const partes = Object.fromEntries(
+    firma.split(',').map((p) => {
+      const [k, ...v] = p.split('=');
+      return [k.trim(), v.join('=').trim()];
+    }),
+  );
+  if (!partes.ts || !partes.v1 || !idQuery) return responder('Firma ausente', 401);
+  // Mercado Pago firma el id en minúsculas cuando es alfanumérico.
+  const manifiesto = `id:${/^[a-z0-9]+$/i.test(idQuery) ? idQuery.toLowerCase() : idQuery};request-id:${requestId};ts:${partes.ts};`;
+  const esperado = await hmacHex(secreto, manifiesto);
+  if (!iguales(esperado, partes.v1)) return responder('Firma inválida', 401);
+
+  try {
+    let preapprovalId = '';
+    let pago: { id: string; estado: string; monto: number } | null = null;
+
+    if (tipo === 'subscription_preapproval') {
+      preapprovalId = id;
+    } else if (tipo === 'subscription_authorized_payment') {
+      const ap = await consultar(`/authorized_payments/${encodeURIComponent(id)}`, token);
+      preapprovalId = String(ap.preapproval_id ?? '');
+      pago = {
+        id: String(ap.id ?? id),
+        estado: String(ap.payment?.status ?? ap.status ?? ''),
+        monto: Number(ap.transaction_amount ?? 0),
+      };
+    } else {
+      return responder('Ignorado'); // otros avisos (por ejemplo "payment") no interesan acá
+    }
+    if (!preapprovalId) return responder('Sin suscripción');
+
+    const pre = await consultar(`/preapproval/${encodeURIComponent(preapprovalId)}`, token);
+    const [org, plan, periodo] = String(pre.external_reference ?? '').split('|');
+    if (!UUID.test(org ?? '') || !plan || !periodo) {
+      console.error('Aviso de una suscripción que no es de RutNail', preapprovalId);
+      return responder('Ignorado');
+    }
+
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data, error } = await admin.rpc('suscripcion_aplicar_evento', {
+      p_org: org,
+      p_plan: plan,
+      p_periodo: periodo,
+      p_preapproval_id: String(pre.id ?? preapprovalId),
+      p_preapproval_estado: String(pre.status ?? ''),
+      p_payer_email: pre.payer_email ? String(pre.payer_email) : null,
+      p_pago_id: pago ? pago.id : null,
+      p_pago_estado: pago ? pago.estado : null,
+      p_pago_monto: pago ? pago.monto : null,
+      p_crudo: { tipo, id, preapproval: { id: pre.id, status: pre.status }, pago },
+    });
+    if (error) throw new Error(error.message);
+    console.log('Aviso aplicado', tipo, id, data);
+    return responder(String(data ?? 'ok'));
+  } catch (e) {
+    // 500 para que Mercado Pago reintente más tarde.
+    console.error('Error aplicando el aviso', tipo, id, (e as Error).message);
+    return responder('Error', 500);
+  }
+});

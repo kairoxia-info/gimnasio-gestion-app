@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
 
@@ -43,6 +43,38 @@ const AccesoPausado = ({ signOut, refreshProfile }) => (
     </div>
 );
 
+// Suscripción vencida y pasados los 7 días de solo lectura (migración 0086): la base ya no deja leer
+// nada del gimnasio. El administrador puede entrar a "Suscripción" para renovar; el equipo ve un aviso.
+const SuscripcionBloqueada = ({ esAdmin, signOut }) => (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background p-6">
+        <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center">
+            <h1 className="font-display text-xl font-bold">La suscripción venció</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+                {esAdmin
+                    ? 'El acceso a tu gimnasio está pausado hasta que renueves el plan. Tus datos están a salvo: apenas pagues, todo vuelve a estar como lo dejaste.'
+                    : 'El acceso a este gimnasio está pausado porque la suscripción venció. Avisa al administrador para que la renueve.'}
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                {esAdmin && (
+                    <Link
+                        to="/suscripcion"
+                        className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
+                    >
+                        Renovar suscripción
+                    </Link>
+                )}
+                <button
+                    type="button"
+                    onClick={() => signOut()}
+                    className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:border-primary"
+                >
+                    Cerrar sesión
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 const ProtectedRoute = ({ children }) => {
     const { isAuthed, profile, loading, signOut, refreshProfile } = useAuth();
     const location = useLocation();
@@ -60,6 +92,10 @@ const ProtectedRoute = ({ children }) => {
 
     if (!tieneGimnasio && location.pathname !== '/onboarding') {
         return <Navigate to="/onboarding" replace />;
+    }
+
+    if (profile?.suscripcion?.acceso === 'bloqueado' && location.pathname !== '/suscripcion') {
+        return <SuscripcionBloqueada esAdmin={profile?.role === 'admin'} signOut={signOut} />;
     }
 
     // "/login" no pasa por este guard (ver App.jsx), así que el único caso real

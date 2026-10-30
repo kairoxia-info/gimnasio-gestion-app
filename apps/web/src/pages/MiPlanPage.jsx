@@ -544,6 +544,8 @@ const PreviewMediaModal = ({ nombre, url, tipo, onClose }) => {
 const sinAcentos = (s = '') => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const esCodigoInvalido = (msg = '') => /codigo de acceso invalido/i.test(sinAcentos(msg));
 const esRateLimit = (msg = '') => /demasiadas consultas/i.test(sinAcentos(msg));
+// Suscripción del gimnasio vencida y bloqueada (migración 0086): la base responde SUSCRIPCION_PAUSADA.
+const esGimnasioPausado = (msg = '') => /SUSCRIPCION_PAUSADA/.test(msg);
 
 // Logo del gimnasio con el mismo criterio de fallback que GimnasioMark
 // (AppLayout.jsx): si la imagen no carga (link roto, etc.) cae a un ícono
@@ -1067,17 +1069,19 @@ const MiPlanPage = () => {
                     // pantalla ya, también en el refresco silencioso -- con la
                     // pestaña abierta, antes seguía viendo su rutina hasta
                     // cerrarla a mano (28/10/2026).
-                    if (!mostrarCargando && esCodigoInvalido(msg)) setPlan(null);
+                    if (!mostrarCargando && (esCodigoInvalido(msg) || esGimnasioPausado(msg))) setPlan(null);
                     // El refresco silencioso, si falla por cualquier otra cosa
                     // (sin señal justo en ese instante, por ejemplo), no
                     // reemplaza el plan que ya se estaba viendo por una
                     // pantalla de error -- eso sí sería peor que no
                     // actualizar nada.
-                    if (!mostrarCargando && !esCodigoInvalido(msg)) return;
+                    if (!mostrarCargando && !esCodigoInvalido(msg) && !esGimnasioPausado(msg)) return;
                     if (esCodigoInvalido(msg)) {
                         setError(
                             'Este código no es válido o ya no está activo. Pedir al profesor un código nuevo.',
                         );
+                    } else if (esGimnasioPausado(msg)) {
+                        setError('Este gimnasio tiene el acceso pausado por ahora. Consulta con tu gimnasio.');
                     } else if (esRateLimit(msg)) {
                         setError('Demasiadas consultas en poco tiempo. Intentar de nuevo en unos minutos.');
                     } else {

@@ -29,6 +29,8 @@ import MisGimnasiosPage from '@/pages/MisGimnasiosPage';
 import HistorialPage from '@/pages/HistorialPage';
 import EquipoPage from '@/pages/EquipoPage';
 import GuiaPage from '@/pages/GuiaPage';
+import PresentacionPage from '@/pages/PresentacionPage';
+import SuscripcionPage from '@/pages/SuscripcionPage';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
@@ -46,6 +48,9 @@ function App() {
                                 redirigir a "/login" apenas !isAuthed — Navigate hacia la misma
                                 ruta en la que ya está, dejando el formulario inalcanzable. El
                                 propio LoginPage ya redirige a /panel si detecta sesión activa. */}
+                            {/* Presentación y precios (borrador de Nalux, 29/10/2026): pública, sin
+                                sesión. Todavía no es la página de inicio de "/". */}
+                            <Route path="/presentacion" element={<PresentacionPage />} />
                             <Route path="/login" element={<LoginPage />} />
                             {/* Ingreso del personal que el profesor dio de alta desde Equipo (0080). */}
                             <Route path="/ingreso-equipo" element={<LoginPage modoEquipo />} />
@@ -98,6 +103,7 @@ function App() {
                             <Route path="/mis-gimnasios" element={guard(<MisGimnasiosPage />)} />
                             <Route path="/historial" element={guard(<HistorialPage />)} />
                             <Route path="/equipo" element={guard(<EquipoPage />)} />
+                            <Route path="/suscripcion" element={guard(<SuscripcionPage />)} />
                             <Route path="/guia" element={guard(<GuiaPage />)} />
                             <Route path="*" element={<Navigate to="/panel" replace />} />
                         </Routes>
