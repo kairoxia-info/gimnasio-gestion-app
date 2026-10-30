@@ -39,6 +39,7 @@ import { estadoCuota, fmtFecha, hoy, money, ultimoPagoDeAlumno } from '@/lib/for
 import { descartarFallido, onCambioCola, onCambioColaFallida, verCola, verColaFallida } from '@/lib/offline';
 import { copiarAlPortapapeles } from '@/lib/copiar';
 import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
+import { EVENTO_SOLO_LECTURA, marcarSoloLectura } from '@/lib/supabaseClient';
 
 const NAV = [
     { to: '/panel', label: 'Panel', icon: LayoutDashboard },
@@ -308,6 +309,28 @@ const resumenFallido = (item) => {
 
 // Franja de aviso de la suscripción (migración 0086): días de prueba, vencimiento cerca y solo lectura.
 const AvisoSuscripcion = ({ suscripcion, esAdmin }) => {
+    const [rechazado, setRechazado] = useState(false);
+    const soloLectura = suscripcion?.acceso === 'solo_lectura';
+
+    // En solo lectura la base rechaza todo guardado y cada pantalla muestra su error genérico ("No se pudo
+    // guardar…"). El cliente de la base avisa de cada rechazo y acá se explica el motivo real.
+    useEffect(() => {
+        marcarSoloLectura(soloLectura);
+        if (!soloLectura) return undefined;
+        let t;
+        const alRechazar = () => {
+            setRechazado(true);
+            clearTimeout(t);
+            t = setTimeout(() => setRechazado(false), 8000);
+        };
+        window.addEventListener(EVENTO_SOLO_LECTURA, alRechazar);
+        return () => {
+            clearTimeout(t);
+            window.removeEventListener(EVENTO_SOLO_LECTURA, alRechazar);
+            marcarSoloLectura(false);
+        };
+    }, [soloLectura]);
+
     if (!suscripcion) return null;
     const { acceso, estado, dias_restantes: dias } = suscripcion;
     let texto = '';
@@ -326,14 +349,31 @@ const AvisoSuscripcion = ({ suscripcion, esAdmin }) => {
     }
     if (!texto) return null;
     return (
-        <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-xs font-semibold ${tono}`}>
-            <span>{texto}</span>
-            {esAdmin && (
-                <Link to="/suscripcion" className="underline underline-offset-2">
-                    {acceso === 'solo_lectura' ? 'Renovar' : 'Ver planes'}
-                </Link>
+        <>
+            <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-xs font-semibold ${tono}`}>
+                <span>{texto}</span>
+                {esAdmin && (
+                    <Link to="/suscripcion" className="underline underline-offset-2">
+                        {acceso === 'solo_lectura' ? 'Renovar' : 'Ver planes'}
+                    </Link>
+                )}
+            </div>
+            {rechazado && (
+                <div
+                    role="alert"
+                    className="fixed inset-x-4 top-20 z-50 mx-auto max-w-md rounded-2xl border-2 border-destructive bg-card p-4 text-center text-sm font-semibold text-destructive shadow-xl"
+                >
+                    No se guardó nada: la suscripción venció y la cuenta está en solo lectura.{' '}
+                    {esAdmin ? (
+                        <Link to="/suscripcion" className="underline underline-offset-2">
+                            Renovar el plan
+                        </Link>
+                    ) : (
+                        'Avisa al administrador para que la renueve.'
+                    )}
+                </div>
             )}
-        </div>
+        </>
     );
 };
 
