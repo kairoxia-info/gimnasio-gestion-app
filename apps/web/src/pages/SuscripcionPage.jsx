@@ -59,6 +59,7 @@ const SuscripcionPage = () => {
     const [cancelando, setCancelando] = useState(false);
     const [confirmando, setConfirmando] = useState(volvio); // esperando el aviso de Mercado Pago
     const [confirmado, setConfirmado] = useState(false);
+    const [cancelado, setCancelado] = useState(false);
     const venceAntes = useRef(null);
 
     const cargar = useCallback(async () => {
@@ -146,7 +147,17 @@ const SuscripcionPage = () => {
             setError(err);
             return;
         }
-        await cargar();
+        // Mercado Pago confirma la cancelación por aviso, unos segundos después: se consulta hasta que figure.
+        setCancelando(true);
+        for (let i = 0; i < 10; i += 1) {
+            const data = await cargar();
+            if (data && data.estado !== 'activa') {
+                setCancelado(true);
+                break;
+            }
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+        setCancelando(false);
         refreshProfile?.();
     };
 
@@ -191,6 +202,12 @@ const SuscripcionPage = () => {
                 <div className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-ok bg-ok/10 p-4 text-sm font-semibold text-ok">
                     <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} /> ¡Listo! Tu pago se confirmó y tu suscripción
                     está activa.
+                </div>
+            )}
+            {cancelado && (
+                <div className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-ok bg-ok/10 p-4 text-sm font-semibold text-ok">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} /> Listo: se canceló el cobro automático. No se te
+                    cobrará más y sigues con acceso hasta el {info?.vence_en ? fmtFecha(info.vence_en) : 'vencimiento'}.
                 </div>
             )}
             {alertaAcceso && (
