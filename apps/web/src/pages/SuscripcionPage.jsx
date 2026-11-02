@@ -83,6 +83,14 @@ const SuscripcionPage = () => {
         };
     }, [cargar]);
 
+    // Si la persona sale de Mercado Pago con "atrás", el navegador devuelve esta pantalla tal como quedó
+    // (con el botón en "Abriendo Mercado Pago..."): al reaparecer se reinicia.
+    useEffect(() => {
+        const alReaparecer = () => setPagando(false);
+        window.addEventListener('pageshow', alReaparecer);
+        return () => window.removeEventListener('pageshow', alReaparecer);
+    }, []);
+
     useEffect(() => {
         if (user?.email) setEmail((e) => e || user.email);
     }, [user?.email]);
