@@ -41,6 +41,11 @@ const PasswordRecoveryModal = ({ open, onClose }) => {
                         Si <span className="font-semibold">{email}</span> está registrado, vas a recibir un enlace
                         para restablecer tu contraseña en los próximos minutos.
                     </p>
+                    <p className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-foreground">
+                        <span className="font-semibold">Revisa también la carpeta de spam o correo no deseado.</span> El
+                        mensaje llega de «RutNail» y, a veces, el correo lo manda allí. Si lo encuentras, márcalo como
+                        «No es spam» para que el enlace funcione sin problemas.
+                    </p>
                     <Btn
                         type="button"
                         onClick={handleClose}
@@ -68,6 +73,10 @@ const PasswordRecoveryModal = ({ open, onClose }) => {
                             />
                         </div>
                     </Field>
+
+                    <p className="text-xs text-muted-foreground">
+                        Te enviaremos un enlace por correo. Si no lo ves en la bandeja de entrada, revisa la carpeta de spam.
+                    </p>
 
                     {error && <ErrorBox>{error}</ErrorBox>}
 
