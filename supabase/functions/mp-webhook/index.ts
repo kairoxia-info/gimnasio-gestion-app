@@ -57,8 +57,9 @@ const responder = (texto: string, status = 200) => new Response(texto, { status 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return responder('Método no permitido', 405);
 
-  const token = Deno.env.get('MP_ACCESS_TOKEN');
-  const secreto = Deno.env.get('MP_WEBHOOK_SECRET');
+  // trim(): al pegar una clave en el panel de Supabase puede quedar un espacio o salto de línea invisible.
+  const token = Deno.env.get('MP_ACCESS_TOKEN')?.trim();
+  const secreto = Deno.env.get('MP_WEBHOOK_SECRET')?.trim();
   if (!token || !secreto) {
     console.error('Falta MP_ACCESS_TOKEN o MP_WEBHOOK_SECRET');
     return responder('No configurado', 503);
@@ -79,11 +80,18 @@ Deno.serve(async (req) => {
       return [k.trim(), v.join('=').trim()];
     }),
   );
-  if (!partes.ts || !partes.v1 || !idQuery) return responder('Firma ausente', 401);
+  if (!partes.ts || !partes.v1 || !idQuery) {
+    // Sin datos sensibles: solo qué faltó, para distinguirlo de una clave que no coincide.
+    console.error('Firma ausente', { ts: !!partes.ts, v1: !!partes.v1, idEnLaDireccion: !!idQuery, idEnElCuerpo: !!cuerpo?.data?.id, tipo });
+    return responder('Firma ausente', 401);
+  }
   // Mercado Pago firma el id en minúsculas cuando es alfanumérico.
   const manifiesto = `id:${/^[a-z0-9]+$/i.test(idQuery) ? idQuery.toLowerCase() : idQuery};request-id:${requestId};ts:${partes.ts};`;
   const esperado = await hmacHex(secreto, manifiesto);
-  if (!iguales(esperado, partes.v1)) return responder('Firma inválida', 401);
+  if (!iguales(esperado, partes.v1)) {
+    console.error('Firma inválida', { tipo, requestIdPresente: !!requestId, largoClave: secreto.length, largoFirma: partes.v1.length });
+    return responder('Firma inválida', 401);
+  }
 
   try {
     let preapprovalId = '';
