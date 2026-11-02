@@ -383,6 +383,11 @@ const SuscripcionPage = () => {
                             <Btn className="mt-4" onClick={pagar} disabled={pagando || !email.trim()}>
                                 <CreditCard className="h-4 w-4" /> {pagando ? 'Abriendo Mercado Pago...' : 'Pagar con Mercado Pago'}
                             </Btn>
+                            {error && (
+                                <p role="alert" className="mt-3 text-sm font-semibold text-destructive">
+                                    {error}
+                                </p>
+                            )}
                         </Card>
                     )}
                 </>
