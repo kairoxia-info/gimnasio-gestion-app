@@ -6,7 +6,7 @@
 // Prueba gratis (decidida por Nalux el 29/10/2026): arranca sola al crear la cuenta, dura estos días, sin
 // tarjeta (la base crea la suscripción en estado "prueba" para toda organización nueva).
 export const DIAS_PRUEBA = 7;
-const WHATSAPP_CONTACTO = '5493573430891'; // +54 9 357 343-0891
+const WHATSAPP_CONTACTO = '5493532471456'; // +54 9 3532 47-1456 (cambiado por Nalux el 03/11/2026)
 export const enlaceWhatsApp = (mensaje) =>
     `https://wa.me/${WHATSAPP_CONTACTO}?text=${encodeURIComponent(mensaje)}`;
 

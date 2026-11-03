@@ -9,7 +9,9 @@ import {
     Check,
     ChevronDown,
     Dumbbell,
+    Globe,
     History,
+    Instagram,
     Laptop,
     MessageCircle,
     MonitorSmartphone,
@@ -55,6 +57,10 @@ const COLOR_RUTNAIL = {
     '--ring': '42 92% 54%',
 };
 
+// Redes y web de Kairox IA en el pie (pedido de Nalux, 03/11/2026).
+const INSTAGRAM_KAIROX = 'https://www.instagram.com/kairox.ia/';
+const WEB_KAIROX = 'https://kairox-ia.vercel.app/';
+
 // Nota: el texto dorado va como `text-amber-700 dark:text-primary` (el dorado de marca solo contrasta
 // bien sobre negro; sobre fondo claro se usa un ámbar más oscuro).
 
@@ -67,7 +73,7 @@ const FUNCIONES = [
     {
         icon: Dumbbell,
         titulo: 'Rutinas y ejercicios',
-        texto: 'Biblioteca con foto y video de cada ejercicio. Arma bloques, superseries y circuitos, asígnalos y descarga la rutina en PDF.',
+        texto: '500 ejercicios ya cargados y puedes sumar los tuyos. Arma bloques, superseries y circuitos, asígnalos y descarga la rutina en PDF.',
     },
     {
         icon: Apple,
@@ -133,8 +139,43 @@ const CAPTURAS = [
         titulo: 'Ejercicios',
         src: '/capturas/ejercicios.jpg',
         alt: 'Biblioteca de ejercicios con filtros por grupo muscular',
-        texto: 'Más de 500 ejercicios ya cargados, con filtros por grupo muscular y demostración. Y puedes sumar los tuyos.',
+        texto: '500 ejercicios ya cargados, con filtros por grupo muscular. Y puedes sumar los tuyos.',
     },
+    {
+        clave: 'asistencia',
+        titulo: 'Asistencia',
+        src: '/capturas/asistencia.jpg',
+        alt: 'Calendario del mes de cada alumno con los días que vino y los que faltó',
+        texto: 'Pasas lista en segundos y ves el mes completo de cada alumno: qué días vino, cuáles faltó y su porcentaje de asistencia.',
+    },
+    {
+        clave: 'pagos',
+        titulo: 'Pagos',
+        src: '/capturas/pagos.jpg',
+        alt: 'Estado de pago de cada alumno con su último pago, hasta cuándo cubre y la deuda',
+        texto: 'Cada alumno con su último pago, hasta cuándo cubre y si está al día, por vencer o atrasado. Cobras con un toque y envías el comprobante.',
+    },
+    {
+        clave: 'alimentacion',
+        titulo: 'Alimentación',
+        src: '/capturas/alimentacion.jpg',
+        alt: 'Biblioteca de planes de alimentación con las comidas de cada plan',
+        texto: 'Armas cada plan de comidas una sola vez y lo asignas a quien lo necesite, con su PDF para descargar. Incluido en Estándar y Pro.',
+    },
+    {
+        clave: 'progreso',
+        titulo: 'Progreso',
+        src: '/capturas/progreso.jpg',
+        alt: 'Ficha del alumno con la evolución del peso y el historial de medidas',
+        texto: 'En la ficha de cada alumno tienes su rutina, su plan de comidas, su asistencia, sus pagos y su progreso, con el gráfico del peso y el historial de medidas.',
+    },
+];
+
+// Pantallas del portal del alumno, en el marco de celular (capturas al doble de resolución).
+const CAPTURAS_CELULAR = [
+    { clave: 'rutina', titulo: 'Rutina', src: '/capturas/portal.jpg', alt: 'La rutina del día en el celular del alumno, con superseries y demostraciones' },
+    { clave: 'alimentacion', titulo: 'Alimentación', src: '/capturas/portal-alimentacion.jpg', alt: 'El plan de alimentación del alumno en su celular, comida por comida' },
+    { clave: 'progreso', titulo: 'Progreso', src: '/capturas/portal-progreso.jpg', alt: 'El alumno anota su peso y ve su evolución en un gráfico' },
 ];
 
 const PARA_QUIEN = [
@@ -253,6 +294,8 @@ const PresentacionPage = () => {
     const periodo = PERIODOS_PAGO.find((p) => p.clave === periodoClave);
     const [capturaClave, setCapturaClave] = useState('alumnos');
     const captura = CAPTURAS.find((c) => c.clave === capturaClave);
+    const [celularClave, setCelularClave] = useState('rutina');
+    const celular = CAPTURAS_CELULAR.find((c) => c.clave === celularClave);
 
 
     return (
@@ -316,6 +359,9 @@ const PresentacionPage = () => {
                             </div>
                             <p className="mt-4 text-sm text-muted-foreground">
                                 {DIAS_PRUEBA} días gratis · Sin tarjeta · Sin compromiso
+                            </p>
+                            <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+                                <Dumbbell className="h-4 w-4 shrink-0" strokeWidth={2} /> 500 ejercicios ya incluidos
                             </p>
                         </div>
 
@@ -476,7 +522,26 @@ const PresentacionPage = () => {
                                 <h3 className="font-display text-xl font-bold">Para tus alumnos</h3>
                                 <p className="mt-1 text-sm text-muted-foreground">Su propio portal, con la marca de tu gimnasio.</p>
                                 <div className="mt-6 grid items-center gap-6 sm:grid-cols-[auto_1fr]">
-                                    <CapturaCelular src="/capturas/portal.jpg" alt="El portal del alumno en su celular" className="max-w-[190px]" />
+                                    <div className="mx-auto w-[190px]">
+                                        <CapturaCelular src={celular.src} alt={celular.alt} className="max-w-[190px]" />
+                                        <div role="group" aria-label="Pantallas del alumno" className="mt-3 flex justify-center gap-1">
+                                            {CAPTURAS_CELULAR.map((c) => (
+                                                <button
+                                                    key={c.clave}
+                                                    type="button"
+                                                    aria-pressed={c.clave === celularClave}
+                                                    onClick={() => setCelularClave(c.clave)}
+                                                    className={`min-h-[36px] rounded-lg px-2.5 text-xs font-semibold transition ${
+                                                        c.clave === celularClave
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'text-muted-foreground hover:text-foreground'
+                                                    }`}
+                                                >
+                                                    {c.titulo}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     <ul className="space-y-3 text-sm">
                                         {[
                                             'Ve su rutina día por día, con la demostración de cada ejercicio',
@@ -520,7 +585,7 @@ const PresentacionPage = () => {
                     <div className="mx-auto max-w-6xl">
                         <Titulo
                             etiqueta="Precios"
-                            sub={`Prueba ${DIAS_PRUEBA} días gratis con cualquier plan. Sin comisión sobre tus cuotas y sin permanencia.`}
+                            sub={`Todos incluyen 500 ejercicios. Prueba ${DIAS_PRUEBA} días gratis, sin comisión sobre tus cuotas y sin permanencia.`}
                         >
                             Elige el plan que te queda cómodo
                         </Titulo>
@@ -579,7 +644,13 @@ const PresentacionPage = () => {
                                                 : 'Pago mes a mes'}
                                         </p>
 
-                                        <ul className="mt-6 space-y-2.5 border-t border-border pt-5">
+                                        {/* Resaltado a pedido de Nalux (03/11/2026): viene en todos los planes. */}
+                                        <p className="mt-6 flex items-center gap-2.5 rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+                                            <Dumbbell className="h-5 w-5 shrink-0 text-amber-700 dark:text-primary" strokeWidth={2} />
+                                            <strong className="font-display text-base">500 ejercicios incluidos</strong>
+                                        </p>
+
+                                        <ul className="mt-5 space-y-2.5 border-t border-border pt-5">
                                             <Incluye ok>
                                                 <strong>{plan.gimnasios}</strong> {plan.gimnasios === 1 ? 'gimnasio' : 'gimnasios'}
                                             </Incluye>
@@ -592,7 +663,7 @@ const PresentacionPage = () => {
                                                     </>
                                                 )}
                                             </Incluye>
-                                            <Incluye ok>Rutinas y biblioteca de ejercicios</Incluye>
+                                            <Incluye ok>Rutinas con bloques, superseries y PDF</Incluye>
                                             <Incluye ok>Asistencia, pagos y avisos</Incluye>
                                             <Incluye ok>Portal del alumno con tu marca</Incluye>
                                             <Incluye ok>Equipo con cuentas propias</Incluye>
@@ -621,6 +692,10 @@ const PresentacionPage = () => {
                                 Escríbenos
                             </a>{' '}
                             y armamos un plan para ti.
+                        </p>
+                        <p className="mx-auto mt-4 flex w-fit max-w-full items-center gap-2 text-xs text-muted-foreground">
+                            <img src="/mercado-pago.png" alt="" aria-hidden="true" width="24" height="24" loading="lazy" className="h-6 w-6 shrink-0 rounded" />
+                            Pago seguro con Mercado Pago, con tu cuenta o con tu tarjeta.
                         </p>
                     </div>
                 </section>
@@ -673,14 +748,30 @@ const PresentacionPage = () => {
             <footer className="dark border-t border-border bg-background px-4 py-10 text-foreground sm:px-6">
                 <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 text-sm text-muted-foreground sm:flex-row sm:justify-between">
                     <nav aria-label="Accesos" className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                        {/* Solo el ingreso del profesor (pedido de Nalux, 03/11/2026): el equipo y los alumnos
+                            entran con el enlace que les da su profesor desde adentro de la app. */}
                         <Link to="/login" className="hover:text-foreground">Ingreso del profesor</Link>
-                        <Link to="/ingreso-equipo" className="hover:text-foreground">Ingreso del equipo</Link>
-                        <Link to="/alumno" className="hover:text-foreground">Ingreso del alumno</Link>
                         <Link to="/terminos" className="hover:text-foreground">Términos y privacidad</Link>
-                        <a href={enlaceWhatsApp('Hola, quiero consultar por RutNail')} className="hover:text-foreground">WhatsApp</a>
+                        <a href={enlaceWhatsApp('Hola, quiero consultar por RutNail')} className="inline-flex items-center gap-1.5 hover:text-foreground">
+                            <MessageCircle className="h-4 w-4" /> WhatsApp
+                        </a>
+                        <a href={INSTAGRAM_KAIROX} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-foreground">
+                            <Instagram className="h-4 w-4" /> Instagram
+                        </a>
+                        <a href={WEB_KAIROX} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-foreground">
+                            <Globe className="h-4 w-4" /> Kairox IA
+                        </a>
                         <a href={`mailto:${EMAIL_SOPORTE}`} className="hover:text-foreground">Correo</a>
                     </nav>
                     <KairoxFooterMark />
+                </div>
+                {/* Pedido de Nalux (03/11/2026): que se sepa que se paga por Mercado Pago, en chico. */}
+                <div className="mx-auto mt-8 flex max-w-6xl items-center justify-center gap-2.5 border-t border-border pt-6 text-xs text-muted-foreground sm:justify-start">
+                    <img src="/mercado-pago.png" alt="Mercado Pago" width="28" height="28" loading="lazy" className="h-7 w-7 shrink-0 rounded-md" />
+                    <span>
+                        Trabajamos con <strong className="font-semibold text-foreground">Mercado Pago</strong>: pagas la suscripción con tu
+                        cuenta o con tu tarjeta.
+                    </span>
                 </div>
             </footer>
         </div>

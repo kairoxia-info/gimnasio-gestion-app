@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Loader2, Lock, Mail, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Lock, Mail, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
@@ -159,6 +159,16 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
                 transition={{ duration: 0.45, ease: 'easeOut' }}
                 className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-[#141210]/85 p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:p-10"
             >
+                {/* Pedido de Nalux (03/11/2026): desde el ingreso del profesor se puede volver a la presentación.
+                    El ingreso del equipo no lo muestra: ese enlace lo da el profesor y no pasa por la presentación. */}
+                {!modoEquipo && (
+                    <Link
+                        to="/"
+                        className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl text-sm font-semibold text-muted-foreground transition hover:text-[#d8b876]"
+                    >
+                        <ArrowLeft className="h-4 w-4" /> Volver a la presentación
+                    </Link>
+                )}
                 <div className="mb-8 flex flex-col items-center text-center">
                     <Logo className="h-28 sm:h-36" />
                     <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-[#d8b876]">
