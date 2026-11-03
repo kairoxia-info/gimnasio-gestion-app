@@ -84,7 +84,7 @@ export const AYUDAS = {
     },
 
     ejercicios: {
-        resumen: 'La biblioteca de ejercicios para armar rutinas: unos 500 ya incluidos, con foto o video, más los que agregues.',
+        resumen: 'La biblioteca de ejercicios para armar rutinas: 500 ya incluidos, más los que agregues.',
         botones: [
             {
                 nombre: 'Nuevo ejercicio',
@@ -374,7 +374,7 @@ export const PASOS_TOUR_ADMIN = [
     },
     {
         to: '/ejercicios',
-        texto: 'La biblioteca de ejercicios, con unos 500 ya incluidos y foto o video de cómo se hacen. Agrega los tuyos con "Nuevo ejercicio" y oculta los que no uses.',
+        texto: 'La biblioteca de ejercicios, con 500 ya incluidos. Agrega los tuyos con "Nuevo ejercicio" y oculta los que no uses.',
     },
     {
         to: '/rutinas',
@@ -424,7 +424,7 @@ export const PASOS_TOUR_EQUIPO = [
         texto: '¡Bienvenido a RutNail! Este recorrido te muestra qué puedes hacer en cada sección. En el Panel ves de un vistazo los alumnos activos, la asistencia de hoy y la caja del mes.',
     },
     { to: '/alumnos', texto: 'Aquí están los alumnos. Puedes dar de alta uno nuevo, abrir su ficha (rutina, alimentación, progreso, asistencia y pagos) y editar sus datos.' },
-    { to: '/ejercicios', texto: 'La biblioteca de ejercicios, con foto o video de cómo se hacen. Puedes buscar y agregar los tuyos.' },
+    { to: '/ejercicios', texto: 'La biblioteca de ejercicios, con 500 ya incluidos. Puedes buscar y agregar los tuyos.' },
     { to: '/rutinas', texto: 'Las rutinas. Con "Asignar a alumnos" le das una a uno o a varios alumnos a la vez.' },
     { to: '/alimentos', texto: 'La biblioteca de alimentos, con calorías y macronutrientes por porción.' },
     { to: '/planes-alimentacion', texto: 'Los planes de comida. Se asignan a los alumnos igual que las rutinas.' },

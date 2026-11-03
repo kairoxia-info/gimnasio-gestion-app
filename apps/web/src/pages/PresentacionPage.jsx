@@ -14,7 +14,6 @@ import {
     Instagram,
     Laptop,
     MessageCircle,
-    MonitorSmartphone,
     Smartphone,
     Tablet,
     TrendingUp,
@@ -186,6 +185,14 @@ const PARA_QUIEN = [
     'Dueños con más de una sede',
 ];
 
+// Fotos de Unsplash (licencia gratuita, uso comercial sin atribución), elegidas por Nalux el 03/11/2026.
+// Autores y enlaces en CONTEXT.md. No poner testimonios ni frases sobre RutNail encima de estas personas.
+const FOTOS_ENTRENANDO = [
+    { src: '/fotos/entrenador-pesa-rusa.jpg', alt: 'Un entrenador corrige a una alumna que levanta una pesa rusa' },
+    { src: '/fotos/entrenador-maquina.jpg', alt: 'Un entrenador acompaña a una alumna en una máquina de piernas' },
+    { src: '/fotos/entrenadora-flexiones.jpg', alt: 'Una entrenadora ayuda a un alumno a hacer flexiones' },
+];
+
 const HOY_VS_RUTNAIL = [
     ['La planilla de cuotas que nunca cierra', 'Cada alumno con su estado: al día, por vencer o vencido'],
     ['Rutinas en PDF y papel que se pierden', 'La rutina en el celular del alumno, siempre actualizada'],
@@ -334,10 +341,16 @@ const PresentacionPage = () => {
 
             <main>
                 {/* Portada */}
-                <section className="dark relative bg-background px-4 pb-20 pt-14 text-foreground sm:px-6 sm:pt-20">
+                <section className="dark relative bg-background px-4 pb-20 pt-10 text-foreground sm:px-6 sm:pt-14">
                     <div aria-hidden="true" className="pointer-events-none absolute -right-40 top-0 h-[34rem] w-[34rem] rounded-full bg-primary/15 blur-3xl" />
                     <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_1fr]">
                         <div>
+                            {/* Logo grande en la portada y en el cierre (pedido de Nalux, 03/11/2026: "que resalte"). */}
+                            <img
+                                src="/logo-rutnail.png"
+                                alt="RutNail"
+                                className="mb-5 h-20 w-auto drop-shadow-[0_0_28px_rgba(214,168,79,0.35)] sm:h-24"
+                            />
                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-primary">Gestión para gimnasios</p>
                             <h1 className="font-display mt-3 text-balance text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-6xl">
                                 Tu gimnasio en orden. La rutina en el celular de cada alumno.
@@ -389,6 +402,22 @@ const PresentacionPage = () => {
                                 </li>
                             ))}
                         </ul>
+                        {/* En el celular la primera va a lo ancho y las otras dos debajo; desde sm, tres iguales. */}
+                        <div className="mx-auto mt-10 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                            {FOTOS_ENTRENANDO.map((f, i) => (
+                                <Reveal key={f.src} y={16} delay={i * 0.08} className={i === 0 ? 'col-span-2 sm:col-span-1' : ''}>
+                                    <img
+                                        src={f.src}
+                                        alt={f.alt}
+                                        width={1200}
+                                        height={800}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className={`w-full rounded-2xl border border-border object-cover ${i === 0 ? 'aspect-[16/9] sm:aspect-[4/3]' : 'aspect-[4/3]'}`}
+                                    />
+                                </Reveal>
+                            ))}
+                        </div>
                     </div>
                 </section>
 
@@ -719,11 +748,25 @@ const PresentacionPage = () => {
                 </section>
 
                 {/* Cierre */}
-                <section className="dark relative bg-background px-4 py-20 text-foreground sm:px-6">
+                <section className="dark relative overflow-hidden bg-background px-4 py-20 text-foreground sm:px-6">
+                    {/* Foto de fondo muy oscurecida y fundida arriba y abajo con el negro, para que el logo y el texto se lean. */}
+                    <img
+                        src="/fotos/gimnasio-oscuro.jpg"
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-35"
+                    />
+                    <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background via-background/55 to-background" />
                     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/2 mx-auto h-72 max-w-3xl -translate-y-1/2 rounded-full bg-primary/10 blur-3xl" />
                     <div className="relative mx-auto max-w-2xl text-center">
-                        <MonitorSmartphone className="mx-auto h-10 w-10 text-amber-700 dark:text-primary" strokeWidth={1.6} />
-                        <h2 className="font-display mt-4 text-balance text-3xl font-bold sm:text-4xl">
+                        <img
+                            src="/logo-rutnail.png"
+                            alt="RutNail"
+                            className="mx-auto h-32 w-auto drop-shadow-[0_0_36px_rgba(214,168,79,0.4)] sm:h-40"
+                        />
+                        <h2 className="font-display mt-6 text-balance text-3xl font-bold sm:text-4xl">
                             Deja las planillas y empieza a entrenar mejor a tu gente
                         </h2>
                         <p className="mt-3 text-muted-foreground">
