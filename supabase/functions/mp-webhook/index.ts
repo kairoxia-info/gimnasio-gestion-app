@@ -1,5 +1,7 @@
 // Edge Function "mp-webhook" (migración 0086, 30/10/2026): recibe los avisos de Mercado Pago sobre la
 // suscripción (alta, pago, cancelación) y se los pasa a la base.
+// Desde la migración 0090 (03/11/2026) las suscripciones se crean con un plan de Mercado Pago: la organización se
+// reconoce por el id del plan (suscripcion_plan_mp_resolver), no por el correo de quien paga.
 //
 // SEGURIDAD
 //  * verify_jwt = false: Mercado Pago no manda sesión de Supabase. En su lugar se VALIDA LA FIRMA del aviso
@@ -147,13 +149,31 @@ Deno.serve(async (req) => {
     }
 
     const pre = preapprovalId ? await consultar(`/preapproval/${encodeURIComponent(preapprovalId)}`, token) : null;
-    const [org, plan, periodo] = String(pre?.external_reference ?? referencia).split('|');
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+    // De qué organización, plan y período es: las suscripciones creadas con un plan de Mercado Pago (migración
+    // 0090, lo que se usa hoy) se reconocen por el id del plan; las creadas sin plan, por `external_reference`
+    // ("organización|plan|período").
+    let [org, plan, periodo] = String(pre?.external_reference || referencia || '').split('|');
+    let origen = 'external_reference';
+    if (!(UUID.test(org ?? '') && plan && periodo) && pre?.preapproval_plan_id) {
+      const { data: enlace, error: errorEnlace } = await admin.rpc('suscripcion_plan_mp_resolver', {
+        p_mp_plan_id: String(pre.preapproval_plan_id),
+      });
+      if (errorEnlace) throw new Error(errorEnlace.message);
+      if (enlace) {
+        org = String(enlace.organizacion_id);
+        plan = String(enlace.plan);
+        periodo = String(enlace.periodo);
+        origen = 'plan de Mercado Pago';
+      }
+    }
     if (!UUID.test(org ?? '') || !plan || !periodo) {
-      console.error('Aviso de una suscripción que no es de RutNail', preapprovalId);
+      console.error('Aviso de una suscripción que no es de RutNail', preapprovalId, 'plan de Mercado Pago:', pre?.preapproval_plan_id ?? '(ninguno)');
       return responder('Ignorado');
     }
+    console.log('Aviso reconocido por', origen, tipo, id);
 
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const { data, error } = await admin.rpc('suscripcion_aplicar_evento', {
       p_org: org,
       p_plan: plan,
@@ -164,7 +184,7 @@ Deno.serve(async (req) => {
       p_pago_id: pago ? pago.id : null,
       p_pago_estado: pago ? pago.estado : null,
       p_pago_monto: pago ? pago.monto : null,
-      p_crudo: { tipo, id, preapproval: pre ? { id: pre.id, status: pre.status } : null, pago },
+      p_crudo: { tipo, id, origen, preapproval: pre ? { id: pre.id, status: pre.status, plan: pre.preapproval_plan_id ?? null } : null, pago },
     });
     if (error) throw new Error(error.message);
     console.log('Aviso aplicado', tipo, id, data);

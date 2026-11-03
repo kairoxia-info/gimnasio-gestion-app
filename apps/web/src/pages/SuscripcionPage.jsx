@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet';
 import { useSearchParams } from 'react-router-dom';
 import { Check, CreditCard, X } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Card, ErrorBox, Field, Input, Loading } from '@/components/ui-kit';
+import { Badge, Btn, Card, ErrorBox, Loading } from '@/components/ui-kit';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { fmtFecha } from '@/lib/format';
@@ -43,7 +43,7 @@ const llamarSuscripcion = async (body) => {
 const textoTope = (n, singular, plural) => (n === null || n === undefined ? 'sin límite' : `${n} ${n === 1 ? singular : plural}`);
 
 const SuscripcionPage = () => {
-    const { profile, user, refreshProfile } = useAuth();
+    const { profile, refreshProfile } = useAuth();
     const [busqueda, setBusqueda] = useSearchParams();
     // Mercado Pago agrega su propio "?preapproval_id=…" al volver, así que el valor llega como "1?preapproval_id=…".
     const volvio = (busqueda.get('volvio') ?? '').startsWith('1');
@@ -54,7 +54,6 @@ const SuscripcionPage = () => {
     const [error, setError] = useState('');
     const [periodoClave, setPeriodoClave] = useState('mensual');
     const [elegido, setElegido] = useState(null); // clave del plan
-    const [email, setEmail] = useState('');
     const [pagando, setPagando] = useState(false);
     const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
     const [cancelando, setCancelando] = useState(false);
@@ -91,10 +90,6 @@ const SuscripcionPage = () => {
         return () => window.removeEventListener('pageshow', alReaparecer);
     }, []);
 
-    useEffect(() => {
-        if (user?.email) setEmail((e) => e || user.email);
-    }, [user?.email]);
-
     // Al volver de Mercado Pago: se consulta cada 4 s (hasta 2 minutos) hasta que el pago figura aprobado.
     useEffect(() => {
         if (!volvio) return undefined;
@@ -130,13 +125,7 @@ const SuscripcionPage = () => {
     const pagar = async () => {
         setError('');
         setPagando(true);
-        const { data, error: err } = await llamarSuscripcion({
-            accion: 'crear',
-            plan: elegido,
-            periodo: periodoClave,
-            email: email.trim(),
-            volver_a: window.location.origin,
-        });
+        const { data, error: err } = await llamarSuscripcion({ accion: 'crear', plan: elegido, periodo: periodoClave });
         if (err) {
             setError(err);
             setPagando(false);
@@ -385,10 +374,10 @@ const SuscripcionPage = () => {
                                 {periodo.meses > 1 ? `cada ${periodo.meses} meses` : 'cada mes'}, con cobro automático. Puedes cancelarlo
                                 cuando quieras desde esta pantalla.
                             </p>
-                            <Field label="Correo de tu cuenta de Mercado Pago" className="mt-4 max-w-md">
-                                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-                            </Field>
-                            <Btn className="mt-4" onClick={pagar} disabled={pagando || !email.trim()}>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Te llevamos a Mercado Pago, donde pagas con tu cuenta o con tu tarjeta.
+                            </p>
+                            <Btn className="mt-4" onClick={pagar} disabled={pagando}>
                                 <CreditCard className="h-4 w-4" /> {pagando ? 'Abriendo Mercado Pago...' : 'Pagar con Mercado Pago'}
                             </Btn>
                             {error && (

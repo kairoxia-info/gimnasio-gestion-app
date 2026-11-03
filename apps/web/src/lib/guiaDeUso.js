@@ -298,7 +298,7 @@ export const AYUDAS = {
         ],
         consejos: [
             'Si la suscripción vence, la cuenta pasa 7 días a solo lectura (ves todo pero no puedes editar) y después se pausa. Tus datos no se borran.',
-            'El correo que escribes debe ser el de tu cuenta de Mercado Pago.',
+            'En Mercado Pago puedes pagar con tu cuenta o con tu tarjeta: no hace falta que el correo sea el mismo que usas en RutNail.',
         ],
     },
 

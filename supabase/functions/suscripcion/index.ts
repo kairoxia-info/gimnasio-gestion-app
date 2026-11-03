@@ -3,14 +3,23 @@
 //
 // Qué hace: el administrador elige un plan y un período en la pantalla "Suscripción"; esta función valida
 // la elección en la base (suscripcion_preparar: plan, tope de alumnos y de gimnasios, monto), le pide a
-// Mercado Pago un cobro recurrente en estado "pending" y devuelve el link (init_point) al que se manda a
-// la persona para pagar. El pago en sí lo confirma Mercado Pago por webhook (función "mp-webhook").
+// Mercado Pago un PLAN de cobro recurrente (si ya creó uno igual para esa organización, plan, período y monto,
+// lo reutiliza) y devuelve el link (init_point) al que se manda a la persona para suscribirse. El pago en sí
+// lo confirma Mercado Pago por webhook (función "mp-webhook").
+//
+// Por qué un plan y no una suscripción con correo (migración 0090, 03/11/2026): con `POST /preapproval` +
+// `payer_email`, Mercado Pago exige que la cuenta que paga tenga exactamente ese correo, y un cliente cuyo
+// correo de Mercado Pago no sea el de RutNail no podía pagar ("Tu e-mail no coincide con el de la
+// suscripción"). El link de un plan lo puede usar cualquier cuenta; la organización se reconoce después por
+// el id del plan (tabla suscripcion_planes_mp).
 //
 // SEGURIDAD
 //  * verify_jwt = true: solo sesiones válidas. Quién es y de qué organización sale del TOKEN (las funciones
 //    SQL verifican que sea ADMINISTRADOR); nada de eso sale del cuerpo del pedido.
 //  * El monto y el plan los calcula la base, nunca el navegador.
-//  * El token de Mercado Pago (MP_ACCESS_TOKEN) vive solo en los secretos de esta función.
+//  * El token de Mercado Pago (MP_ACCESS_TOKEN) vive solo en los secretos de esta función. La tabla que
+//    relaciona planes de Mercado Pago con organizaciones solo se toca con service_role, desde acá y desde
+//    mp-webhook.
 //  * Los errores de Mercado Pago se anotan en el registro de la función, no se muestran tal cual.
 //
 // SECRETOS (Supabase > Edge Functions > Secrets):
@@ -27,7 +36,6 @@ const CORS = {
 const json = (cuerpo: unknown, status = 200) =>
   new Response(JSON.stringify(cuerpo), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MP = 'https://api.mercadopago.com';
 
 // Mensajes que escribimos nosotros en las funciones SQL y se pueden mostrar tal cual.
@@ -41,8 +49,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
 
-  const token = Deno.env.get('MP_ACCESS_TOKEN');
-  const appUrl = (Deno.env.get('APP_URL') ?? '').replace(/\/$/, '');
+  // trim(): al pegar una clave en el panel de Supabase puede quedar un espacio o salto de línea invisible.
+  const token = Deno.env.get('MP_ACCESS_TOKEN')?.trim();
+  const appUrl = (Deno.env.get('APP_URL') ?? '').trim().replace(/\/$/, '');
   if (!token || !appUrl) {
     console.error('Falta MP_ACCESS_TOKEN o APP_URL');
     return json({ error: 'El cobro todavía no está configurado. Escríbenos y lo resolvemos.' }, 503);
@@ -69,44 +78,50 @@ Deno.serve(async (req) => {
       return json({ error: mensajeDe(error, 'No se pudo preparar la suscripción. Inténtalo de nuevo.') }, 400);
     }
 
-    const correoPedido = typeof cuerpo.email === 'string' ? cuerpo.email.trim() : '';
-    const email = EMAIL.test(correoPedido) ? correoPedido : (data.email as string);
+    // Con service_role: la tabla de planes de Mercado Pago no es accesible desde el navegador.
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const clave = { p_org: data.organizacion_id, p_plan: data.plan, p_periodo: data.periodo, p_monto: data.monto };
 
-    // A dónde vuelve la persona después de pagar: solo la app (o el entorno local de pruebas).
-    const volver = typeof cuerpo.volver_a === 'string' ? cuerpo.volver_a.replace(/\/$/, '') : '';
-    const permitidos = [appUrl, 'http://localhost:3001', 'http://localhost:3000'];
-    const base = permitidos.includes(volver) ? volver : appUrl;
+    // ¿Ya hay un plan de Mercado Pago para esta combinación? Se reutiliza (no se llena Mercado Pago de planes).
+    const { data: existente, error: errorBuscar } = await admin.rpc('suscripcion_plan_mp_buscar', clave);
+    if (errorBuscar) {
+      console.error('No se pudo buscar el plan de Mercado Pago', errorBuscar.message);
+      return json({ error: 'No se pudo preparar el cobro. Inténtalo de nuevo.' }, 500);
+    }
+    if (existente?.init_point) return json({ init_point: existente.init_point });
 
-    const respuesta = await fetch(`${MP}/preapproval`, {
+    const respuesta = await fetch(`${MP}/preapproval_plan`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         reason: data.razon,
-        // organización | plan | período: el webhook lo lee de acá para saber qué activar.
-        external_reference: `${data.organizacion_id}|${data.plan}|${data.periodo}`,
-        payer_email: email,
         auto_recurring: {
           frequency: data.meses,
           frequency_type: 'months',
           transaction_amount: data.monto,
           currency_id: 'ARS',
         },
-        back_url: `${base}/suscripcion?volvio=1`,
-        status: 'pending',
+        // Mercado Pago le agrega su propio "?preapproval_id=…"; la pantalla lo tiene en cuenta (startsWith).
+        back_url: `${appUrl}/suscripcion?volvio=1`,
       }),
     });
     const resultado = await respuesta.json().catch(() => ({}));
-    if (!respuesta.ok || !resultado.init_point) {
-      console.error('Mercado Pago no creó el cobro', respuesta.status, JSON.stringify(resultado));
-      return json(
-        {
-          error:
-            'Mercado Pago no pudo crear el cobro. Revisa que el correo sea el de tu cuenta de Mercado Pago e inténtalo de nuevo.',
-        },
-        502,
-      );
+    if (!respuesta.ok || !resultado.id || !resultado.init_point) {
+      console.error('Mercado Pago no creó el plan de cobro', respuesta.status, JSON.stringify(resultado));
+      return json({ error: 'Mercado Pago no pudo preparar el cobro. Inténtalo de nuevo en un momento.' }, 502);
     }
-    return json({ init_point: resultado.init_point });
+
+    // Sin guardar la relación plan ↔ organización, el pago no se podría reconocer: si falla, no se manda a pagar.
+    const { data: guardado, error: errorGuardar } = await admin.rpc('suscripcion_plan_mp_guardar', {
+      p_mp_plan_id: String(resultado.id),
+      p_init_point: String(resultado.init_point),
+      ...clave,
+    });
+    if (errorGuardar || !guardado?.init_point) {
+      console.error('No se pudo guardar el plan de Mercado Pago', errorGuardar?.message ?? 'sin respuesta');
+      return json({ error: 'No se pudo preparar el cobro. Inténtalo de nuevo.' }, 500);
+    }
+    return json({ init_point: guardado.init_point });
   }
 
   // --- Cancelar el cobro automático ---------------------------------------------------------------
