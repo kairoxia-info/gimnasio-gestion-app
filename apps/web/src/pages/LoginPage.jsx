@@ -34,14 +34,16 @@ const traducirError = (err, modo) => {
 // modoEquipo (ruta /ingreso-equipo, 28/10/2026): ingreso para el personal que el profesor dio de alta
 // desde su panel (pantalla Equipo). Solo iniciar sesión: sus cuentas las crea el administrador, no
 // hay registro propio. Es el mismo inicio de sesión de siempre; cambia el rótulo y no ofrece registrarse.
-const LoginPage = ({ modoEquipo = false }) => {
+// registro (ruta /registro, 03/11/2026): los botones "Probar 7 días gratis" de la página de presentación abren
+// directo el formulario de crear cuenta (la persona igual puede pasar a "Ingresar" desde la misma pantalla).
+const LoginPage = ({ modoEquipo = false, registro = false }) => {
     const { signIn, signUp, signOut, isAuthed, user, profile, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     // true desde que se envía el formulario: solo entonces, con la sesión ya abierta, se pasa al panel
     // solo. Si la sesión estaba abierta de antes (por ejemplo el panel del profesor en otra pestaña),
     // la pantalla lo muestra y deja elegir en vez de mandar a la persona a un panel que no pidió.
     const ingresoReciente = useRef(false);
-    const [mode, setMode] = useState('login');
+    const [mode, setMode] = useState(registro && !modoEquipo ? 'signup' : 'login');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
@@ -144,7 +146,7 @@ const LoginPage = ({ modoEquipo = false }) => {
     return (
         <AuthBackdrop>
             <Helmet>
-                <title>{modoEquipo ? 'Ingreso del equipo' : 'Ingresar'} | RutNail</title>
+                <title>{modoEquipo ? 'Ingreso del equipo' : isLogin ? 'Ingresar' : 'Crear cuenta'} | RutNail</title>
                 <meta
                     name="description"
                     content="Acceso del entrenador a RutNail: gestión de alumnos, planes, asistencia y pagos."

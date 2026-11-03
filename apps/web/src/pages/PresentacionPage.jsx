@@ -29,7 +29,6 @@ import {
     DIAS_PRUEBA,
     PERIODOS_PAGO,
     PLANES,
-    PRECIOS_BORRADOR,
     enlaceWhatsApp,
     formatoPesos,
     precioPorMes,
@@ -39,11 +38,12 @@ import {
 // páginas de otras apps del rubro: qué hace la app, para quién es, en qué pantallas funciona y los
 // planes). Sin ProtectedRoute: es para quien todavía no tiene cuenta.
 //
-// El registro público de profesores está apagado en Supabase (21/09/2026): las cuentas las crea el
-// equipo. Por eso los botones de prueba gratis abren WhatsApp con el equipo en vez de un alta.
+// Es la página de inicio de "/" para quien no tiene sesión (03/11/2026). El registro público está abierto:
+// los botones de prueba gratis llevan a "/registro" y la prueba de 7 días arranca sola al crear la cuenta.
+// WhatsApp queda para consultas y para quien necesita más de 5 gimnasios.
 // Estética: negro y dorado de la marca. Cabecera, portada, cierre y pie son siempre negros (clase `dark`);
 // el resto sigue el tema claro/oscuro que elija la persona.
-// Los precios salen de lib/planesSuscripcion.js y son un BORRADOR hasta que Nalux los confirme.
+// Los precios salen de lib/planesSuscripcion.js (confirmados por Nalux el 03/11/2026).
 
 // Es la página de la marca RutNail (dorado), no la de un gimnasio: aunque quien la mire tenga sesión de un
 // gimnasio con otro color, acá se fija el dorado de fábrica (las variables del contenedor pisan a las de la raíz).
@@ -189,11 +189,15 @@ const FAQ = [
     ],
     [
         '¿Puedo probarlo antes de contratar?',
-        `Sí: ${DIAS_PRUEBA} días gratis, sin tarjeta y sin compromiso. Escríbenos por WhatsApp y dejamos tu gimnasio listo para que lo pruebes con tus alumnos.`,
+        `Sí: ${DIAS_PRUEBA} días gratis, sin tarjeta y sin compromiso. Creas tu cuenta en un minuto, armas tu gimnasio y lo pruebas con tus alumnos con todo incluido.`,
     ],
     [
         '¿Qué pasa cuando termina la prueba?',
-        'Eliges un plan para seguir. Si no, tu cuenta queda en solo lectura unos días y luego se pausa; no se borra nada y puedes retomarla cuando quieras.',
+        'Eliges un plan para seguir. Si no, tu cuenta queda 7 días en solo lectura (ves todo, pero no puedes editar) y luego se pausa; no se borra nada y puedes retomarla cuando quieras.',
+    ],
+    [
+        '¿Cómo se paga la suscripción?',
+        'Con Mercado Pago, con tu cuenta o con tu tarjeta. El cobro es automático cada mes, cada 3 meses o cada 6, según el período que elijas, y puedes cancelarlo cuando quieras desde la pantalla Suscripción.',
     ],
 ];
 
@@ -207,14 +211,19 @@ const Titulo = ({ etiqueta, children, sub }) => (
     </div>
 );
 
-const BotonPrincipal = ({ href, children, className = '' }) => (
-    <a
-        href={href}
-        className={`inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-base font-bold text-primary-foreground transition hover:-translate-y-px hover:brightness-110 active:scale-[0.98] ${className}`}
-    >
-        {children}
-    </a>
-);
+// Con `to` navega dentro de la app (por ejemplo a "/registro"); con `href`, a un enlace de afuera (WhatsApp).
+const BotonPrincipal = ({ href, to, children, className = '' }) => {
+    const clases = `inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-base font-bold text-primary-foreground transition hover:-translate-y-px hover:brightness-110 active:scale-[0.98] ${className}`;
+    return to ? (
+        <Link to={to} className={clases}>
+            {children}
+        </Link>
+    ) : (
+        <a href={href} className={clases}>
+            {children}
+        </a>
+    );
+};
 
 const Dispositivo = ({ icon: Icon, titulo, texto }) => (
     <div className="flex items-start gap-3">
@@ -258,12 +267,6 @@ const PresentacionPage = () => {
                 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
             </Helmet>
 
-            {PRECIOS_BORRADOR && (
-                <div className="bg-warn/20 px-4 py-2 text-center text-xs font-semibold text-warn">
-                    Borrador interno: los precios de esta página son de ejemplo y todavía no están confirmados.
-                </div>
-            )}
-
             <header className="dark sticky top-0 z-30 border-b border-border bg-background/90 text-foreground backdrop-blur">
                 <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
                     <Logo className="h-9" />
@@ -301,7 +304,7 @@ const PresentacionPage = () => {
                                 sin cuadernos y sin perseguir a nadie por WhatsApp.
                             </p>
                             <div className="mt-8 flex flex-wrap items-center gap-3">
-                                <BotonPrincipal href={enlaceWhatsApp(`Hola, quiero probar RutNail ${DIAS_PRUEBA} días gratis`)}>
+                                <BotonPrincipal to="/registro">
                                     Probar {DIAS_PRUEBA} días gratis <ArrowRight className="h-5 w-5" />
                                 </BotonPrincipal>
                                 <a
@@ -599,7 +602,7 @@ const PresentacionPage = () => {
                                         </ul>
 
                                         <BotonPrincipal
-                                            href={enlaceWhatsApp(`Hola, quiero probar el plan ${plan.nombre} de RutNail ${DIAS_PRUEBA} días gratis`)}
+                                            to="/registro"
                                             className={`mt-7 w-full ${plan.destacado ? '' : '!bg-transparent !text-foreground border border-border hover:!border-primary hover:!brightness-100'}`}
                                         >
                                             Probar {DIAS_PRUEBA} días gratis
@@ -649,12 +652,19 @@ const PresentacionPage = () => {
                             Deja las planillas y empieza a entrenar mejor a tu gente
                         </h2>
                         <p className="mt-3 text-muted-foreground">
-                            {DIAS_PRUEBA} días gratis, sin tarjeta y sin compromiso. Escríbenos y dejamos tu gimnasio listo para probar.
+                            {DIAS_PRUEBA} días gratis, sin tarjeta y sin compromiso. Creas tu cuenta en un minuto y pruebas
+                            todo con tus alumnos.
                         </p>
-                        <div className="mt-7 flex justify-center">
-                            <BotonPrincipal href={enlaceWhatsApp(`Hola, quiero probar RutNail ${DIAS_PRUEBA} días gratis`)}>
-                                <MessageCircle className="h-5 w-5" /> Escribir por WhatsApp
+                        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+                            <BotonPrincipal to="/registro">
+                                Crear mi cuenta gratis <ArrowRight className="h-5 w-5" />
                             </BotonPrincipal>
+                            <a
+                                href={enlaceWhatsApp('Hola, quiero consultar por RutNail')}
+                                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-border px-6 py-3 text-base font-semibold transition hover:border-primary"
+                            >
+                                <MessageCircle className="h-5 w-5" /> Tengo una consulta
+                            </a>
                         </div>
                     </div>
                 </section>

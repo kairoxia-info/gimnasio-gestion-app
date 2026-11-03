@@ -1,14 +1,10 @@
-// Planes de suscripción de RutNail (definidos por Nalux el 29/10/2026). Un solo lugar con los límites y
-// los precios: la página de presentación los muestra desde acá y, cuando se construya el módulo de
-// suscripción, el control de límites (en el servidor) tiene que usar estos mismos números.
-//
-// PRECIOS = BORRADOR. Son una propuesta para ajustar con Nalux; mientras `PRECIOS_BORRADOR` sea true la
-// página lo avisa con una franja visible. Importes en pesos argentinos por mes, con el pago mensual.
+// Planes de suscripción de RutNail (definidos por Nalux el 29/10/2026; precios confirmados el 03/11/2026).
+// Un solo lugar con los límites y los precios que muestra la página de presentación. Lo que se cobra y se
+// controla de verdad sale de la base (tabla `planes_suscripcion`, migración 0086): si se cambia un número
+// acá, hay que cambiarlo allá también. Importes en pesos argentinos por mes, con el pago mensual.
 
-export const PRECIOS_BORRADOR = true;
-
-// Prueba gratis (decidida por Nalux el 29/10/2026): las cuentas las crea el equipo, así que se pide por
-// WhatsApp. Cuando exista el módulo de suscripción, la prueba tiene que ser un estado de la suscripción.
+// Prueba gratis (decidida por Nalux el 29/10/2026): arranca sola al crear la cuenta, dura estos días, sin
+// tarjeta (la base crea la suscripción en estado "prueba" para toda organización nueva).
 export const DIAS_PRUEBA = 7;
 const WHATSAPP_CONTACTO = '5493573430891'; // +54 9 357 343-0891
 export const enlaceWhatsApp = (mensaje) =>

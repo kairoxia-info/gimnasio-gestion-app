@@ -30,6 +30,7 @@ import HistorialPage from '@/pages/HistorialPage';
 import EquipoPage from '@/pages/EquipoPage';
 import GuiaPage from '@/pages/GuiaPage';
 import PresentacionPage from '@/pages/PresentacionPage';
+import Inicio from '@/components/Inicio';
 import SuscripcionPage from '@/pages/SuscripcionPage';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
@@ -42,16 +43,21 @@ function App() {
                     <Router>
                         <ScrollToTop />
                         <Routes>
-                            <Route path="/" element={<Navigate to="/panel" replace />} />
+                            {/* Inicio (03/11/2026): con sesión va al panel; sin sesión muestra la presentación. */}
+                            <Route path="/" element={<Inicio />} />
                             {/* Sin ProtectedRoute a propósito: es la puerta de entrada para
                                 usuarios SIN sesión. Envolverla con el guard normal la haría
                                 redirigir a "/login" apenas !isAuthed — Navigate hacia la misma
                                 ruta en la que ya está, dejando el formulario inalcanzable. El
                                 propio LoginPage ya redirige a /panel si detecta sesión activa. */}
-                            {/* Presentación y precios (borrador de Nalux, 29/10/2026): pública, sin
-                                sesión. Todavía no es la página de inicio de "/". */}
+                            {/* Presentación y precios (pedido de Nalux, 29/10/2026): pública, sin sesión.
+                                Es la misma página que se ve en "/" sin sesión; se deja la ruta por los
+                                enlaces que ya se hayan compartido. */}
                             <Route path="/presentacion" element={<PresentacionPage />} />
                             <Route path="/login" element={<LoginPage />} />
+                            {/* Crear cuenta (03/11/2026): abre el formulario de registro; los botones de
+                                "Probar 7 días gratis" de la presentación llevan acá. */}
+                            <Route path="/registro" element={<LoginPage registro />} />
                             {/* Ingreso del personal que el profesor dio de alta desde Equipo (0080). */}
                             <Route path="/ingreso-equipo" element={<LoginPage modoEquipo />} />
                             {/* Sin ProtectedRoute a propósito: esta ruta se llega con la sesión
