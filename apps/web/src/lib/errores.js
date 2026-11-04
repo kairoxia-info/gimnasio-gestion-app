@@ -14,9 +14,13 @@ import supabase from '@/lib/supabaseClient';
 //   solo proyecto de Supabase), y cada error de desarrollo escrito ahí
 //   ensuciaría justo la tabla que se va a revisar al final de la semana. En
 //   desarrollo se avisa por consola y no se guarda.
-// - Solo con sesión. La RPC es solo para `authenticated` (decisión 2 de la
-//   0066: no se abre a `anon`); sin sesión (portal del alumno, login) no vale
-//   ni el viaje de red. getSession() lee del storage local, no consulta nada.
+// - Con sesión, o en el portal del alumno. registrar_error_cliente es solo para
+//   `authenticated` (decisión 2 de la 0066); el alumno no tiene sesión y va por
+//   registrar_error_alumno (0096), que exige su código de acceso. Sin ninguna de
+//   las dos cosas (pantallas de ingreso) no vale ni el viaje de red. getSession()
+//   lee del storage local, no consulta nada.
+// - En el portal no se reportan las fallas de conexión: en el gimnasio suele no
+//   haber señal, no es un error de la app y le llenaría el teléfono a Nalux.
 // - Tope por pestaña + repetidos. La RPC ya corta en 20 por usuario cada 5
 //   minutos, pero un error en bucle (un setInterval que falla cada segundo)
 //   dispararía igual esas 20 llamadas de red: acá se frena antes, y el mismo
@@ -27,6 +31,10 @@ import supabase from '@/lib/supabaseClient';
 //   de quien llama.
 const MAX_POR_PESTANA = 20;
 const VENTANA_REPETIDO_MS = 10_000;
+const RUTA_PORTAL = /^\/mi-plan\/([^/?#]+)/;
+const ES_CONEXION = /Failed to fetch|NetworkError|Load failed|Network request failed/i;
+// Respuestas normales de la base, no errores: código dado de baja, cuenta vencida, topes y datos mal cargados.
+const ES_ESPERADO_PORTAL = /SUSCRIPCION_|c[oó]digo de acceso inv|demasiadas (acciones|consultas)|peso inv|d[ií]a inv|no hay una rutina activa/i;
 let enviados = 0;
 let ultimoMensaje = '';
 let ultimoEn = 0;
@@ -60,18 +68,33 @@ export const reportarErrorCliente = async ({ mensaje, detalle }) => {
         ultimoEn = ahora;
 
         const { data } = await supabase.auth.getSession();
-        if (!data?.session) return;
+        const codigo = data?.session ? null : window.location.pathname.match(RUTA_PORTAL)?.[1];
+        if (!data?.session && !codigo) return;
+        if (codigo && (navigator.onLine === false || ES_CONEXION.test(msg))) return;
 
         enviados += 1;
-        await supabase.rpc('registrar_error_cliente', {
+        const error = {
             p_mensaje: msg,
             p_detalle: detalle || null,
-            p_ruta: `${window.location.pathname}${window.location.search}`,
+            // La ruta del portal lleva el código de acceso del alumno: nunca se guarda.
+            p_ruta: `${window.location.pathname.replace(RUTA_PORTAL, '/mi-plan/(código)')}${window.location.search}`,
             p_user_agent: navigator.userAgent,
-        });
+        };
+        await supabase.rpc(
+            codigo ? 'registrar_error_alumno' : 'registrar_error_cliente',
+            codigo ? { p_codigo: codigo, ...error } : error,
+        );
     } catch (_) {
         // ni siquiera se pudo reportar: la pantalla sigue igual
     }
+};
+
+// Fallos que el portal atrapa y le muestra al alumno ("No se pudo guardar"): la pantalla no se rompe, así que
+// los listeners de abajo no los ven. `accion` completa la frase "No se pudo ...".
+export const reportarFalloPortal = (accion, error) => {
+    const texto = String(error?.message || error || 'sin mensaje');
+    if (ES_ESPERADO_PORTAL.test(texto)) return;
+    reportarErrorCliente({ mensaje: `No se pudo ${accion}: ${texto}`, detalle: detalleDe(error) });
 };
 
 // Se llama una sola vez desde main.jsx, antes de montar React.

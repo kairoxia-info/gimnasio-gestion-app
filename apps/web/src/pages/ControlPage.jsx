@@ -389,7 +389,7 @@ const ControlPage = () => {
                         {/* Errores */}
                         <Seccion
                             titulo="Errores en pantallas"
-                            sub="Lo que falló en el navegador de un profesor o de su equipo, agrupado por tipo de error."
+                            sub="Lo que falló en el navegador de un profesor, de su equipo o de un alumno, agrupado por tipo de error."
                         >
                             {errores.length === 0 ? (
                                 <Empty>Sin errores en el período.</Empty>

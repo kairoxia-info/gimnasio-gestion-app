@@ -240,9 +240,12 @@ const TerminosPage = () => (
                         </p>
                         <p className="mt-2">
                             Del titular y su equipo: nombre, correo electrónico, los datos del gimnasio, el plan
-                            contratado, el estado de la suscripción y la fecha de los pagos. Además se guardan
-                            registros técnicos de uso y de errores (por ejemplo, la pantalla y el navegador en los
-                            que ocurrió una falla).
+                            contratado, el estado de la suscripción y la fecha de los pagos.
+                        </p>
+                        <p className="mt-2">
+                            De todos los usuarios, incluidos los alumnos, se guardan registros técnicos de errores
+                            (por ejemplo, la pantalla y el navegador en los que ocurrió una falla), para poder
+                            corregirlos. Esos registros no incluyen el nombre del alumno ni sus datos personales.
                         </p>
                     </Apartado>
 

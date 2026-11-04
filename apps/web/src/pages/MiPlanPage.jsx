@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { limpiarPlanesDelAlumnoGuardados } from '@/lib/offline';
+import { reportarFalloPortal } from '@/lib/errores';
 import { KairoxFooterMark, ThemeToggle } from '@/components/AppLayout';
 import CajonMenu, { NavLinksAnimados } from '@/components/CajonMenu';
 import TarjetaTour, { TOUR_ESPACIO_MOVIL_PX, usePosicionTour } from '@/components/TourBienvenida';
@@ -754,7 +755,8 @@ const MiPlanPage = () => {
                 esRutina ? '.rutina-pdf-hoja' : '.alimentacion-pdf-hoja',
                 `${esRutina ? 'Rutina' : 'Plan de alimentación'} - ${plan?.alumno_nombre || 'alumno'}`,
             );
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('generar el PDF', err);
             setErrorPdf('No se pudo generar el PDF. Probar de nuevo.');
         } finally {
             setImprimiendoSeccion(null);
@@ -780,7 +782,8 @@ const MiPlanPage = () => {
             });
             if (err) throw err;
             setAvisoOculto(true);
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('marcar un aviso como leído', err);
             setAvisoError('No se pudo guardar. No es grave, se puede seguir usando la pantalla igual.');
         } finally {
             setMarcandoAviso(false);
@@ -825,7 +828,8 @@ const MiPlanPage = () => {
             // pasa a dar false con este mismo cambio de estado.
             const ahora = new Date().toISOString();
             setPlan((prev) => (prev ? { ...prev, aceptacion_datos_en: ahora, aceptacion_deslinde_en: ahora } : prev));
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('guardar la aceptación de los términos', err);
             setErrorAceptacion('No se pudo guardar. Probar de nuevo en un momento.');
         } finally {
             setGuardandoAceptacion(false);
@@ -875,7 +879,8 @@ const MiPlanPage = () => {
             // todavía no se abrió esa pestaña ni hace falta: se pide fresca
             // la primera vez que se entre.
             if (progresoYaPedidoRef.current) cargarProgreso();
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('marcar un entrenamiento como hecho', err);
             setErrorMarcarDia({ clave, mensaje: 'No se pudo guardar. Probar de nuevo.' });
         } finally {
             setMarcandoDia(null);
@@ -913,7 +918,8 @@ const MiPlanPage = () => {
             // pedir el progreso (mismo costo que ya paga "ver el plan": no
             // suma un límite nuevo, ver el comentario de la RPC).
             cargarProgreso();
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('guardar el peso', err);
             setErrorPeso('No se pudo guardar. Probar de nuevo.');
         } finally {
             setGuardandoPeso(false);
@@ -990,7 +996,8 @@ const MiPlanPage = () => {
             if (err) throw err;
             const fila = Array.isArray(data) ? data[0] : data;
             setProgreso(fila || { historial_peso: [], entrenamientos_ultima_semana: 0 });
-        } catch (_) {
+        } catch (err) {
+            reportarFalloPortal('cargar el progreso', err);
             setErrorProgreso('No se pudo cargar el progreso. Probar de nuevo.');
         } finally {
             setCargandoProgreso(false);
@@ -1085,6 +1092,7 @@ const MiPlanPage = () => {
                     } else if (esRateLimit(msg)) {
                         setError('Demasiadas consultas en poco tiempo. Intentar de nuevo en unos minutos.');
                     } else {
+                        reportarFalloPortal('cargar el plan', err);
                         setError('No se pudo cargar el plan en este momento. Intentar de nuevo más tarde.');
                     }
                 })
