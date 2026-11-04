@@ -107,8 +107,14 @@ export const AuthProvider = ({ children }) => {
             // Suscripción (migración 0086): estado de acceso y plan. Si la base todavía no tiene la
             // migración, estas dos líneas no cambian nada (acceso completo, todo incluido).
             perfil.incluyeAlimentacion = ctx.incluye_alimentacion !== false;
-            const { data: susc } = await supabase.rpc('mi_suscripcion');
+            // Dueña de RutNail (migración 0091): ve el panel "Control de RutNail". Va en paralelo con la
+            // suscripción para no sumar espera; si falla, simplemente no aparece el panel.
+            const [{ data: susc }, { data: adminPlataforma }] = await Promise.all([
+                supabase.rpc('mi_suscripcion'),
+                supabase.rpc('es_admin_plataforma'),
+            ]);
             perfil.suscripcion = susc ?? { acceso: ctx.suscripcion_acceso ?? 'completo' };
+            perfil.esAdminPlataforma = adminPlataforma === true;
             // Recuerda si es cuenta de equipo para volver a su ingreso al cerrar sesión.
             recordarTipoDeIngreso({ misGimnasios: perfil.misGimnasios, accesoPausado: perfil.accesoPausado });
             // Fija en la base el gimnasio con el que ESTA sesión abrió la app (una vez por carga). Sin

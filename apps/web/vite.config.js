@@ -8,6 +8,7 @@ import iframeRouteRestorationPlugin from './plugins/vite-plugin-iframe-route-res
 import sitePagesPlugin from './plugins/vite-plugin-site-pages.js';
 import pocketbaseAuthPlugin from './plugins/vite-plugin-pocketbase-auth.js';
 import sessionJournalPlugin from './plugins/session-journal/vite-plugin-session-journal.js';
+import versionAppPlugin from './plugins/vite-plugin-version-app.js';
 
 import { readFileSync } from 'node:fs';
 
@@ -389,6 +390,8 @@ export default defineConfig(({ command }) => ({
 			? [inlineEditPlugin(), editModeDevPlugin(), selectionModePlugin(), iframeRouteRestorationPlugin(), sitePagesPlugin(), pocketbaseAuthPlugin(), sessionJournalPlugin()]
 			: []),
 		react(),
+		// Aviso de versión nueva (03/11/2026): /version.json y __VERSION_APP__, ver el plugin.
+		versionAppPlugin({ command }),
 		// Solo en el dev server (11/09/2026). Era el único plugin de la plantilla
 		// de Hostinger Horizons que ni siquiera intentaba limitarse a desarrollo,
 		// así que el build de producción se llevaba 5 scripts inline que: parchean

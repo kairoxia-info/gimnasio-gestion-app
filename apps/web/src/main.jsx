@@ -2,11 +2,21 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from '@/App';
 import { instalarCapturaGlobalDeErrores } from '@/lib/errores';
+import { recargarUnaVez } from '@/lib/recargaVersion';
 import '@/index.css';
 
 // Antes de montar nada, para que un error del primer render también quede
 // registrado. Qué guarda y con qué límites: ver lib/errores.js.
 instalarCapturaGlobalDeErrores();
+
+// Vite avisa con este evento cuando no puede cargar un pedazo de la app (típico: pestaña abierta desde
+// antes de subir una versión nueva). Se recarga una vez en vez de mostrar la pantalla de error; ver
+// lib/recargaVersion.js.
+if (import.meta.env.PROD) {
+	window.addEventListener('vite:preloadError', (ev) => {
+		if (recargarUnaVez()) ev.preventDefault();
+	});
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
 	<App />

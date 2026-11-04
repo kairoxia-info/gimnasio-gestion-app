@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
+    Activity,
     AlertTriangle,
     Apple,
     BookOpen,
@@ -62,6 +63,9 @@ const TOUR_ESPACIO_MOVIL = 300;
 
 // Guía de uso (29/10/2026): qué hace cada pantalla y cada botón. Va al final del menú de todos.
 const ITEM_GUIA = { to: '/guia', label: 'Guía de uso', icon: BookOpen };
+
+// Control de RutNail (migración 0091): solo para la dueña de la plataforma, nunca para un cliente.
+const ITEM_CONTROL = { to: '/control', label: 'Control de RutNail', icon: Activity };
 
 // El administrador además ve "Mis gimnasios" (pedido de Nalux, 28/10/2026): apartado aparte para
 // abrir, agregar y eliminar gimnasios. Va antes de Configuración.
@@ -404,9 +408,12 @@ const AppLayout = ({ title, subtitle, ayuda, actions, children }) => {
     const esAdmin = profile?.role === 'admin';
     // El plan Básico no incluye alimentación (migración 0086): esas dos pantallas no se muestran.
     const incluyeAlimentacion = profile?.incluyeAlimentacion !== false;
-    const menu = (esAdmin ? NAV_ADMIN : NAV_STAFF).filter(
-        (n) => incluyeAlimentacion || (n.to !== '/alimentos' && n.to !== '/planes-alimentacion'),
-    );
+    const menu = [
+        ...(esAdmin ? NAV_ADMIN : NAV_STAFF).filter(
+            (n) => incluyeAlimentacion || (n.to !== '/alimentos' && n.to !== '/planes-alimentacion'),
+        ),
+        ...(profile?.esAdminPlataforma ? [ITEM_CONTROL] : []),
+    ];
     // Sin los pasos de pantallas que el plan no incluye (alimentación en el Básico).
     const PASOS_TOUR = (esAdmin ? PASOS_TOUR_ADMIN : PASOS_TOUR_EQUIPO).filter((p) => menu.some((n) => n.to === p.to));
     const guiaActiva = profile?.tour_visto === false && location.pathname === '/panel';

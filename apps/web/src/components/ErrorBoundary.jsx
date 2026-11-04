@@ -1,5 +1,6 @@
 import React from 'react';
 import { reportarErrorCliente } from '@/lib/errores';
+import { esErrorDeVersionVieja, recargarUnaVez } from '@/lib/recargaVersion';
 
 // Reportado por Nalux (07/09/2026): en el celular, al entrar o al cambiar de
 // módulo, a veces la pantalla se pone en negro y hay que recargar a mano.
@@ -27,6 +28,10 @@ class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, info) {
         console.error('Error atrapado por ErrorBoundary:', error, info?.componentStack);
+
+        // Versión vieja abierta (lib/recargaVersion.js): se recarga sola una vez y no se anota como
+        // error, porque ya quedó resuelto. Si vuelve a pasar enseguida, sigue de largo y se anota.
+        if (import.meta.env.PROD && esErrorDeVersionVieja(error) && recargarUnaVez()) return;
 
         // Deja rastro en la base (migración 0066, pedido de Nalux 21/09/2026,
         // antes de la semana de prueba con el primer cliente real): sin esto,

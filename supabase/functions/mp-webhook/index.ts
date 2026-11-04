@@ -56,6 +56,24 @@ const consultar = async (ruta: string, token: string) => {
 
 const responder = (texto: string, status = 200) => new Response(texto, { status });
 
+// Problemas del servidor (migración 0091): quedan en eventos_sistema y se ven en "Control de RutNail" (los
+// registros propios de Supabase duran 1 día en el plan gratis). El mensaje es fijo para poder agruparlos;
+// lo variable va en `detalle`, sin claves ni datos de pago. Anotar nunca cambia la respuesta.
+const anotar = async (nivel: 'error' | 'aviso', mensaje: string, detalle: Record<string, unknown> = {}, org: string | null = null) => {
+  try {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    await admin.rpc('registrar_evento_sistema', {
+      p_origen: 'mp-webhook',
+      p_nivel: nivel,
+      p_mensaje: mensaje,
+      p_detalle: detalle,
+      p_org: org,
+    });
+  } catch (_) {
+    // sin registro: la respuesta a Mercado Pago sigue igual
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return responder('Método no permitido', 405);
 
@@ -64,6 +82,7 @@ Deno.serve(async (req) => {
   const secreto = Deno.env.get('MP_WEBHOOK_SECRET')?.trim();
   if (!token || !secreto) {
     console.error('Falta MP_ACCESS_TOKEN o MP_WEBHOOK_SECRET');
+    await anotar('error', 'Faltan las claves de Mercado Pago en el servidor', { token: !!token, secreto: !!secreto });
     return responder('No configurado', 503);
   }
 
@@ -85,6 +104,7 @@ Deno.serve(async (req) => {
   if (!partes.ts || !partes.v1 || !idQuery) {
     // Sin datos sensibles: solo qué faltó, para distinguirlo de una clave que no coincide.
     console.error('Firma ausente', { ts: !!partes.ts, v1: !!partes.v1, idEnLaDireccion: !!idQuery, idEnElCuerpo: !!cuerpo?.data?.id, tipo });
+    await anotar('aviso', 'Llegó un aviso sin firma de Mercado Pago (se rechazó)', { tipo, ts: !!partes.ts, v1: !!partes.v1, idEnLaDireccion: !!idQuery });
     return responder('Firma ausente', 401);
   }
   // Mercado Pago firma el id en minúsculas cuando es alfanumérico.
@@ -92,6 +112,7 @@ Deno.serve(async (req) => {
   const esperado = await hmacHex(secreto, manifiesto);
   if (!iguales(esperado, partes.v1)) {
     console.error('Firma inválida', { tipo, requestIdPresente: !!requestId, largoClave: secreto.length, largoFirma: partes.v1.length });
+    await anotar('aviso', 'Llegó un aviso con firma inválida (se rechazó; si se repite, revisar la clave secreta del webhook)', { tipo, requestIdPresente: !!requestId });
     return responder('Firma inválida', 401);
   }
 
@@ -145,6 +166,7 @@ Deno.serve(async (req) => {
     }
     if (!preapprovalId && !referencia) {
       console.error('Aviso sin suscripción ni referencia', tipo, id);
+      await anotar('aviso', 'Aviso de Mercado Pago sin suscripción asociada', { tipo, id });
       return responder('Sin suscripción');
     }
 
@@ -170,6 +192,12 @@ Deno.serve(async (req) => {
     }
     if (!UUID.test(org ?? '') || !plan || !periodo) {
       console.error('Aviso de una suscripción que no es de RutNail', preapprovalId, 'plan de Mercado Pago:', pre?.preapproval_plan_id ?? '(ninguno)');
+      await anotar('aviso', 'Aviso de una suscripción que no se reconoce como de RutNail', {
+        tipo,
+        id,
+        preapproval: preapprovalId || null,
+        planMercadoPago: pre?.preapproval_plan_id ?? null,
+      });
       return responder('Ignorado');
     }
     console.log('Aviso reconocido por', origen, tipo, id);
@@ -192,6 +220,11 @@ Deno.serve(async (req) => {
   } catch (e) {
     // 500 para que Mercado Pago reintente más tarde.
     console.error('Error aplicando el aviso', tipo, id, (e as Error).message);
+    await anotar('error', 'No se pudo aplicar un aviso de Mercado Pago (Mercado Pago lo va a reintentar)', {
+      tipo,
+      id,
+      error: String((e as Error).message ?? e).slice(0, 500),
+    });
     return responder('Error', 500);
   }
 });

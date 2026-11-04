@@ -38,6 +38,24 @@ const json = (cuerpo: unknown, status = 200) =>
 
 const MP = 'https://api.mercadopago.com';
 
+// Problemas del servidor (migración 0091): quedan en eventos_sistema y se ven en "Control de RutNail". El
+// mensaje es fijo para poder agruparlos; lo variable va en `detalle`, sin claves. Anotar nunca cambia la
+// respuesta.
+const anotar = async (mensaje: string, detalle: Record<string, unknown> = {}, org: string | null = null) => {
+  try {
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    await admin.rpc('registrar_evento_sistema', {
+      p_origen: 'suscripcion',
+      p_nivel: 'error',
+      p_mensaje: mensaje,
+      p_detalle: detalle,
+      p_org: org,
+    });
+  } catch (_) {
+    // sin registro: la respuesta a la pantalla sigue igual
+  }
+};
+
 // Mensajes que escribimos nosotros en las funciones SQL y se pueden mostrar tal cual.
 const mensajeDe = (error: { message?: string } | null, porDefecto: string) => {
   const m = error?.message ?? '';
@@ -54,6 +72,7 @@ Deno.serve(async (req) => {
   const appUrl = (Deno.env.get('APP_URL') ?? '').trim().replace(/\/$/, '');
   if (!token || !appUrl) {
     console.error('Falta MP_ACCESS_TOKEN o APP_URL');
+    await anotar('Faltan las claves del cobro en el servidor (nadie puede pagar)', { token: !!token, appUrl: !!appUrl });
     return json({ error: 'El cobro todavía no está configurado. Escríbenos y lo resolvemos.' }, 503);
   }
 
@@ -86,6 +105,7 @@ Deno.serve(async (req) => {
     const { data: existente, error: errorBuscar } = await admin.rpc('suscripcion_plan_mp_buscar', clave);
     if (errorBuscar) {
       console.error('No se pudo buscar el plan de Mercado Pago', errorBuscar.message);
+      await anotar('No se pudo preparar el pago: falló la base al buscar el plan', { error: errorBuscar.message }, data.organizacion_id);
       return json({ error: 'No se pudo preparar el cobro. Inténtalo de nuevo.' }, 500);
     }
     if (existente?.init_point) return json({ init_point: existente.init_point });
@@ -108,6 +128,11 @@ Deno.serve(async (req) => {
     const resultado = await respuesta.json().catch(() => ({}));
     if (!respuesta.ok || !resultado.id || !resultado.init_point) {
       console.error('Mercado Pago no creó el plan de cobro', respuesta.status, JSON.stringify(resultado));
+      await anotar(
+        'Mercado Pago no creó el plan de cobro (un cliente no pudo abrir el pago)',
+        { status: respuesta.status, respuesta: JSON.stringify(resultado).slice(0, 500), plan: data.plan, periodo: data.periodo },
+        data.organizacion_id,
+      );
       return json({ error: 'Mercado Pago no pudo preparar el cobro. Inténtalo de nuevo en un momento.' }, 502);
     }
 
@@ -119,6 +144,7 @@ Deno.serve(async (req) => {
     });
     if (errorGuardar || !guardado?.init_point) {
       console.error('No se pudo guardar el plan de Mercado Pago', errorGuardar?.message ?? 'sin respuesta');
+      await anotar('No se pudo preparar el pago: falló la base al guardar el plan', { error: errorGuardar?.message ?? 'sin respuesta' }, data.organizacion_id);
       return json({ error: 'No se pudo preparar el cobro. Inténtalo de nuevo.' }, 500);
     }
     return json({ init_point: guardado.init_point });
@@ -136,7 +162,9 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ status: 'cancelled' }),
     });
     if (!respuesta.ok) {
-      console.error('Mercado Pago no canceló', respuesta.status, await respuesta.text());
+      const texto = (await respuesta.text()).slice(0, 500);
+      console.error('Mercado Pago no canceló', respuesta.status, texto);
+      await anotar('Mercado Pago no canceló un cobro automático (el cliente lo pidió)', { status: respuesta.status, respuesta: texto });
       return json({ error: 'Mercado Pago no pudo cancelar el cobro. Inténtalo de nuevo en un momento.' }, 502);
     }
     return json({ ok: true });

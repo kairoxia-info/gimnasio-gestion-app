@@ -32,6 +32,8 @@ import GuiaPage from '@/pages/GuiaPage';
 import PresentacionPage from '@/pages/PresentacionPage';
 import Inicio from '@/components/Inicio';
 import SuscripcionPage from '@/pages/SuscripcionPage';
+import ControlPage from '@/pages/ControlPage';
+import AvisoVersionNueva from '@/components/AvisoVersionNueva';
 
 const guard = (element) => <ProtectedRoute>{element}</ProtectedRoute>;
 
@@ -42,6 +44,8 @@ function App() {
                 <AuthProvider>
                     <Router>
                         <ScrollToTop />
+                        {/* Cartel "Hay una versión nueva" (03/11/2026): en todas las pantallas menos la presentación. */}
+                        <AvisoVersionNueva />
                         <Routes>
                             {/* Inicio (03/11/2026): con sesión va al panel; sin sesión muestra la presentación. */}
                             <Route path="/" element={<Inicio />} />
@@ -111,6 +115,8 @@ function App() {
                             <Route path="/equipo" element={guard(<EquipoPage />)} />
                             <Route path="/suscripcion" element={guard(<SuscripcionPage />)} />
                             <Route path="/guia" element={guard(<GuiaPage />)} />
+                            {/* Control de RutNail (0091): solo la dueña de la plataforma; la página redirige a cualquier otro. */}
+                            <Route path="/control" element={guard(<ControlPage />)} />
                             <Route path="*" element={<Navigate to="/panel" replace />} />
                         </Routes>
                     </Router>
