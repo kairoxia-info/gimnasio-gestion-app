@@ -30,6 +30,11 @@ const ENTRADAS = [
     '../../package-lock.json',
 ];
 
+// Las variables que terminan dentro de la app. Solo estas y no todas las VITE_: Vercel puede agregar por
+// su cuenta otras como VITE_VERCEL_GIT_COMMIT_SHA, que cambian en cada subida, y con ellas la huella
+// cambiaría aunque la app fuera la misma. Si la app empieza a leer otra VITE_, va en esta lista.
+const VARIABLES = ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_URL'];
+
 const archivosDe = (ruta) => {
     if (!existsSync(ruta)) return [];
     if (!statSync(ruta).isDirectory()) return [ruta];
@@ -45,11 +50,7 @@ const huellaDeLaApp = (raiz) => {
             hash.update(clave);
             hash.update(readFileSync(archivo));
         });
-    // Las variables VITE_ también terminan dentro de la app.
-    Object.keys(process.env)
-        .filter((nombre) => nombre.startsWith('VITE_'))
-        .sort()
-        .forEach((nombre) => hash.update(`${nombre}=${process.env[nombre]}`));
+    VARIABLES.forEach((nombre) => hash.update(`${nombre}=${process.env[nombre] ?? ''}`));
     return hash.digest('hex').slice(0, 12);
 };
 
