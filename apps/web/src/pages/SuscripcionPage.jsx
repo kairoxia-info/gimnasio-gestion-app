@@ -149,7 +149,7 @@ const SuscripcionPage = () => {
         setCancelando(true);
         for (let i = 0; i < 10; i += 1) {
             const data = await cargar();
-            if (data && data.estado !== 'activa') {
+            if (data && !data.tiene_cobro_automatico) {
                 setConfirmado(false);
                 setCancelado(true);
                 break;
@@ -285,7 +285,7 @@ const SuscripcionPage = () => {
                     </div>
 
                     <h2 className="font-display mb-3 text-xl font-bold">
-                        {info.estado === 'activa' ? 'Cambiar de plan o renovar' : 'Elige tu plan'}
+                        {info.tiene_cobro_automatico ? 'Cambiar de plan' : info.estado === 'activa' ? 'Cambiar de plan o renovar' : 'Elige tu plan'}
                     </h2>
                     <div
                         role="group"
@@ -368,18 +368,33 @@ const SuscripcionPage = () => {
 
                     {elegido && !info.planes.some((p) => p.clave === elegido && ((p.max_alumnos !== null && info.uso.alumnos > p.max_alumnos) || info.uso.gimnasios > p.max_gimnasios)) && (
                         <Card className="mt-6">
-                            <h3 className="font-display text-lg font-bold">Pagar con Mercado Pago</h3>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Pagarás {formatoPesos(info.planes.find((p) => p.clave === elegido).montos[periodoClave])}{' '}
-                                {periodo.meses > 1 ? `cada ${periodo.meses} meses` : 'cada mes'}, con cobro automático. Puedes cancelarlo
-                                cuando quieras desde esta pantalla.
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Te llevamos a Mercado Pago, donde pagas con tu cuenta o con tu tarjeta.
-                            </p>
-                            <Btn className="mt-4" onClick={pagar} disabled={pagando}>
-                                <CreditCard className="h-4 w-4" /> {pagando ? 'Abriendo Mercado Pago...' : 'Pagar con Mercado Pago'}
-                            </Btn>
+                            {/* Con un cobro vivo, otro pago sumaría un segundo cobro en Mercado Pago sin cancelar el
+                                primero (la base también lo rechaza, migración 0095). */}
+                            {info.tiene_cobro_automatico ? (
+                                <>
+                                    <h3 className="font-display text-lg font-bold">Primero cancela tu cobro actual</h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Para que no se te cobren los dos planes, cancela el cobro automático en esta misma pantalla, más
+                                        arriba, y vuelve a elegir el plan. Lo que ya pagaste se mantiene: el plan nuevo se suma a los días
+                                        que te queden.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 className="font-display text-lg font-bold">Pagar con Mercado Pago</h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Pagarás {formatoPesos(info.planes.find((p) => p.clave === elegido).montos[periodoClave])}{' '}
+                                        {periodo.meses > 1 ? `cada ${periodo.meses} meses` : 'cada mes'}, con cobro automático. Puedes
+                                        cancelarlo cuando quieras desde esta pantalla.
+                                    </p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Te llevamos a Mercado Pago, donde pagas con tu cuenta o con tu tarjeta.
+                                    </p>
+                                    <Btn className="mt-4" onClick={pagar} disabled={pagando}>
+                                        <CreditCard className="h-4 w-4" /> {pagando ? 'Abriendo Mercado Pago...' : 'Pagar con Mercado Pago'}
+                                    </Btn>
+                                </>
+                            )}
                             {error && (
                                 <p role="alert" className="mt-3 text-sm font-semibold text-destructive">
                                     {error}

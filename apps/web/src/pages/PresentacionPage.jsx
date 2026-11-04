@@ -795,6 +795,25 @@ const PresentacionPage = () => {
                             entran con el enlace que les da su profesor desde adentro de la app. */}
                         <Link to="/login" className="hover:text-foreground">Ingreso del profesor</Link>
                         <Link to="/terminos" className="hover:text-foreground">Términos y privacidad</Link>
+                        {/* Exigidos para quien vende por internet (Disposición 954/2025): visibles desde el primer
+                            acceso y sin registro ni trámites. Abren WhatsApp con el pedido escrito; ver punto 7 de
+                            los términos. */}
+                        <a
+                            href={enlaceWhatsApp('Hola, quiero arrepentirme de mi contratación de RutNail.')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-foreground"
+                        >
+                            Botón de arrepentimiento
+                        </a>
+                        <a
+                            href={enlaceWhatsApp('Hola, quiero dar de baja mi servicio de RutNail.')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-foreground"
+                        >
+                            Botón de baja de servicio
+                        </a>
                         <a href={enlaceWhatsApp('Hola, quiero consultar por RutNail')} className="inline-flex items-center gap-1.5 hover:text-foreground">
                             <MessageCircle className="h-4 w-4" /> WhatsApp
                         </a>

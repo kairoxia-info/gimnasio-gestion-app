@@ -294,7 +294,7 @@ export const AYUDAS = {
             { nombre: 'Mensual · Trimestral · Semestral', que: 'Cuánto pagas por mes según el período. Pagando varios meses juntos hay descuento (10 % y 20 %).' },
             { nombre: 'Elegir este plan', que: 'Selecciona el plan y abre el pago. Si tienes más alumnos o gimnasios de los que permite un plan, no te deja elegirlo.' },
             { nombre: 'Pagar con Mercado Pago', que: 'Te lleva a Mercado Pago a pagar. Al volver, esta pantalla confirma el pago sola. Después se cobra automáticamente en cada período.' },
-            { nombre: 'Cancelar el cobro automático', que: 'Deja de cobrarte. Sigues con acceso hasta el vencimiento ya pagado.' },
+            { nombre: 'Cancelar el cobro automático', que: 'Deja de cobrarte. Sigues con acceso hasta el vencimiento ya pagado. Para cambiar de plan, primero hay que cancelarlo: así no se cobran los dos, y el plan nuevo se suma a los días que te queden.' },
         ],
         consejos: [
             'Si la suscripción vence, la cuenta pasa 7 días a solo lectura (ves todo pero no puedes editar) y después se pausa. Tus datos no se borran.',
@@ -336,7 +336,7 @@ export const AYUDAS = {
                 nombre: 'Archivo de pagos',
                 que: 'Resume en un total por mes los pagos anteriores a la fecha que elijas y borra su detalle. Esos comprobantes ya no se pueden reimprimir; el total sigue en "Ingresos por mes". Queda anotado en el Historial.',
             },
-            { nombre: 'Eliminar cuenta', que: 'Borra tu cuenta y todo lo que contiene. Pide tu contraseña y no se puede deshacer.' },
+            { nombre: 'Eliminar cuenta', que: 'Borra tu cuenta y todo lo que contiene. Pide tu contraseña y no se puede deshacer. Si tienes el cobro automático activo, primero cancélalo desde Suscripción.' },
         ],
     },
 };

@@ -344,6 +344,21 @@ export const AuthProvider = ({ children }) => {
                     };
                 }
 
+                // Con el cobro automático vivo, Mercado Pago seguiría cobrando después de borrar la cuenta. La
+                // base también lo rechaza (0094), pero acá se frena antes de borrar los archivos. Consulta
+                // fresca: el perfil en memoria puede ser de antes de cancelar.
+                if (propios.length === 1) {
+                    const { data: suscripcion } = await supabase.rpc('mi_suscripcion');
+                    if (suscripcion?.tiene_cobro_automatico) {
+                        return {
+                            error: {
+                                message:
+                                    'Primero cancela el cobro automático desde la pantalla Suscripción. Si no, Mercado Pago seguiría cobrando.',
+                            },
+                        };
+                    }
+                }
+
                 const { error: authError } = await supabase.auth.signInWithPassword({
                     email: user.email,
                     password,
