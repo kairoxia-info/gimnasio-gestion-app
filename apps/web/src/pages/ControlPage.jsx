@@ -126,6 +126,88 @@ const Seccion = ({ titulo, sub, children }) => (
     </section>
 );
 
+// Bot de Telegram (migración 0092). El enlace se muestra como botón en vez de abrirse solo: el navegador
+// bloquea las ventanas que se abren después de esperar una respuesta.
+const AvisosTelegram = () => {
+    const [conectado, setConectado] = useState(null);
+    const [enlace, setEnlace] = useState('');
+    const [preparando, setPreparando] = useState(false);
+    const [error, setError] = useState('');
+
+    const revisar = useCallback(async () => {
+        const { data } = await supabase.rpc('telegram_conectado');
+        setConectado(data === true);
+        if (data === true) setEnlace('');
+    }, []);
+
+    useEffect(() => {
+        revisar();
+    }, [revisar]);
+
+    const conectar = async () => {
+        setPreparando(true);
+        setError('');
+        const { data, error: errorFuncion } = await supabase.functions.invoke('telegram-bot', { body: { accion: 'conectar' } });
+        if (data?.enlace) {
+            setEnlace(data.enlace);
+        } else {
+            // Con un error, el mensaje de la función viene en el cuerpo de la respuesta.
+            const cuerpo = await errorFuncion?.context?.json?.().catch(() => null);
+            setError(cuerpo?.error || 'No se pudo preparar la conexión. Inténtalo de nuevo en un momento.');
+        }
+        setPreparando(false);
+    };
+
+    return (
+        <Seccion
+            titulo="Avisos por Telegram"
+            sub="Te avisa si hay una cuenta nueva, un pago, una cancelación o un error, y le puedes preguntar cómo está todo."
+        >
+            <div className="rounded-2xl border border-border bg-card p-4">
+                {error && (
+                    <div className="mb-3">
+                        <ErrorBox>{error}</ErrorBox>
+                    </div>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm">
+                        {conectado === null ? (
+                            'Revisando…'
+                        ) : conectado ? (
+                            <span className="font-semibold text-ok">Conectado a tu Telegram</span>
+                        ) : (
+                            <span className="font-semibold">Todavía no está conectado</span>
+                        )}
+                    </p>
+                    {conectado !== null && !enlace && (
+                        <Btn variant={conectado ? 'ghost' : 'primary'} onClick={conectar} disabled={preparando}>
+                            {preparando ? 'Preparando…' : conectado ? 'Volver a conectar' : 'Conectar Telegram'}
+                        </Btn>
+                    )}
+                </div>
+                {enlace && (
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <a
+                            href={enlace}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition active:scale-[0.98]"
+                        >
+                            Abrir Telegram
+                        </a>
+                        <Btn variant="ghost" onClick={revisar}>
+                            Ya lo conecté
+                        </Btn>
+                        <p className="w-full text-xs text-muted-foreground">
+                            En Telegram toca "Iniciar". El enlace sirve una sola vez y vence en 10 minutos.
+                        </p>
+                    </div>
+                )}
+            </div>
+        </Seccion>
+    );
+};
+
 const ControlPage = () => {
     const { profile, loading: cargandoPerfil } = useAuth();
     const [dias, setDias] = useState(7);
@@ -237,6 +319,8 @@ const ControlPage = () => {
                             <Dato label="Errores en pantallas" valor={p.errores} alerta={p.errores > 0} />
                             <Dato label="Problemas del servidor" valor={p.problemas_servidor} alerta={p.problemas_servidor > 0} />
                         </div>
+
+                        <AvisosTelegram />
 
                         {/* Cuentas */}
                         <Seccion titulo={`Cuentas (${cuentas.length})`} sub="La más nueva primero. Los errores son los del período elegido.">
