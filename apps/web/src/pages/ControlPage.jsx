@@ -3,7 +3,7 @@ import { Helmet } from 'react-helmet';
 import { Navigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
-import { Badge, Btn, Empty, ErrorBox, Loading, Select } from '@/components/ui-kit';
+import { Badge, Btn, Empty, ErrorBox, Input, Loading, Select } from '@/components/ui-kit';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { money } from '@/lib/format';
@@ -208,6 +208,165 @@ const AvisosTelegram = () => {
     );
 };
 
+// Verificación en dos pasos (migración 0097). Desde acá se activa para la cuenta de la dueña; la pantalla
+// que pide el código al ingresar es components/SegundoPaso.jsx.
+const DosPasos = () => {
+    // undefined = revisando; null = sin activar; un objeto = el factor activo.
+    const [factor, setFactor] = useState(undefined);
+    const [alta, setAlta] = useState(null);
+    const [codigo, setCodigo] = useState('');
+    const [trabajando, setTrabajando] = useState(false);
+    const [confirmandoBaja, setConfirmandoBaja] = useState(false);
+    const [error, setError] = useState('');
+
+    const revisar = useCallback(async () => {
+        const { data, error: errorFactores } = await supabase.auth.mfa.listFactors();
+        if (errorFactores) {
+            setError('No se pudo revisar la verificación. Revisa la conexión.');
+            return;
+        }
+        setFactor(data?.totp?.[0] ?? null);
+    }, []);
+
+    useEffect(() => {
+        revisar();
+    }, [revisar]);
+
+    const empezar = async () => {
+        setTrabajando(true);
+        setError('');
+        // Un alta que quedó a medias no deja crear otra con el mismo nombre.
+        const { data: factores } = await supabase.auth.mfa.listFactors();
+        for (const f of factores?.all ?? []) {
+            if (f.status !== 'verified') await supabase.auth.mfa.unenroll({ factorId: f.id });
+        }
+        const { data, error: errorAlta } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'RutNail' });
+        if (errorAlta || !data) {
+            setError('No se pudo empezar la activación. Prueba de nuevo en un momento.');
+        } else {
+            setAlta({ id: data.id, qr: data.totp.qr_code, clave: data.totp.secret });
+        }
+        setTrabajando(false);
+    };
+
+    const confirmar = async (e) => {
+        e.preventDefault();
+        setTrabajando(true);
+        setError('');
+        const { error: errorCodigo } = await supabase.auth.mfa.challengeAndVerify({ factorId: alta.id, code: codigo });
+        if (errorCodigo) {
+            setError(
+                errorCodigo.code === 'mfa_verification_failed'
+                    ? 'Ese código no es correcto o ya cambió. Escribe el que se ve ahora en tu app.'
+                    : 'No se pudo verificar el código. Prueba de nuevo en unos segundos.',
+            );
+            setCodigo('');
+        } else {
+            setAlta(null);
+            setCodigo('');
+            await revisar();
+        }
+        setTrabajando(false);
+    };
+
+    const desactivar = async () => {
+        setTrabajando(true);
+        setError('');
+        const { error: errorBaja } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        if (errorBaja) setError('No se pudo desactivar. Prueba de nuevo en un momento.');
+        else await revisar();
+        setConfirmandoBaja(false);
+        setTrabajando(false);
+    };
+
+    return (
+        <Seccion
+            titulo="Verificación en dos pasos"
+            sub="Además de la contraseña, para entrar a tu cuenta se pide un código que cambia cada 30 segundos en tu celular."
+        >
+            <div className="rounded-2xl border border-border bg-card p-4">
+                {error && (
+                    <div className="mb-3">
+                        <ErrorBox>{error}</ErrorBox>
+                    </div>
+                )}
+
+                {alta ? (
+                    <form onSubmit={confirmar} className="space-y-4">
+                        <ol className="list-decimal space-y-1 pl-5 text-sm">
+                            <li>Instala en tu celular Google Authenticator o Microsoft Authenticator.</li>
+                            <li>En esa app, agrega una cuenta y escanea este código.</li>
+                            <li>Escribe abajo el código de 6 números que te muestra.</li>
+                        </ol>
+                        <img src={alta.qr} alt="Código QR para la app de autenticación" className="h-48 w-48 rounded-xl bg-white p-2" />
+                        <div className="rounded-xl border border-warn/50 bg-warn/10 p-3 text-sm">
+                            <p className="font-semibold">Guarda esta clave en un lugar seguro</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Sirve para volver a cargar la cuenta si cambias de celular, o para escribirla a mano si no puedes
+                                escanear el código.
+                            </p>
+                            <code className="mt-2 block select-all break-all font-mono text-sm">{alta.clave}</code>
+                        </div>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div className="w-40">
+                                <Input
+                                    value={codigo}
+                                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    placeholder="123456"
+                                    aria-label="Código de 6 números"
+                                    className="text-center tracking-[0.3em]"
+                                    required
+                                />
+                            </div>
+                            <Btn type="submit" disabled={trabajando || codigo.length !== 6}>
+                                {trabajando ? 'Verificando...' : 'Activar'}
+                            </Btn>
+                            <Btn variant="ghost" onClick={() => setAlta(null)} disabled={trabajando}>
+                                Cancelar
+                            </Btn>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm">
+                            {factor === undefined ? (
+                                'Revisando…'
+                            ) : factor ? (
+                                <span className="font-semibold text-ok">Activada en tu cuenta</span>
+                            ) : (
+                                <span className="font-semibold">Todavía no está activada</span>
+                            )}
+                        </p>
+                        {factor === null && (
+                            <Btn onClick={empezar} disabled={trabajando}>
+                                {trabajando ? 'Preparando…' : 'Activar verificación'}
+                            </Btn>
+                        )}
+                        {factor && !confirmandoBaja && (
+                            <Btn variant="ghost" onClick={() => setConfirmandoBaja(true)}>
+                                Desactivar
+                            </Btn>
+                        )}
+                        {factor && confirmandoBaja && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm text-muted-foreground">¿Desactivar la verificación?</span>
+                                <Btn variant="danger" onClick={desactivar} disabled={trabajando}>
+                                    Sí, desactivar
+                                </Btn>
+                                <Btn variant="ghost" onClick={() => setConfirmandoBaja(false)}>
+                                    No
+                                </Btn>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </Seccion>
+    );
+};
+
 const ControlPage = () => {
     const { profile, loading: cargandoPerfil } = useAuth();
     const [dias, setDias] = useState(7);
@@ -321,6 +480,7 @@ const ControlPage = () => {
                         </div>
 
                         <AvisosTelegram />
+                        <DosPasos />
 
                         {/* Cuentas */}
                         <Seccion titulo={`Cuentas (${cuentas.length})`} sub="La más nueva primero. Los errores son los del período elegido.">

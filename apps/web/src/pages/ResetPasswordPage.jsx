@@ -7,11 +7,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/AppLayout';
 import { Btn, ErrorBox, Field, PasswordInput } from '@/components/ui-kit';
 import AuthBackdrop from '@/components/AuthBackdrop';
+import SegundoPaso from '@/components/SegundoPaso';
 import { validarContrasena } from '@/lib/validacionPassword';
 import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
 
 const ResetPasswordPage = () => {
-    const { user, loading: authLoading, updatePassword, signOut } = useAuth();
+    const { user, loading: authLoading, necesitaSegundoPaso, updatePassword, signOut } = useAuth();
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
@@ -56,11 +57,14 @@ const ResetPasswordPage = () => {
         }
     };
 
+    // Con la verificación en dos pasos activada, Supabase no deja cambiar la contraseña sin pasar el código.
+    if (necesitaSegundoPaso) return <SegundoPaso />;
+
     return (
         <AuthBackdrop>
             <Helmet>
                 <title>Restablecer contraseña | RutNail</title>
-                <meta name="description" content="Definí una nueva contraseña para tu cuenta de RutNail." />
+                <meta name="description" content="Define una nueva contraseña para tu cuenta de RutNail." />
             </Helmet>
 
             <motion.div

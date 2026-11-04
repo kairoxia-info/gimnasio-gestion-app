@@ -1,6 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, Navigate, useLocation } from 'react-router-dom';
+import SegundoPaso from '@/components/SegundoPaso';
 import { useAuth } from '@/contexts/AuthContext';
 import { rutaDeIngreso } from '@/lib/rutaDeIngreso';
 
@@ -80,13 +81,16 @@ const SuscripcionBloqueada = ({ esAdmin, signOut }) => (
 );
 
 const ProtectedRoute = ({ children }) => {
-    const { isAuthed, profile, loading, signOut, refreshProfile } = useAuth();
+    const { isAuthed, profile, loading, necesitaSegundoPaso, signOut, refreshProfile } = useAuth();
     const location = useLocation();
 
     if (loading) return <FullscreenSpinner />;
 
     // Sin sesión: cada uno vuelve a su ingreso (el del equipo o el del profesor).
     if (!isAuthed) return <Navigate to={rutaDeIngreso()} replace />;
+
+    // Cuenta con verificación en dos pasos y sesión que todavía no pasó el código.
+    if (necesitaSegundoPaso) return <SegundoPaso />;
 
     const tieneGimnasio = !!profile?.gimnasio_id;
 

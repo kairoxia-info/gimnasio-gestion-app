@@ -54,10 +54,25 @@ const contextoDeLimpieza = (profile) => ({
     otrosEnOrganizacion: !!(profile?.misGimnasios ?? []).find((g) => g.id === profile?.gimnasio_id)?.otros_en_organizacion,
 });
 
+// Verificación en dos pasos (04/11/2026): ¿la cuenta la tiene activada y esta sesión todavía no pasó el
+// código? Se lee de la propia sesión y no con mfa.getAuthenticatorAssuranceLevel(), que pide el candado de
+// auth y acá se llama desde adentro de onAuthStateChange. Ante cualquier duda deja pasar: un error acá
+// no puede dejar afuera a nadie, y lo sensible (el panel de la dueña) lo exige la base (migración 0097).
+const faltaSegundoPaso = (session) => {
+    try {
+        if (!session?.user?.factors?.some((f) => f.status === 'verified')) return false;
+        const carga = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(atob(carga)).aal !== 'aal2';
+    } catch (_) {
+        return false;
+    }
+};
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [necesitaSegundoPaso, setNecesitaSegundoPaso] = useState(false);
     // Si esta sesión ya fijó su gimnasio en la base (ver fetchProfile).
     const sesionFijadaRef = useRef(false);
     // La persona pidió ver el recorrido de bienvenida de nuevo (Guía de uso): vale hasta que lo termina.
@@ -153,6 +168,7 @@ export const AuthProvider = ({ children }) => {
         supabase.auth.getSession().then(async ({ data: { session } }) => {
             if (!mounted) return;
             setUser(session?.user ?? null);
+            setNecesitaSegundoPaso(faltaSegundoPaso(session));
             if (session?.user) await fetchProfile(session.user.id);
             setLoading(false);
         });
@@ -172,6 +188,7 @@ export const AuthProvider = ({ children }) => {
                 sesionFijadaRef.current = false;
             }
             setUser(session?.user ?? null);
+            setNecesitaSegundoPaso(faltaSegundoPaso(session));
             if (session?.user) {
                 await fetchProfile(session.user.id);
             } else {
@@ -210,6 +227,7 @@ export const AuthProvider = ({ children }) => {
             gimnasio: profile?.gimnasios ?? null,
             isAuthed: !!user,
             loading,
+            necesitaSegundoPaso,
             signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
             // emailRedirectTo (08/09/2026, pedido de Nalux de verificar el correo al
             // registrarse): mismo criterio que resetPasswordForEmail más abajo -- sin
@@ -407,7 +425,7 @@ export const AuthProvider = ({ children }) => {
                 return { error: null };
             },
         }),
-        [user, profile, loading, fetchProfile],
+        [user, profile, loading, necesitaSegundoPaso, fetchProfile],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
