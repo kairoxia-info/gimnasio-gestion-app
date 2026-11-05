@@ -7,6 +7,7 @@ import { Badge, Btn, Empty, ErrorBox, Input, Loading, Select } from '@/component
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { money } from '@/lib/format';
+import { enlaceSeguro } from '@/lib/enlaces';
 
 // Control de RutNail (migración 0091, pedido de Nalux del 03/11/2026): el panel de la dueña de la
 // plataforma, con TODAS las cuentas. Solo lo ve quien está en admins_plataforma; la base lo garantiza
@@ -188,7 +189,7 @@ const AvisosTelegram = () => {
                 {enlace && (
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                         <a
-                            href={enlace}
+                            href={enlaceSeguro(enlace)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition active:scale-[0.98]"

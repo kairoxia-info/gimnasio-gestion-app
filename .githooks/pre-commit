@@ -1,0 +1,10 @@
+#!/bin/sh
+# Bloquea el commit si lo preparado trae claves o datos personales (el repositorio es público).
+if ! node scripts/revisar-secretos.mjs --staged; then
+  echo ""
+  echo "Commit bloqueado. Qué revisar:"
+  echo "  1. Quita la clave o el dato personal de los archivos indicados y vuelve a prepararlos (git add)."
+  echo "  2. Si una clave llegó a escribirse en un archivo, considérala expuesta y genera una nueva."
+  echo "  3. Si el valor es público a propósito, avisa para agregarlo a la lista permitida del script."
+  exit 1
+fi

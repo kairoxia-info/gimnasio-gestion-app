@@ -1,0 +1,25 @@
+name: Seguridad
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 12 * * 1' # lunes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Buscar claves en los archivos versionados
+        run: node scripts/revisar-secretos.mjs --claves
+      - name: Auditar dependencias (solo las de producción)
+        run: npm audit --omit=dev --audit-level=high

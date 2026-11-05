@@ -1,3 +1,5 @@
+import { enlaceSeguro } from './enlaces';
+
 // Lógica compartida para decidir si el media_url de un ejercicio se puede
 // mostrar adentro de la app (imagen o video embebido) o si hay que abrirlo
 // como link externo. Vivía duplicada en EjerciciosPage.jsx; se separó acá
@@ -42,8 +44,11 @@ export const extensionDe = (url) => {
     return m ? m[1].toLowerCase() : null;
 };
 
-// null = no hay preview posible acá (usar el link externo tal cual).
+// null = no hay preview posible acá (usar el link externo tal cual). Una URL
+// que no sea http(s) tampoco llega nunca a un reproductor: devuelve null y,
+// como el link externo también pasa por enlaceSeguro(), no se muestra nada.
 export const tipoDePreview = (mediaUrl) => {
+    if (!enlaceSeguro(mediaUrl)) return null;
     const ext = extensionDe(mediaUrl);
     if (EXTENSIONES_IMAGEN.includes(ext)) return 'imagen'; // cualquier host: es un archivo de imagen posta
     if (!pathEnBucket(mediaUrl)) return null; // video externo: solo confiamos si es nuestro propio archivo

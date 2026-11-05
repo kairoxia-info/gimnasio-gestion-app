@@ -5,6 +5,7 @@
 // aprueba y de una tiene con qué entrar, sin que el profesor tenga que
 // pensar un usuario y una contraseña a mano).
 import supabase from './supabaseClient';
+import { validarContrasenaAlumno } from './validacionPassword';
 
 // Primer nombre, sin acentos ni espacios, en minúsculas -- mismo estilo que
 // ya usa Nalux a mano ("nadia1"). Si el nombre es muy corto (o viene vacío),
@@ -27,6 +28,9 @@ export const usuarioBaseDesdeNombre = (nombreCompleto) => {
 // generador criptográfico. Ahora son 10 (2 + 4 + 4, ~39 bits) con
 // crypto.getRandomValues -- sigue siendo fácil de dictar, y si algún día se
 // filtrara la base el hash cuesta mucho más de romper (auditoría del 28/10).
+// Siempre cumple la regla de validarContrasenaAlumno() (10+ caracteres,
+// mayúscula, minúscula y número), incluido no contener el usuario: por eso
+// recibe el usuario y saca otra si por casualidad lo contiene.
 //
 // Elige con rechazo (no con módulo) para que todos los caracteres salgan con
 // la misma probabilidad.
@@ -39,12 +43,20 @@ const elegirAlAzar = (conjunto) => {
     return conjunto[byte[0] % conjunto.length];
 };
 
-export const generarContrasenaAlumno = () => {
+const sacarContrasena = () => {
     const letrasMayus = 'ABCDEFGHJKMNPQRSTUVWXYZ';
     const letrasMinus = 'abcdefghjkmnpqrstuvwxyz';
     const numeros = '23456789';
     const veces = (n, conjunto) => Array.from({ length: n }, () => elegirAlAzar(conjunto)).join('');
     return `${veces(2, letrasMayus)}${veces(4, letrasMinus)}${veces(4, numeros)}`;
+};
+
+export const generarContrasenaAlumno = (usuario = '') => {
+    for (let i = 0; i < 50; i++) {
+        const contrasena = sacarContrasena();
+        if (!validarContrasenaAlumno(contrasena, usuario)) return contrasena;
+    }
+    throw new Error('No se pudo generar una contraseña válida. Probar de nuevo.');
 };
 
 // Crea el acceso completo a partir del nombre del alumno, reintentando con
@@ -54,10 +66,12 @@ export const generarContrasenaAlumno = () => {
 // { usuario, contrasena } ya guardados.
 export const crearAccesoAutomatico = async (alumno) => {
     const base = usuarioBaseDesdeNombre(alumno.nombre);
-    const contrasena = generarContrasenaAlumno();
     const TOPE_INTENTOS = 20;
     for (let intento = 0; intento < TOPE_INTENTOS; intento++) {
         const usuario = intento === 0 ? base : `${base}${intento + 1}`;
+        // Se genera por intento: el usuario cambia (ana, ana2...) y la
+        // contraseña no puede contener el usuario con el que se guarda.
+        const contrasena = generarContrasenaAlumno(usuario);
         const { error } = await supabase.rpc('crear_acceso_alumno', {
             p_alumno_id: alumno.id,
             p_usuario: usuario,

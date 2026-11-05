@@ -40,6 +40,8 @@ const llamarSuscripcion = async (body) => {
     return { data };
 };
 
+const TEXTO_AJUSTE_DIAS = 'Si cambias de plan, los días que te quedan se ajustan según el precio del plan nuevo.';
+
 const textoTope = (n, singular, plural) => (n === null || n === undefined ? 'sin límite' : `${n} ${n === 1 ? singular : plural}`);
 
 const SuscripcionPage = () => {
@@ -178,6 +180,15 @@ const SuscripcionPage = () => {
             : info?.acceso === 'bloqueado'
               ? 'Tu suscripción venció y el acceso está pausado. Renueva el plan y todo vuelve a estar como lo dejaste.'
               : '';
+
+    // Al cambiar de plan, los días pagos que quedan se convierten según el precio del plan nuevo
+    // (ya no se suman tal cual). Se avisa solo si hay días pagos y se eligió un plan distinto al actual.
+    const avisoAjusteDias =
+        !!elegido &&
+        elegido !== info?.plan &&
+        (info?.estado === 'activa' || info?.estado === 'cancelada') &&
+        info?.acceso === 'completo' &&
+        (info?.dias_restantes ?? 0) > 0;
 
     return (
         <AppLayout title="Suscripción" subtitle="Tu plan, tu uso y el pago con Mercado Pago." ayuda={AYUDAS.suscripcion}>
@@ -375,13 +386,14 @@ const SuscripcionPage = () => {
                                     <h3 className="font-display text-lg font-bold">Primero cancela tu cobro actual</h3>
                                     <p className="mt-1 text-sm text-muted-foreground">
                                         Para que no se te cobren los dos planes, cancela el cobro automático en esta misma pantalla, más
-                                        arriba, y vuelve a elegir el plan. Lo que ya pagaste se mantiene: el plan nuevo se suma a los días
-                                        que te queden.
+                                        arriba, y vuelve a elegir el plan. Lo que ya pagaste no se pierde.
                                     </p>
+                                    {avisoAjusteDias && <p className="mt-1 text-sm text-muted-foreground">{TEXTO_AJUSTE_DIAS}</p>}
                                 </>
                             ) : (
                                 <>
                                     <h3 className="font-display text-lg font-bold">Pagar con Mercado Pago</h3>
+                                    {avisoAjusteDias && <p className="mt-1 text-sm text-muted-foreground">{TEXTO_AJUSTE_DIAS}</p>}
                                     <p className="mt-1 text-sm text-muted-foreground">
                                         Pagarás {formatoPesos(info.planes.find((p) => p.clave === elegido).montos[periodoClave])}{' '}
                                         {periodo.meses > 1 ? `cada ${periodo.meses} meses` : 'cada mes'}, con cobro automático. Puedes

@@ -1,0 +1,2 @@
+# Los ganchos de git los ejecuta sh: con fin de línea de Windows dejarían de funcionar.
+.githooks/* text eol=lf

@@ -4,7 +4,7 @@ import { Check, Copy, MessageCircle } from 'lucide-react';
 import supabase from '@/lib/supabaseClient';
 import { Btn, Card, Empty, ErrorBox, Field, Input, PasswordInput } from '@/components/ui-kit';
 import { copiarAlPortapapeles } from '@/lib/copiar';
-import { validarContrasena } from '@/lib/validacionPassword';
+import { validarContrasenaAlumno } from '@/lib/validacionPassword';
 import { crearAccesoAutomatico, generarContrasenaAlumno } from '@/lib/accesoAlumno';
 import { updateRec } from '@/lib/data';
 
@@ -58,12 +58,12 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
     const guardar = async (e) => {
         e.preventDefault();
         setError('');
-        // Pedido de Nalux (09/09/2026, ajustado el mismo día: mínimo 8, no
-        // 4): al menos una mayúscula, también acá. Se valida del lado del
-        // cliente para el aviso inmediato, y también adentro de
-        // crear_acceso_alumno() (migración) por si algún día se llama a la
-        // RPC directo, sin pasar por este formulario.
-        const errorContrasena = validarContrasena(contrasenaForm, 8);
+        // Regla del 05/11/2026 (auditoría): 10+ caracteres, mayúscula,
+        // minúscula, número, sin el usuario y fuera de la lista de claves
+        // fáciles. Se valida acá para el aviso inmediato, y también adentro
+        // de crear_acceso_alumno() (migración 0098), que es la que manda por
+        // si algún día se llama a la RPC directo.
+        const errorContrasena = validarContrasenaAlumno(contrasenaForm, usuarioForm.trim());
         if (errorContrasena) {
             setError(errorContrasena);
             return;
@@ -132,7 +132,7 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
         setRegenerando(true);
         setError('');
         try {
-            const nueva = generarContrasenaAlumno();
+            const nueva = generarContrasenaAlumno(alumno.usuario);
             const { error: err } = await supabase.rpc('crear_acceso_alumno', {
                 p_alumno_id: alumno.id,
                 p_usuario: alumno.usuario,
@@ -418,14 +418,14 @@ const AccesoAlumno = ({ alumno, onCambiado }) => {
                             <PasswordInput
                                 value={contrasenaForm}
                                 onChange={(e) => setContrasenaForm(e.target.value)}
-                                placeholder="Mínimo 8 caracteres"
+                                placeholder="Mínimo 10 caracteres"
                                 required
-                                minLength={8}
+                                minLength={10}
                                 autoComplete="new-password"
                             />
                             <span className="text-xs text-muted-foreground">
-                                Mínimo 8 caracteres, con al menos una mayúscula. El ojito la muestra para
-                                dictarla.
+                                Mínimo 10 caracteres, con mayúscula, minúscula y número, y sin el usuario.
+                                El ojito la muestra para dictarla.
                             </span>
                         </Field>
                     </div>

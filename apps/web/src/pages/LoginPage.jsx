@@ -13,6 +13,8 @@ import { validarContrasena } from '@/lib/validacionPassword';
 const traducirError = (err, modo) => {
     const msg = err?.message || '';
     if (msg.includes('Invalid login credentials')) return 'Correo o contraseña incorrectos.';
+    if (msg.includes('Email not confirmed'))
+        return 'Tu correo todavía no está confirmado. Revisa tu bandeja de entrada y también el spam.';
     if (msg.includes('already registered') || msg.includes('already exists')) return 'Ese correo ya está registrado.';
     if (msg.includes('Password should be at least')) return 'La contraseña debe tener al menos 8 caracteres.';
     // 14/09/2026: mensaje real que devuelve Supabase cuando falta minúscula,
@@ -37,7 +39,7 @@ const traducirError = (err, modo) => {
 // registro (ruta /registro, 03/11/2026): los botones "Probar 7 días gratis" de la página de presentación abren
 // directo el formulario de crear cuenta (la persona igual puede pasar a "Ingresar" desde la misma pantalla).
 const LoginPage = ({ modoEquipo = false, registro = false }) => {
-    const { signIn, signUp, signOut, isAuthed, user, profile, loading: authLoading } = useAuth();
+    const { signIn, signUp, signOut, reenviarConfirmacion, isAuthed, user, profile, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     // true desde que se envía el formulario: solo entonces, con la sesión ya abierta, se pasa al panel
     // solo. Si la sesión estaba abierta de antes (por ejemplo el panel del profesor en otra pestaña),
@@ -52,8 +54,24 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
     const [info, setInfo] = useState('');
     const [loading, setLoading] = useState(false);
     const [recoveryOpen, setRecoveryOpen] = useState(false);
+    // La persona intentó ingresar sin confirmar el correo: se ofrece mandarle el mensaje otra vez.
+    const [sinConfirmar, setSinConfirmar] = useState(false);
+    const [aceptaTerminos, setAceptaTerminos] = useState(false);
 
     if (!authLoading && isAuthed && ingresoReciente.current) return <Navigate to="/panel" replace />;
+
+    const reenviar = async () => {
+        setLoading(true);
+        const { error: err } = await reenviarConfirmacion(email.trim());
+        setLoading(false);
+        setSinConfirmar(false);
+        if (err) {
+            setError('No se pudo reenviar el correo. Prueba de nuevo en unos minutos.');
+            return;
+        }
+        setError('');
+        setInfo('Te enviamos otro correo para confirmar tu cuenta. Revisa también el spam.');
+    };
 
     const isLogin = mode === 'login';
 
@@ -66,6 +84,10 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
         // al REGISTRARSE, no al iniciar sesión -- una cuenta ya creada antes
         // de esta regla no tiene por qué dejar de poder entrar.
         if (!isLogin) {
+            if (!aceptaTerminos) {
+                setError('Para crear la cuenta tienes que aceptar los Términos y la Política de privacidad.');
+                return;
+            }
             // minLength 8 + exigirMinusculaYNumero (14/09/2026): esta cuenta
             // pasa por Supabase Auth, que tiene esa política configurada del
             // lado del servidor -- ver el comentario largo en
@@ -86,6 +108,8 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
                 const { data, error: err } = await signUp(email.trim(), password, {
                     first_name: firstName.trim(),
                     last_name: lastName.trim(),
+                    // Constancia de la aceptación: la fecha indica qué versión de los términos estaba vigente.
+                    terminos_aceptados_en: new Date().toISOString(),
                 });
                 if (err) throw err;
                 if (data?.session) {
@@ -98,6 +122,7 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
             }
         } catch (err) {
             ingresoReciente.current = false;
+            setSinConfirmar(isLogin && (err?.message || '').includes('Email not confirmed'));
             setError(traducirError(err, mode));
         } finally {
             setLoading(false);
@@ -302,21 +327,42 @@ const LoginPage = ({ modoEquipo = false, registro = false }) => {
                         correo/contraseña, navegar en la misma pestaña le borraría el
                         formulario a mitad de carga. */}
                     {!isLogin && (
-                        <p className="text-center text-xs text-muted-foreground">
-                            Al crear una cuenta, aceptas los{' '}
-                            <Link
-                                to="/terminos"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-semibold text-[#d8b876] hover:underline"
-                            >
-                                Términos y la Política de privacidad
-                            </Link>
-                            .
-                        </p>
+                        <label className="flex cursor-pointer items-start gap-2.5 text-sm text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                checked={aceptaTerminos}
+                                onChange={(e) => {
+                                    setAceptaTerminos(e.target.checked);
+                                    setError('');
+                                }}
+                                className="mt-0.5 h-4 w-4 shrink-0 accent-[#d8b876]"
+                            />
+                            <span>
+                                Leí y acepto los{' '}
+                                <Link
+                                    to="/terminos"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-semibold text-[#d8b876] hover:underline"
+                                >
+                                    Términos y la Política de privacidad
+                                </Link>
+                                .
+                            </span>
+                        </label>
                     )}
 
                     {error && <ErrorBox>{error}</ErrorBox>}
+                    {sinConfirmar && (
+                        <button
+                            type="button"
+                            onClick={reenviar}
+                            disabled={loading}
+                            className="text-sm font-medium text-[#d8b876] underline underline-offset-4 disabled:opacity-60"
+                        >
+                            Reenviar el correo de confirmación
+                        </button>
+                    )}
                     {info && !error && (
                         <div className="rounded-2xl border border-border bg-secondary p-4 text-sm text-foreground">
                             {info}

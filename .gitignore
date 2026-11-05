@@ -14,3 +14,17 @@ dist/
 
 # Log de sesión del plugin de dev de Horizons (se regenera solo)
 vault/
+
+# Claves y archivos locales (el repositorio es público)
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+.vercel/
+supabase/.env
+supabase/.temp/
+.claude/settings.local.json
+
+# Notas internas: se quedan en la computadora, no se publican
+CONTEXT.md

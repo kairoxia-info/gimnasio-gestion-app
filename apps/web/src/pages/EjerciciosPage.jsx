@@ -6,6 +6,7 @@ import { Badge, Btn, Empty, ErrorBox, Field, Input, Loading, Modal, Select, Text
 import { createRec, listAll, removeRec, updateRec } from '@/lib/data';
 import { CLASIFICACIONES, GRUPOS } from '@/lib/format';
 import { pathEnBucket, tipoDePreview } from '@/lib/mediaEjercicio';
+import { empiezaConHttp, enlaceSeguro } from '@/lib/enlaces';
 import { useAuth } from '@/contexts/AuthContext';
 import supabase from '@/lib/supabaseClient';
 import { AYUDAS } from '@/lib/guiaDeUso';
@@ -52,6 +53,7 @@ const EjerciciosPage = () => {
     // aviso de "ya tenés un archivo cargado".
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaError, setMediaError] = useState('');
+    const [enlaceError, setEnlaceError] = useState('');
     const [mediaUrlActual, setMediaUrlActual] = useState('');
     // Con varios gimnasios, borrar un ejercicio lo saca de todos: pide confirmación antes.
     const [confirmandoBorrarId, setConfirmandoBorrarId] = useState(null);
@@ -206,6 +208,7 @@ const EjerciciosPage = () => {
     const limpiarMedia = () => {
         setMediaFile(null);
         setMediaError('');
+        setEnlaceError('');
         setMediaUrlActual('');
         if (mediaInputRef.current) mediaInputRef.current.value = '';
     };
@@ -243,6 +246,16 @@ const EjerciciosPage = () => {
             return;
         }
         setGrupoError('');
+        // El enlace externo tiene que ser http(s): la base también lo exige
+        // (CHECK) y un "javascript:" se ejecutaría al tocar "Ver demostración".
+        // Si hay un archivo para subir, el campo del enlace está deshabilitado
+        // y no se guarda lo que haya quedado escrito.
+        const enlaceEscrito = form.media_url.trim();
+        if (!mediaFile && enlaceEscrito && !empiezaConHttp(enlaceEscrito)) {
+            setEnlaceError('El enlace tiene que empezar con http:// o https://');
+            return;
+        }
+        setEnlaceError('');
         setSaving(true);
         setWarning('');
         try {
@@ -252,7 +265,10 @@ const EjerciciosPage = () => {
             // pisarlo con vacío antes de saber si el archivo nuevo se subió bien. El
             // archivo, si se sube con éxito, gana recién en el updateRec de más abajo
             // (después del upload) — nunca acá.
-            const payload = { ...form };
+            const payload = { ...form, media_url: enlaceEscrito };
+            // Con archivo para subir, un enlace viejo que no sea http(s) no se
+            // reenvía (la base lo rechazaría); el archivo lo reemplaza abajo.
+            if (mediaFile && enlaceEscrito && !empiezaConHttp(enlaceEscrito)) delete payload.media_url;
 
             let id = editId;
             if (editId) await updateRec('ejercicios', editId, payload);
@@ -533,7 +549,7 @@ const EjerciciosPage = () => {
                                     {ej.descripcion && (
                                         <p className="mt-3 text-sm text-muted-foreground">{ej.descripcion}</p>
                                     )}
-                                    {ej.media_url && (
+                                    {enlaceSeguro(ej.media_url) && (
                                         tipoDePreview(ej.media_url) ? (
                                             <button
                                                 type="button"
@@ -544,7 +560,7 @@ const EjerciciosPage = () => {
                                             </button>
                                         ) : (
                                             <a
-                                                href={ej.media_url}
+                                                href={enlaceSeguro(ej.media_url)}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"
@@ -683,10 +699,14 @@ const EjerciciosPage = () => {
                     <Field label="Video o imagen demostrativa (URL externa opcional)">
                         <Input
                             value={form.media_url}
-                            onChange={(e) => setForm({ ...form, media_url: e.target.value })}
+                            onChange={(e) => {
+                                setForm({ ...form, media_url: e.target.value });
+                                setEnlaceError('');
+                            }}
                             placeholder="https://..."
                             disabled={!!mediaFile}
                         />
+                        {enlaceError && <ErrorBox>{enlaceError}</ErrorBox>}
                         <span className="text-xs text-muted-foreground">
                             Pegar un enlace de YouTube, Vimeo, etc. — o subir un archivo propio abajo.
                         </span>
@@ -745,15 +765,15 @@ const EjerciciosPage = () => {
             >
                 {previewEj && tipoDePreview(previewEj.media_url) === 'video' ? (
                     <video
-                        src={previewEj.media_url}
+                        src={enlaceSeguro(previewEj.media_url)}
                         controls
                         autoPlay
                         playsInline
                         className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-xl bg-black"
                     />
-                ) : previewEj ? (
+                ) : previewEj && tipoDePreview(previewEj.media_url) === 'imagen' ? (
                     <img
-                        src={previewEj.media_url}
+                        src={enlaceSeguro(previewEj.media_url)}
                         alt={`Demostración de ${previewEj.nombre}`}
                         className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-xl"
                     />

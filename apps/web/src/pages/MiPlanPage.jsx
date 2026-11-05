@@ -52,6 +52,7 @@ import { ESTILOS_IMPRESION_RUTINA, RutinaImprimiblePDF } from '@/components/Ruti
 import { ESTILOS_IMPRESION_ALIMENTACION, PlanAlimentacionImprimiblePDF } from '@/components/PlanAlimentacionPDF';
 import { descargarComoPdf } from '@/lib/descargarPdf';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
+import { enlaceSeguro, mailtoSeguro, whatsappSeguro } from '@/lib/enlaces';
 
 // Mismo componente y mismo criterio de carga diferida que ya usa
 // AlumnoPage.jsx (Progreso, del lado del profesor): recharts pesa ~100 KB,
@@ -1666,12 +1667,13 @@ const MiPlanPage = () => {
                                                     Después de transferir, enviar el comprobante a:
                                                 </p>
                                                 <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                                                    {plan.whatsapp_pagos && (
+                                                    {whatsappSeguro(plan.whatsapp_pagos) && (
                                                         <a
                                                             // wa.me exige el número solo con dígitos y con
                                                             // código de país -- el campo de Configuración lo
-                                                            // aclara; acá se limpia lo que haya escrito.
-                                                            href={`https://wa.me/${String(plan.whatsapp_pagos).replace(/\D/g, '')}`}
+                                                            // aclara; whatsappSeguro limpia lo que haya
+                                                            // escrito y descarta lo que no parezca un número.
+                                                            href={whatsappSeguro(plan.whatsapp_pagos)}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-5 py-4 text-lg font-bold text-primary transition active:scale-[0.98]"
@@ -1679,9 +1681,9 @@ const MiPlanPage = () => {
                                                             <MessageCircle className="h-5 w-5" aria-hidden="true" /> WhatsApp
                                                         </a>
                                                     )}
-                                                    {plan.email_pagos && (
+                                                    {mailtoSeguro(plan.email_pagos) && (
                                                         <a
-                                                            href={`mailto:${plan.email_pagos}`}
+                                                            href={mailtoSeguro(plan.email_pagos)}
                                                             className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-primary px-5 py-4 text-lg font-bold text-primary transition active:scale-[0.98]"
                                                         >
                                                             <Mail className="h-5 w-5" aria-hidden="true" /> Correo
@@ -2196,7 +2198,7 @@ const MiPlanPage = () => {
                     {previewItem && (
                         <PreviewMediaModal
                             nombre={previewItem.nombre}
-                            url={previewItem.mediaUrl}
+                            url={enlaceSeguro(previewItem.mediaUrl)}
                             tipo={tipoDePreview(previewItem.mediaUrl)}
                             onClose={() => setPreviewItem(null)}
                         />

@@ -36,6 +36,7 @@ import {
     tipoDeGrupo,
 } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
+import { enlaceSeguro } from '@/lib/enlaces';
 import { AYUDAS } from '@/lib/guiaDeUso';
 
 // Días que ya usa una rutina, en el orden de DIAS. Si algún item tuviera un
@@ -1991,13 +1992,13 @@ const RutinasPage = () => {
                 >
                     {previewHover.tipo === 'imagen' ? (
                         <img
-                            src={previewHover.ej.media_url}
+                            src={enlaceSeguro(previewHover.ej.media_url)}
                             alt=""
                             className="h-32 w-full object-cover"
                         />
                     ) : (
                         <video
-                            src={previewHover.ej.media_url}
+                            src={enlaceSeguro(previewHover.ej.media_url)}
                             className="h-32 w-full object-cover"
                             muted
                             autoPlay

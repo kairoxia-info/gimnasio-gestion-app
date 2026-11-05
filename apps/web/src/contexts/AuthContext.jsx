@@ -237,14 +237,20 @@ export const AuthProvider = ({ children }) => {
             // Apunta a la raíz (no a una página propia): LoginPage ya redirige solo a
             // /onboarding en cuanto detecta la sesión (ver ProtectedRoute.jsx), así que
             // no hace falta una pantalla dedicada para "correo confirmado".
-            signUp: (email, password, { first_name, last_name } = {}) =>
+            signUp: (email, password, { first_name, last_name, terminos_aceptados_en } = {}) =>
                 supabase.auth.signUp({
                     email,
                     password,
                     options: {
-                        data: { first_name, last_name },
+                        data: { first_name, last_name, terminos_aceptados_en },
                         emailRedirectTo: window.location.origin,
                     },
+                }),
+            reenviarConfirmacion: (email) =>
+                supabase.auth.resend({
+                    type: 'signup',
+                    email,
+                    options: { emailRedirectTo: window.location.origin },
                 }),
             // Limpia el cache y la cola de sincronización de este celular
             // (lib/offline.js) -- si no, un profesor distinto que se loguee

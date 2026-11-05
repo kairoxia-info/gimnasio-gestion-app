@@ -45,6 +45,7 @@ const MENSAJES_SEGUROS = [
   'Esa persona ya está en el equipo de este gimnasio',
   'Se alcanzó el máximo de 20 personas de staff por gimnasio',
   'No se encontró a esa persona',
+  'Demasiadas búsquedas en poco tiempo. Prueba de nuevo en unos minutos.',
 ];
 const mensajeDe = (error: { message?: string } | null, porDefecto: string) => {
   const m = error?.message ?? '';
@@ -69,9 +70,14 @@ Deno.serve(async (req) => {
 
   const { data: rol } = await delUsuario.rpc('get_mi_rol');
   const { data: gimnasioId } = await delUsuario.rpc('get_mi_gimnasio_id');
-  if (rol !== 'admin' || !gimnasioId) {
+  const { data: organizacionId } = await delUsuario.rpc('get_mi_organizacion_id');
+  if (rol !== 'admin' || !gimnasioId || !organizacionId) {
     return json({ error: 'Solo un administrador puede gestionar el equipo.' }, 403);
   }
+  // La marca de "cuenta creada por esta organización" vive en app_metadata, que solo escribe el
+  // servidor. user_metadata lo puede editar el propio usuario, por eso nunca se usa para esto.
+  const esDeMiOrganizacion = (u: { app_metadata?: Record<string, unknown> } | null | undefined) =>
+    !!u && u.app_metadata?.creada_por_organizacion === organizacionId;
 
   let cuerpo: Record<string, unknown>;
   try {
@@ -108,7 +114,10 @@ Deno.serve(async (req) => {
       if (!nombre) return json({ error: 'Falta el nombre.' }, 400);
       if (!EMAIL.test(email)) return json({ error: 'El correo no es válido.' }, 400);
 
-      const { data: existente } = await delUsuario.rpc('equipo_buscar', { p_email: email });
+      const { data: existente, error: errorBuscar } = await delUsuario.rpc('equipo_buscar', { p_email: email });
+      if (errorBuscar) {
+        return json({ error: mensajeDe(errorBuscar, 'No se pudo revisar ese correo. Reintentar en unos minutos.') }, 400);
+      }
 
       let userId: string;
       let creado = false;
@@ -123,8 +132,23 @@ Deno.serve(async (req) => {
           password,
           email_confirm: true,
           user_metadata: { first_name: nombre, last_name: apellido },
+          app_metadata: { creada_por_organizacion: organizacionId },
         });
         if (errorCrear || !nuevo?.user) {
+          // El correo ya tiene cuenta pero equipo_buscar no la ofreció: la creó otra organización o
+          // su dueño todavía no confirmó el correo.
+          const yaExiste =
+            errorCrear?.code === 'email_exists' ||
+            (errorCrear?.status === 422 && /already.*(registered|exists)/i.test(errorCrear.message ?? ''));
+          if (yaExiste) {
+            return json(
+              {
+                error:
+                  'Ese correo ya tiene una cuenta de RutNail y no se puede sumar desde aquí. Usa otro correo para esta persona o escríbenos por WhatsApp.',
+              },
+              400,
+            );
+          }
           return json({ error: 'No se pudo crear la cuenta. Revisar el correo y la contraseña.' }, 400);
         }
         userId = nuevo.user.id;
@@ -157,6 +181,11 @@ Deno.serve(async (req) => {
           400,
         );
       }
+      // Solo cuentas creadas por esta organización: las demás las maneja su dueño.
+      const { data: cuenta } = await admin.auth.admin.getUserById(userId);
+      if (!esDeMiOrganizacion(cuenta?.user)) {
+        return json({ error: 'Esa persona tiene que cambiar su contraseña ella misma.' }, 400);
+      }
       const errorPass = errorDeContrasena(password);
       if (errorPass) return json({ error: errorPass }, 400);
 
@@ -178,8 +207,10 @@ Deno.serve(async (req) => {
 
       // Sin más gimnasios, la cuenta no sirve para nada: se borra (si quedara viva podría
       // entrar y abrir un gimnasio propio sin pasar por la suscripción).
+      // Solo si la cuenta la creó esta organización; una cuenta ajena se quita del equipo y queda viva.
       if (Number(quedan) === 0) {
-        await admin.auth.admin.deleteUser(userId);
+        const { data: cuenta } = await admin.auth.admin.getUserById(userId);
+        if (esDeMiOrganizacion(cuenta?.user)) await admin.auth.admin.deleteUser(userId);
       }
 
       await delUsuario.rpc('equipo_anotar', { p_evento: 'baja', p_nombre: info.nombre, p_email: info.email });

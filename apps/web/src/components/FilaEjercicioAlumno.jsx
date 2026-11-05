@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Timer } from 'lucide-react';
 import { esRepsPorTiempo, filasDeSeries, resumenSeries, tieneSeriesDetalle } from '@/lib/format';
 import { tipoDePreview } from '@/lib/mediaEjercicio';
+import { enlaceSeguro } from '@/lib/enlaces';
 
 // Cómo se ve UN ejercicio en el portal del alumno (MiPlanPage.jsx), versión
 // compacta (21/09/2026, pedido de Nalux): "que se vean parecidas a como
@@ -40,12 +41,17 @@ const BotonIcono = ({ onClick, href, label, Icon }) => {
 // Demostración: modal propio si es un archivo nuestro (imagen/video del
 // bucket), link externo en pestaña nueva si no -- mismo criterio que tenía
 // BotonVerDemo antes de este cambio (lib/mediaEjercicio.js).
-const BotonDemo = ({ item, label, onPreview }) =>
-    tipoDePreview(item.mediaUrl) ? (
+// El enlace lo escribe el staff: solo se muestra el botón si es http(s)
+// (enlaceSeguro); si no, no hay botón.
+const BotonDemo = ({ item, label, onPreview }) => {
+    const url = enlaceSeguro(item.mediaUrl);
+    if (!url) return null;
+    return tipoDePreview(url) ? (
         <BotonIcono onClick={() => onPreview(item)} label={label} Icon={Play} />
     ) : (
-        <BotonIcono href={item.mediaUrl} label={label} Icon={Play} />
+        <BotonIcono href={url} label={label} Icon={Play} />
     );
+};
 
 // Grupo · descanso · peso · intensidad en una sola línea gris. Un valor
 // combinado vacío de una superserie viene como "—" (combinarValor en

@@ -88,7 +88,7 @@ const TerminosPage = () => (
                         Términos y condiciones · Política de privacidad
                     </h1>
                     <p className="mt-1 text-xs text-muted-foreground">
-                        Última actualización: 4 de noviembre de 2026
+                        Última actualización: 5 de noviembre de 2026
                     </p>
                 </div>
 
@@ -150,7 +150,8 @@ const TerminosPage = () => (
                             cancelar el cobro automático en cualquier momento y sin costo desde la pantalla
                             Suscripción, o pedirlo con el enlace «Botón de baja de servicio» de la página de
                             inicio. Al cancelar no se hacen más cobros y la cuenta sigue funcionando hasta el
-                            último día del período ya pagado.
+                            último día del período ya pagado. Si se cambia de plan con días pagos pendientes, esos
+                            días se ajustan según el precio del plan nuevo.
                         </p>
                     </Apartado>
 
